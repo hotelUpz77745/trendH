@@ -182,6 +182,21 @@
             "long_cond": "CROSS_UP",
             "short_cond": "CROSS_DOWN",
             "_comment_ema_cross": "Боевой EMA-кроссовер с фильтром ускорения и импульса (period1 x period2 + expanding diff)"
+        },
+        "vol_filter": {
+            "is_active": false,
+            "timeframe": "1m",
+            "mode": "a",
+            "period": 14,
+            "a": {
+                "slice_factor": 1.1
+            },
+            "r": {
+                "slice_factor": 2.1
+            },
+            "long_cond": "VOLF_PASSED",
+            "short_cond": "VOLF_PASSED",
+            "_comment_vol_filter": "Фильтр всплеска объема (mode 'a': last_vol > max * slice_factor, 'r': last_vol > avg * slice_factor)"
         }
     },
     "exit_rules": {

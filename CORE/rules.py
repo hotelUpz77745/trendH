@@ -165,6 +165,33 @@ class EntryEMACrossRule(BaseRule):
         return False
 
 
+class EntryVolumeFilterRule(BaseRule):
+    """Правило фильтрации всплеска объема (VOLF_PASSED)."""
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.cfg = cfg
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.long_cond: str = str(cfg.get("long_cond", "VOLF_PASSED"))
+        self.short_cond: str = str(cfg.get("short_cond", "VOLF_PASSED"))
+
+    def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
+        if not self.is_active:
+            return True
+
+        indicators = indicators or kwargs.get("indicators", {})
+        vol_states = indicators.get("vol_filter", kwargs.get("vol_filter", []))
+
+        if not vol_states or "UNSTABLE" in vol_states:
+            return False
+
+        if side == "LONG":
+            return self.long_cond in vol_states
+        elif side == "SHORT":
+            return self.short_cond in vol_states
+
+        return False
+
+
 class EntrySignalEngine:
     """
     Движок сигналов на вход.
@@ -196,6 +223,9 @@ class EntrySignalEngine:
 
         if "ema_cross" in enter_rules_cfg:
             self.rules.append(EntryEMACrossRule(enter_rules_cfg["ema_cross"]))
+
+        if "vol_filter" in enter_rules_cfg:
+            self.rules.append(EntryVolumeFilterRule(enter_rules_cfg["vol_filter"]))
 
     def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
         """

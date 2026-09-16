@@ -233,6 +233,69 @@ class EMACrossCalculator:
         return signals
 
 
+class VolumeFilterCalculator:
+    """Изолированный калькулятор фильтра всплеска объема (VOLF)."""
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.timeframe: str = str(cfg.get("timeframe", "1m"))
+        self.mode: str = str(cfg.get("mode", "a"))  # 'a' (absolute max) / 'r' (rolling average)
+        self.period: int = int(cfg.get("period", 14))
+        
+        mode_cfg = cfg.get(self.mode, {}) if isinstance(cfg.get(self.mode), dict) else {}
+        self.slice_factor: float = float(mode_cfg.get("slice_factor", 1.1 if self.mode == "a" else 2.1))
+        
+        self.long_cond: str = str(cfg.get("long_cond", "VOLF_PASSED"))
+        self.short_cond: str = str(cfg.get("short_cond", "VOLF_PASSED"))
+
+    def calculate(self, candles: Any) -> List[str]:
+        """
+        Вычисляет условие всплеска объема:
+        - mode 'a': last_vol > max(ref_values) * slice_factor
+        - mode 'r': last_vol > avg(ref_values) * slice_factor
+        Возвращает:
+        - ['VOLF_PASSED']: если условие выполнено
+        - ['UNSTABLE']: если недостаточно свечей
+        - []: если всплеск объема не зафиксирован
+        """
+        if not self.is_active or not candles:
+            return ["UNSTABLE"]
+
+        volumes: List[float] = []
+        if isinstance(candles, list):
+            for c in candles:
+                if isinstance(c, dict):
+                    volumes.append(abs(float(c.get("volume", 0.0))))
+                elif isinstance(c, (int, float)):
+                    volumes.append(abs(float(c)))
+        elif isinstance(candles, dict) and "volume" in candles:
+            volumes = [abs(float(v)) for v in candles["volume"]]
+
+        if len(volumes) < self.period + 1:
+            return ["UNSTABLE"]
+
+        last_vol = volumes[-1]
+        ref_values = volumes[-(self.period + 1):-1]
+
+        passed = False
+        if self.mode == "a":
+            past_max = max(ref_values)
+            if past_max > 0 and last_vol > (past_max * self.slice_factor):
+                passed = True
+            elif past_max == 0 and last_vol > 0:
+                passed = True
+        elif self.mode == "r":
+            past_avg = sum(ref_values) / len(ref_values)
+            if past_avg > 0 and last_vol > (past_avg * self.slice_factor):
+                passed = True
+            elif past_avg == 0 and last_vol > 0:
+                passed = True
+
+        if passed:
+            return [self.long_cond]
+        return []
+
+
 class IndicatorsEngine:
     """
     Фасадный интерфейс индикаторного блока системы.
@@ -262,6 +325,9 @@ class IndicatorsEngine:
         ema_cross_cfg = enter_rules.get("ema_cross")
         self.ema_cross_calc = EMACrossCalculator(ema_cross_cfg) if ema_cross_cfg else None
 
+        vol_cfg = enter_rules.get("vol_filter")
+        self.vol_filter_calc = VolumeFilterCalculator(vol_cfg) if vol_cfg else None
+
     def get_required_timeframes(self) -> Set[str]:
         """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
         tfs = set()
@@ -276,6 +342,8 @@ class IndicatorsEngine:
             tfs.add(self.sr_calc.timeframe)
         if self.ema_cross_calc and self.ema_cross_calc.is_active:
             tfs.add(self.ema_cross_calc.timeframe)
+        if self.vol_filter_calc and self.vol_filter_calc.is_active:
+            tfs.add(self.vol_filter_calc.timeframe)
         return tfs if tfs else {"5m"}
 
     def calculate(self, klines_by_tf: Dict[str, Any], current_price: Optional[float] = None) -> Dict[str, Any]:
@@ -283,7 +351,7 @@ class IndicatorsEngine:
         Вычисляет показатели индикаторов по переданному словарю {таймфрейм: список_свечей_или_closes}.
         Возвращает: {"trend": str, "trend_htf": str, "rsi": list[str], "rsi_value": float | None,
                      "rsi_waterline50": list[str], "sr_levels": list[str], "sr_levels_data": dict,
-                     "ema_cross": list[str]}
+                     "ema_cross": list[str], "vol_filter": list[str]}
         """
         # Извлечение close цен для EMA и RSI
         closes_by_tf: Dict[str, List[float]] = {}
@@ -339,5 +407,11 @@ class IndicatorsEngine:
             result["ema_cross"] = self.ema_cross_calc.calculate(closes_ec)
         else:
             result["ema_cross"] = []
+
+        if self.vol_filter_calc and self.vol_filter_calc.is_active:
+            candles_vol = klines_by_tf.get(self.vol_filter_calc.timeframe, [])
+            result["vol_filter"] = self.vol_filter_calc.calculate(candles_vol)
+        else:
+            result["vol_filter"] = []
 
         return result

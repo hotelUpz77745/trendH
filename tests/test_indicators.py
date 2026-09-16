@@ -11,6 +11,7 @@ from CORE.indicators import (
     RSIWaterlineCalculator,
     SRLevelsCalculator,
     EMACrossCalculator,
+    VolumeFilterCalculator,
     IndicatorsEngine
 )
 
@@ -205,6 +206,52 @@ class TestEMACrossCalculator(unittest.TestCase):
         self.assertIn("CROSS_DOWN", states)
 
 
+class TestVolumeFilterCalculator(unittest.TestCase):
+    def test_insufficient_data(self):
+        cfg = {"is_active": True, "timeframe": "1m", "mode": "a", "period": 14, "a": {"slice_factor": 1.1}}
+        calc = VolumeFilterCalculator(cfg)
+        self.assertEqual(calc.calculate([100.0] * 10), ["UNSTABLE"])
+
+    def test_mode_a_passed(self):
+        cfg = {"is_active": True, "timeframe": "1m", "mode": "a", "period": 5, "a": {"slice_factor": 1.1}}
+        calc = VolumeFilterCalculator(cfg)
+        # Previous 5 volumes: 100, max is 100. Last volume: 115 (> 100 * 1.1 = 110)
+        vols = [100.0, 95.0, 100.0, 90.0, 98.0, 115.0]
+        self.assertEqual(calc.calculate(vols), ["VOLF_PASSED"])
+
+    def test_mode_a_failed(self):
+        cfg = {"is_active": True, "timeframe": "1m", "mode": "a", "period": 5, "a": {"slice_factor": 1.1}}
+        calc = VolumeFilterCalculator(cfg)
+        # Previous 5 volumes: 100, max is 100. Last volume: 105 (<= 110)
+        vols = [100.0, 95.0, 100.0, 90.0, 98.0, 105.0]
+        self.assertEqual(calc.calculate(vols), [])
+
+    def test_mode_r_passed(self):
+        cfg = {"is_active": True, "timeframe": "1m", "mode": "r", "period": 5, "r": {"slice_factor": 2.0}}
+        calc = VolumeFilterCalculator(cfg)
+        # Previous 5 volumes: 50, avg is 50. Last volume: 105 (> 50 * 2.0 = 100)
+        vols = [50.0, 50.0, 50.0, 50.0, 50.0, 105.0]
+        self.assertEqual(calc.calculate(vols), ["VOLF_PASSED"])
+
+    def test_mode_r_failed(self):
+        cfg = {"is_active": True, "timeframe": "1m", "mode": "r", "period": 5, "r": {"slice_factor": 2.0}}
+        calc = VolumeFilterCalculator(cfg)
+        # Previous 5 volumes: 50, avg is 50. Last volume: 95 (<= 100)
+        vols = [50.0, 50.0, 50.0, 50.0, 50.0, 95.0]
+        self.assertEqual(calc.calculate(vols), [])
+
+    def test_with_candle_dicts(self):
+        cfg = {"is_active": True, "timeframe": "1m", "mode": "a", "period": 3, "a": {"slice_factor": 1.1}}
+        calc = VolumeFilterCalculator(cfg)
+        candles = [
+            {"ts": 1, "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100.0},
+            {"ts": 2, "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100.0},
+            {"ts": 3, "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100.0},
+            {"ts": 4, "open": 10, "high": 11, "low": 9, "close": 10, "volume": 120.0},
+        ]
+        self.assertEqual(calc.calculate(candles), ["VOLF_PASSED"])
+
+
 class TestIndicatorsEngine(unittest.TestCase):
     def setUp(self):
         self.enter_rules = {
@@ -259,22 +306,35 @@ class TestIndicatorsEngine(unittest.TestCase):
                 "period2": 10,
                 "long_cond": "CROSS_UP",
                 "short_cond": "CROSS_DOWN"
+            },
+            "vol_filter": {
+                "is_active": True,
+                "timeframe": "1m",
+                "mode": "a",
+                "period": 5,
+                "a": {"slice_factor": 1.1},
+                "r": {"slice_factor": 2.1},
+                "long_cond": "VOLF_PASSED",
+                "short_cond": "VOLF_PASSED"
             }
         }
         self.engine = IndicatorsEngine(self.enter_rules)
 
     def test_required_timeframes(self):
         tfs = self.engine.get_required_timeframes()
-        self.assertEqual(tfs, {"5m", "1h", "15m"})
+        self.assertEqual(tfs, {"5m", "1h", "15m", "1m"})
 
     def test_calculate_facade(self):
         closes_5m = [10.0 + i * 1.5 for i in range(30)]
         closes_1h = [100.0 - i * 1.0 for i in range(30)]
         closes_15m = [50.0 + i * 0.5 for i in range(30)]
+        vols_1m = [{"ts": i, "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100.0} for i in range(10)]
+        vols_1m.append({"ts": 10, "open": 10, "high": 11, "low": 9, "close": 10, "volume": 150.0})
         data = {
             "5m": closes_5m,
             "1h": closes_1h,
-            "15m": closes_15m
+            "15m": closes_15m,
+            "1m": vols_1m
         }
         result = self.engine.calculate(data, current_price=60.0)
         self.assertIn("trend", result)
@@ -282,9 +342,11 @@ class TestIndicatorsEngine(unittest.TestCase):
         self.assertIn("rsi", result)
         self.assertIn("sr_levels", result)
         self.assertIn("ema_cross", result)
+        self.assertIn("vol_filter", result)
         self.assertEqual(result["trend"], "UP")
         self.assertEqual(result["trend_htf"], "DOWN")
         self.assertEqual(result["rsi"], [])
+        self.assertEqual(result["vol_filter"], ["VOLF_PASSED"])
 
 
 if __name__ == "__main__":

@@ -341,7 +341,9 @@ class Main:
                     sr_str = f", SR: {','.join(sr_states)}" if sr_states else ""
                     ec_states = indicators.get("ema_cross", [])
                     ec_str = f", EMACross: {','.join(ec_states)}" if ec_states else ""
-                    log(f"🎯 [SIGNAL ENTRY] [{symbol}][{side}] Сигнал на вход! Trend: {indicators['trend']}{htf_str}, RSI: {rsi_str} ({','.join(indicators['rsi'])}){sr_str}{ec_str}, Цена: {current_price}", level="INFO")
+                    vol_states = indicators.get("vol_filter", [])
+                    vol_str = f", VolF: {','.join(vol_states)}" if vol_states else ""
+                    log(f"🎯 [SIGNAL ENTRY] [{symbol}][{side}] Сигнал на вход! Trend: {indicators['trend']}{htf_str}, RSI: {rsi_str} ({','.join(indicators['rsi'])}){sr_str}{ec_str}{vol_str}, Цена: {current_price}", level="INFO")
                     if invest_size > 0:
                         log(f"🟢 [POSITION OPEN] [{symbol}][{side}] Открытие позиции. Цена: {current_price}, Размер: {invest_size}$", level="INFO")
                         self.state.open_position(symbol, side, current_price, invest_size)

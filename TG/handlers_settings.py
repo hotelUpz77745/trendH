@@ -79,6 +79,7 @@ def setup_settings_handlers(router: Router, bot_core):
         rsi_wl_cfg = ENTER_RULES.get("rsi_waterline50", {})
         sr_cfg = ENTER_RULES.get("sr_levels", {})
         ec_cfg = ENTER_RULES.get("ema_cross", {})
+        vol_cfg = ENTER_RULES.get("vol_filter", {})
         exit_rev = EXIT_RULES.get("trend_reversal", {})
         exit_tp = EXIT_RULES.get("take_profit_ratio", {})
         exit_sl = EXIT_RULES.get("stop_loss_ratio", {})
@@ -116,6 +117,15 @@ def setup_settings_handlers(router: Router, bot_core):
                 f"Long={ec_cfg.get('long_cond')}, Short={ec_cfg.get('short_cond')}\n"
             )
 
+        vol_info = ""
+        if vol_cfg.get("is_active", False):
+            mode = vol_cfg.get("mode", "a")
+            sf = vol_cfg.get(mode, {}).get("slice_factor", 1.0)
+            vol_info = (
+                f"• <b>Volume Filter ({vol_cfg.get('timeframe', '1m')})</b>: "
+                f"Mode={mode.upper()}, Period={vol_cfg.get('period', 14)}, SliceFactor={sf}\n"
+            )
+
         tp_val = exit_tp.get("value")
         tp_str = f"{tp_val * 100:.1f}% ({tp_val})" if tp_val is not None else "Отключен (null)"
         sl_val = exit_sl.get("value")
@@ -132,7 +142,8 @@ def setup_settings_handlers(router: Router, bot_core):
             f"Window={rsi_cfg.get('window', 14)}, Conds={rsi_cfg.get('conditions', {})}\n"
             f"{wl_info}"
             f"{sr_info}"
-            f"{ec_info}\n"
+            f"{ec_info}"
+            f"{vol_info}\n"
             f"<b>Выход (Exit Rules):</b>\n"
             f"• <b>Trend Reversal</b>: Long={exit_rev.get('long_exit_trends')}, Short={exit_rev.get('short_exit_trends')}\n"
             f"• <b>Take Profit</b>: {tp_str}\n"
