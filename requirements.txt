@@ -1,0 +1,6 @@
+pandas
+matplotlib
+pytz
+curl_cffi
+python-dotenv
+pyautogui

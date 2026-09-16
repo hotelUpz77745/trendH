@@ -1,0 +1,160 @@
+{
+    "INDICATORS_REFRESH_INTERVAL_SEC": 60,
+    "DIRECTION_MODE": "HEDGE",
+    "MAIN_LOOP_DELAY_SEC": 0.1,
+    "MAX_RECONNECT_ATTEMPTS": 5,
+    "BINANCE_FUTURES_BASE_URL": "https://fapi.binance.com",
+    "TIME_ZONE": "UTC",
+    "data_sources": {
+        "symbols_path": "C:\\Users\\user\\Desktop\\My_Pro\\HP_EliteBook_735_old\\MY\\HRON_3\\cron3Papper\\CFG\\app.json",
+        "runtime_path": "C:\\Users\\user\\Desktop\\My_Pro\\HP_EliteBook_735_old\\MY\\HRON_3\\cron3Papper\\CFG\\runtime",
+        "hardcoded_symbols": [
+            "ARXUSDT",
+            "LAUSDT",
+            "GIGGLEUSDT",
+            "ROBOUSDT",
+            "SOPHUSDT",
+            "FLOCKUSDT",
+            "ESPUSDT",
+            "BOMEUSDT",
+            "NAORISUSDT",
+            "PUMPUSDT",
+            "RIVERUSDT",
+            "SIRENUSDT",
+            "CHIPUSDT",
+            "ARBUSDT",
+            "ZAMAUSDT",
+            "ENAUSDT",
+            "PIEVERSEUSDT",
+            "TRUMPUSDT",
+            "CATIUSDT",
+            "MOVRUSDT",
+            "LITUSDT",
+            "1000CATUSDT",
+            "TUSDT",
+            "CROSSUSDT",
+            "ACUUSDT",
+            "PEOPLEUSDT",
+            "VVVUSDT",
+            "VELODROMEUSDT",
+            "1000BONKUSDT",
+            "ZROUSDT",
+            "GRASSUSDT",
+            "ZECUSDT",
+            "JTOUSDT",
+            "GPSUSDT",
+            "SAFEUSDT",
+            "DOODUSDT",
+            "ZORAUSDT",
+            "FORMUSDT",
+            "WLDUSDT",
+            "KITEUSDT",
+            "ZKCUSDT",
+            "SOLVUSDT",
+            "0GUSDT",
+            "XPLUSDT",
+            "GUSDT",
+            "ETHFIUSDT",
+            "UNIUSDT",
+            "FARTCOINUSDT",
+            "SPXUSDT",
+            "DASHUSDT",
+            "NEIROUSDT",
+            "STXUSDT",
+            "EIGENUSDT",
+            "SCRUSDT",
+            "FFUSDT",
+            "SYRUPUSDT",
+            "PLAYUSDT",
+            "PYTHUSDT",
+            "LDOUSDT",
+            "DOGSUSDT",
+            "RAYSOLUSDT",
+            "MIRAUSDT",
+            "AIAUSDT",
+            "TRBUSDT",
+            "1000PEPEUSDT",
+            "AEROUSDT",
+            "MEGAUSDT",
+            "JUPUSDT",
+            "CFGUSDT",
+            "ADAUSDT",
+            "PENGUUSDT",
+            "XVGUSDT",
+            "IOSTUSDT",
+            "AAVEUSDT"
+        ],
+        "hardcoded_size": 50,
+        "_comment_hardcoded": "If hardcoded_symbols/size are present, they override reading from the paths"
+    },
+    "logging": {
+        "debug": false,
+        "info": true,
+        "warning": true,
+        "error": true,
+        "max_log_lines": 50000,
+        "log_to_console": true,
+        "log_to_file": true,
+        "TIME_ZONE": "UTC"
+    },
+    "telegram": {
+        "enabled": false,
+        "allowed_users": [
+            610822492
+        ]
+    },
+    "analytics": {
+        "taker_fee_ratio": 0.0006,
+        "_comment_taker_fee_ratio": "Например, введите 0.0006 для 0.06%"
+    },
+    "paper_trading": {
+        "slippage_base_ratio": 0.001,
+        "_desc_slippage_base_ratio": "Базовое проскальзывание. Значение 0.001 означает 0.1%.",
+        "daily_volume_tiers_usdt": {
+            "2000000": 1.2,
+            "5000000": 0.8,
+            "7000000": 0.4,
+            "inf": 0.2
+        }
+    },
+    "enter_rules": {
+        "trend": {
+            "is_active": true,
+            "timeframe": "5m",
+            "sma_fast": 10,
+            "sma_slow": 30,
+            "confirmation_candles": 5,
+            "require_rising": true,
+            "trend_positive": true,
+            "long_cond": "UP",
+            "short_cond": "DOWN"
+        },
+        "rsi": {
+            "is_active": true,
+            "timeframe": "5m",
+            "window": 14,
+            "long_cond": "50 < x <= 75",
+            "short_cond": "25 <= x < 50"
+        }
+    },
+    "exit_rules": {
+        "trend_reversal": {
+            "is_active": true,
+            "long_exit_trends": [
+                "DOWN",
+                "FLAT",
+                "UNSTABLE"
+            ],
+            "short_exit_trends": [
+                "UP",
+                "FLAT",
+                "UNSTABLE"
+            ],
+            "_comment_trend_reversal": "Выход при смене тренда. Укажите списком имена трендов, на которые будет реагировать выход из LONG и SHORT"
+        },
+        "take_profit_ratio": {
+            "value": null,
+            "_comment_take_profit_ratio": "null или доля от единицы, например 0.04 для 4%"
+        }
+    }
+}

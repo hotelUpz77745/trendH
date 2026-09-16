@@ -1,0 +1,298 @@
+# ============================================================
+# FILE: main.py
+# ROLE: Main bot loop, signal processing, and virtual execution
+# ============================================================
+import asyncio
+import time
+import traceback
+from typing import Dict, TYPE_CHECKING
+from c_log import log
+from API.binance import BinanceAdapter
+from utils import Utils, NetworkServices
+from cron_integration import CronIntegration
+from ANALYTICS.analytics import AnalyticsManager
+from rules_engine import EntrySignalEngine, ExitSignalEngine
+import json
+from notifier import NotifierManager
+from API.price_stream import BinanceHotPriceStream
+from TG.tg_receiver import TelegramReceiver
+from INDICATORS.indicators_engine import IndicatorsEngine
+
+if TYPE_CHECKING:
+    from API.price_stream import HotPriceTick
+from consts import (
+    cfg,
+    MAIN_LOOP_DELAY_SEC,
+    INDICATORS_REFRESH_INTERVAL_SEC,
+    DIRECTION_MODE,
+    ENTER_RULES,
+    EXIT_RULES,
+    ANALYTICS_CFG,
+    PAPER_TRADING_CFG,
+    TG_ENABLED,
+    TG_TOKEN,
+    CFG_PATH
+)
+
+
+class BotState:
+    def __init__(self):
+        # symbol -> {"LONG": {"open_price": float, "size": float}, "SHORT": {"open_price": float, "size": float}}
+        self.positions: Dict[str, Dict[str, dict]] = {}
+
+    def get_position(self, symbol: str, side: str):
+        return self.positions.get(symbol, {}).get(side)
+
+    def open_position(self, symbol: str, side: str, price: float, size: float):
+        if symbol not in self.positions:
+            self.positions[symbol] = {}
+        self.positions[symbol][side] = {"open_price": price, "size": size}
+
+    def close_position(self, symbol: str, side: str):
+        if symbol in self.positions and side in self.positions[symbol]:
+            del self.positions[symbol][side]
+
+class Main:
+    def __init__(self):
+        self.utils = Utils()
+        self.binance_client = BinanceAdapter()
+        self.network = NetworkServices()
+        self.analytics = AnalyticsManager()
+        self.state = BotState()
+        self.symbols = []
+        self.symbol_indicators = {} # symbol -> {"rsi": float, "trend": str}
+        self.symbol_volume_24h = {}
+        self.current_prices = {} # symbol -> float
+        
+        self.entry_engine = EntrySignalEngine(ENTER_RULES)
+        self.exit_engine = ExitSignalEngine(EXIT_RULES, ANALYTICS_CFG, self.get_slippage_ratio)
+        self.indicators_engine = IndicatorsEngine(ENTER_RULES)
+        self.notifier = NotifierManager()
+        
+        self.price_stream = None
+        self.stream_task = None
+        self.tg_bot = None
+        self.tg_task = None
+        self.is_paused = not cfg.get("auto_start", True)
+        self.direction_mode = DIRECTION_MODE
+
+    def set_paused(self, paused: bool):
+        """Переключает флаг паузы и сохраняет состояние auto_start в cfg.json."""
+        self.is_paused = paused
+        try:
+            with open(CFG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            data["auto_start"] = not paused
+            with open(CFG_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+            cfg["auto_start"] = not paused
+            log(f"[Main] Состояние auto_start сохранено: {not paused}", level="INFO")
+        except Exception as e:
+            log(f"[Main] Ошибка сохранения auto_start: {e}", level="ERROR")
+        
+    async def fetch_24h_volume(self, symbol: str):
+        vol = await self.binance_client.get_24h_volume(symbol)
+        self.symbol_volume_24h[symbol] = vol
+
+    def get_slippage_ratio(self, symbol: str) -> float:
+        vol = self.symbol_volume_24h.get(symbol, 0.0)
+        base_ratio = PAPER_TRADING_CFG["slippage_base_ratio"]
+        tiers = PAPER_TRADING_CFG.get("daily_volume_tiers_usdt", {})
+        
+        multiplier = 1.0
+        # sort tiers
+        sorted_tiers = sorted(
+            [(float(k) if k != "inf" else float('inf'), v) for k, v in tiers.items()]
+        )
+        for threshold, mult in sorted_tiers:
+            if vol <= threshold:
+                multiplier = mult
+                break
+        
+        return base_ratio * multiplier
+        
+    async def update_indicators(self, session, symbol: str):
+        try:
+            tfs = self.indicators_engine.get_required_timeframes()
+            klines_data = {}
+            for tf in tfs:
+                klines = await self.binance_client.get_klines(session, symbol, interval=tf, limit=100)
+                if klines:
+                    klines_data[tf] = [float(k[4]) for k in klines]
+                await asyncio.sleep(0.1)  # rate limiting
+
+            if not klines_data:
+                return
+
+            self.symbol_indicators[symbol] = self.indicators_engine.calculate(klines_data)
+        except Exception as e:
+            log(f"[{symbol}] Error updating indicators: {e}", level="ERROR")
+
+    def check_entry(self, symbol: str, side: str) -> bool:
+        indicators = self.symbol_indicators.get(symbol)
+        if not indicators: return False
+        return self.entry_engine.check_signal(side, indicators["trend"], indicators["rsi"])
+
+    def check_exit(self, symbol: str, side: str, open_price: float, current_price: float) -> bool:
+        indicators = self.symbol_indicators.get(symbol)
+        if not indicators: return False
+        return self.exit_engine.check_signal(
+            side, 
+            symbol=symbol, 
+            trend=indicators["trend"], 
+            open_price=open_price, 
+            current_price=current_price
+        )
+
+    async def on_tick(self, tick: 'HotPriceTick'):
+        """WebSocket callback triggered instantly on every price change."""
+        symbol = tick.symbol
+        current_price = tick.price
+        self.current_prices[symbol] = current_price
+        
+        indicators = self.symbol_indicators.get(symbol)
+        if not indicators: return
+        
+        allow_long = self.direction_mode in ("LONG", "HEDGE", "MONO")
+        allow_short = self.direction_mode in ("SHORT", "HEDGE", "MONO")
+        
+        has_long = self.state.get_position(symbol, "LONG") is not None
+        has_short = self.state.get_position(symbol, "SHORT") is not None
+        
+        if self.direction_mode == "MONO":
+            if has_long: allow_short = False
+            if has_short: allow_long = False
+            
+        for side in ["LONG", "SHORT"]:
+            if side == "LONG" and not allow_long: continue
+            if side == "SHORT" and not allow_short: continue
+            
+            pos = self.state.get_position(symbol, side)
+            if pos:
+                # Check exit
+                if self.check_exit(symbol, side, pos["open_price"], current_price):
+                    log(f"[{symbol}][{side}] Закрытие виртуальной позиции. Цена: {current_price}", level="INFO")
+                    fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
+                    slippage_ratio = self.get_slippage_ratio(symbol) * 2
+                    fee_slip_ratio = fee_ratio + slippage_ratio
+                    
+                    if side == "LONG":
+                        pnl_ratio = (current_price - pos["open_price"]) / pos["open_price"]
+                    else:
+                        pnl_ratio = (pos["open_price"] - current_price) / pos["open_price"]
+                        
+                    pnl_usd = (pnl_ratio * pos["size"])
+                    comm_usd = -(fee_slip_ratio * pos["size"])
+                    
+                    self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd)
+                    self.state.close_position(symbol, side)
+            else:
+                # Check entry
+                if not self.is_paused and self.check_entry(symbol, side):
+                    cron_state = CronIntegration.get_symbol_state(symbol)
+                    invest_size = cron_state.get(side, {}).get("invest_size", 0.0)
+                    if invest_size > 0:
+                        log(f"[{symbol}][{side}] Открытие виртуальной позиции. Цена: {current_price}, Размер: {invest_size}$", level="INFO")
+                        self.state.open_position(symbol, side, current_price, invest_size)
+
+    async def close_all_positions(self):
+        """Экстренное закрытие всех виртуальных позиций по рынку."""
+        closed_count = 0
+        for symbol, sides in list(self.state.positions.items()):
+            for side in list(sides.keys()):
+                pos = sides[side]
+                current_price = self.current_prices.get(symbol)
+                if not current_price:
+                    continue # Не можем закрыть без цены
+                    
+                fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
+                slippage_ratio = self.get_slippage_ratio(symbol) * 2
+                fee_slip_ratio = fee_ratio + slippage_ratio
+                
+                if side == "LONG":
+                    pnl_ratio = (current_price - pos["open_price"]) / pos["open_price"]
+                else:
+                    pnl_ratio = (pos["open_price"] - current_price) / pos["open_price"]
+                    
+                pnl_usd = (pnl_ratio * pos["size"])
+                comm_usd = -(fee_slip_ratio * pos["size"])
+                
+                self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd)
+                self.state.close_position(symbol, side)
+                log(f"[{symbol}][{side}] Экстренное закрытие позиции. Цена: {current_price}, PnL: {pnl_usd:.4f}$", level="INFO")
+                closed_count += 1
+                
+        log(f"✅ Close All: Успешно закрыто {closed_count} виртуальных позиций.", level="INFO")
+
+    async def run(self):
+        await self.network.initialize_session()
+        if not await self.network.validate_session():
+            log("Не удалось установить сессию.", level="ERROR")
+            return
+
+        session = self.network.session
+        last_indicators_refresh = 0
+
+        await self.notifier.start()
+
+        # Start TelegramReceiver if enabled and token present
+        if TG_ENABLED and TG_TOKEN:
+            try:
+                self.tg_bot = TelegramReceiver(self)
+                self.tg_task = asyncio.create_task(self.tg_bot.start())
+                log("🚀 TelegramReceiver успешно запущен параллельно с ядром.", level="INFO")
+            except Exception as e:
+                log(f"Не удалось инициализировать TelegramReceiver: {e}", level="ERROR")
+
+        log("✅ Бот успешно запущен (Paper Trading mode)", level="INFO")
+        try:
+            self.symbols = CronIntegration.get_symbols()
+            if self.symbols:
+                self.price_stream = BinanceHotPriceStream(self.symbols)
+                self.stream_task = asyncio.create_task(self.price_stream.run(self.on_tick))
+                log(f"🚀 Запущен HotPriceStream для {len(self.symbols)} пар.", level="INFO")
+                
+            while True:
+                try:
+                    now = time.time()
+                    if now - last_indicators_refresh >= INDICATORS_REFRESH_INTERVAL_SEC:
+                        last_indicators_refresh = now
+                        
+                        # fetch volumes
+                        vol_tasks = [self.fetch_24h_volume(sym) for sym in self.symbols]
+                        if vol_tasks:
+                            await asyncio.gather(*vol_tasks)
+                            
+                        # fetch indicators
+                        tasks = [self.update_indicators(session, sym) for sym in self.symbols]
+                        if tasks:
+                            await asyncio.gather(*tasks)
+
+                except Exception as ex:
+                    log(f"Main loop error: {ex}", level="ERROR")
+                    traceback.print_exc()
+
+                await asyncio.sleep(MAIN_LOOP_DELAY_SEC)
+
+        except KeyboardInterrupt:
+            log("⛔ Остановка по Ctrl+C", level="INFO")
+        except Exception as ex:
+            log(f"Сбой выполнения: {ex}", level="ERROR")
+            traceback.print_exc()
+        finally:
+            log("Завершение работы.", level="INFO")
+            if self.tg_task:
+                self.tg_task.cancel()
+            if self.tg_bot:
+                await self.tg_bot.stop()
+            if self.price_stream:
+                self.price_stream.stop()
+            await self.network.shutdown_session()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(Main().run())
+    except KeyboardInterrupt:
+        pass
+    except asyncio.exceptions.CancelledError:
+        pass
