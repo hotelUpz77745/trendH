@@ -165,10 +165,12 @@
         "trend_reversal": {
             "is_active": true,
             "long_exit_trends": [
-                "FLAT"
+                "FLAT",
+                "DOWN"
             ],
             "short_exit_trends": [
-                "FLAT"
+                "FLAT",
+                "UP"
             ],
             "_comment_trend_reversal": "Выход при смене тренда. Укажите списком имена трендов, на которые будет реагировать выход из LONG и SHORT"
         },
