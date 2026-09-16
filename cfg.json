@@ -125,8 +125,8 @@
             "timeframe": "5m",
             "sma_fast": 10,
             "sma_slow": 30,
-            "confirmation_candles": 5,
-            "require_rising": true,
+            "confirmation_candles": 2,
+            "require_rising": false,
             "trend_positive": true,
             "long_cond": "UP",
             "short_cond": "DOWN"
@@ -145,20 +145,16 @@
         "trend_reversal": {
             "is_active": true,
             "long_exit_trends": [
-                "DOWN",
-                "FLAT",
-                "UNSTABLE"
+                "DOWN"
             ],
             "short_exit_trends": [
-                "UP",
-                "FLAT",
-                "UNSTABLE"
+                "UP"
             ],
             "_comment_trend_reversal": "Выход при смене тренда. Укажите списком имена трендов, на которые будет реагировать выход из LONG и SHORT"
         },
         "take_profit_ratio": {
-            "value": null,
-            "_comment_take_profit_ratio": "null или доля от единицы, например 0.04 для 4%"
+            "value": 0.02,
+            "_comment_take_profit_ratio": "null или доля от единицы, например 0.02 для 2%"
         }
     },
     "watchdog": {
