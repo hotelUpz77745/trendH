@@ -199,7 +199,14 @@ class Main:
                         if tf not in self.klines_cache[sym]:
                             self.klines_cache[sym][tf] = {}
                         for k in klines:
-                            self.klines_cache[sym][tf][int(k[0])] = float(k[4])
+                            self.klines_cache[sym][tf][int(k[0])] = {
+                                "ts": int(k[0]),
+                                "open": float(k[1]),
+                                "high": float(k[2]),
+                                "low": float(k[3]),
+                                "close": float(k[4]),
+                                "volume": float(k[5]),
+                            }
                 await asyncio.sleep(0.01)
 
         tasks = [_fetch(sym) for sym in self.symbols]
@@ -215,7 +222,9 @@ class Main:
                     if sorted_ts:
                         klines_data[tf] = [ts_dict[ts] for ts in sorted_ts[-history_size:]]
                 if klines_data:
-                    self.symbol_indicators[sym] = self.indicators_engine.calculate(klines_data)
+                    self.symbol_indicators[sym] = self.indicators_engine.calculate(
+                        klines_data, current_price=self.current_prices.get(sym)
+                    )
 
     async def update_indicators(self, session, symbol: str):
         try:
@@ -235,7 +244,14 @@ class Main:
                     
                 if klines:
                     for k in klines:
-                        self.klines_cache[symbol][tf][int(k[0])] = float(k[4])
+                        self.klines_cache[symbol][tf][int(k[0])] = {
+                            "ts": int(k[0]),
+                            "open": float(k[1]),
+                            "high": float(k[2]),
+                            "low": float(k[3]),
+                            "close": float(k[4]),
+                            "volume": float(k[5]),
+                        }
                         
                 sorted_ts = sorted(self.klines_cache[symbol][tf].keys())
                 for ts in sorted_ts[:-history_size]:
@@ -247,7 +263,9 @@ class Main:
             if not klines_data:
                 return
 
-            self.symbol_indicators[symbol] = self.indicators_engine.calculate(klines_data)
+            self.symbol_indicators[symbol] = self.indicators_engine.calculate(
+                klines_data, current_price=self.current_prices.get(symbol)
+            )
         except Exception as e:
             log(f"[{symbol}] Error updating indicators: {e}", level="ERROR")
 
@@ -319,7 +337,9 @@ class Main:
                     rsi_val = indicators.get("rsi_value")
                     rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
                     htf_str = f", HTF: {indicators['trend_htf']}" if "trend_htf" in indicators else ""
-                    log(f"🎯 [SIGNAL ENTRY] [{symbol}][{side}] Сигнал на вход! Trend: {indicators['trend']}{htf_str}, RSI: {rsi_str} ({','.join(indicators['rsi'])}), Цена: {current_price}", level="INFO")
+                    sr_states = indicators.get("sr_levels", [])
+                    sr_str = f", SR: {','.join(sr_states)}" if sr_states else ""
+                    log(f"🎯 [SIGNAL ENTRY] [{symbol}][{side}] Сигнал на вход! Trend: {indicators['trend']}{htf_str}, RSI: {rsi_str} ({','.join(indicators['rsi'])}){sr_str}, Цена: {current_price}", level="INFO")
                     if invest_size > 0:
                         log(f"🟢 [POSITION OPEN] [{symbol}][{side}] Открытие позиции. Цена: {current_price}, Размер: {invest_size}$", level="INFO")
                         self.state.open_position(symbol, side, current_price, invest_size)

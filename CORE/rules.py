@@ -111,6 +111,33 @@ class EntryRSIWaterlineRule(BaseRule):
         return False
 
 
+class EntrySRLevelsRule(BaseRule):
+    """Правило входа по пробою уровней поддержки/сопротивления (BREAKOUT_LONG / BREAKOUT_SHORT)."""
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.cfg = cfg
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.long_cond: str = str(cfg.get("long_cond", "BREAKOUT_LONG"))
+        self.short_cond: str = str(cfg.get("short_cond", "BREAKOUT_SHORT"))
+
+    def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
+        if not self.is_active:
+            return True
+
+        indicators = indicators or kwargs.get("indicators", {})
+        sr_states = indicators.get("sr_levels", kwargs.get("sr_levels", []))
+
+        if not sr_states or "UNSTABLE" in sr_states:
+            return False
+
+        if side == "LONG":
+            return self.long_cond in sr_states
+        elif side == "SHORT":
+            return self.short_cond in sr_states
+
+        return False
+
+
 class EntrySignalEngine:
     """
     Движок сигналов на вход.
@@ -136,6 +163,9 @@ class EntrySignalEngine:
 
         if "rsi_waterline50" in enter_rules_cfg:
             self.rules.append(EntryRSIWaterlineRule(enter_rules_cfg["rsi_waterline50"]))
+
+        if "sr_levels" in enter_rules_cfg:
+            self.rules.append(EntrySRLevelsRule(enter_rules_cfg["sr_levels"]))
 
     def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
         """

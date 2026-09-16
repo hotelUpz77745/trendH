@@ -9,6 +9,7 @@ from CORE.indicators import (
     TrendCalculator,
     RSICalculator,
     RSIWaterlineCalculator,
+    SRLevelsCalculator,
     IndicatorsEngine
 )
 
@@ -118,6 +119,63 @@ class TestRSIWaterlineCalculator(unittest.TestCase):
         self.assertIn("CROSS_DOWN", states)
 
 
+class TestSRLevelsCalculator(unittest.TestCase):
+    def setUp(self):
+        self.cfg = {
+            "is_active": True,
+            "timeframe": "5m",
+            "swing_len": 5,
+            "window": 100,
+            "margin": 2.0,
+            "thickness_k": 0.17,
+            "max_zones": 5,
+            "level_mode": "latest",
+            "breakout_edge": "h",
+            "long_cond": "BREAKOUT_LONG",
+            "short_cond": "BREAKOUT_SHORT"
+        }
+        self.calc = SRLevelsCalculator(self.cfg)
+
+    def test_sr_levels_breakout_long(self):
+        # Create candles with a peak (resistance) in the middle, then price breaking above it
+        candles = []
+        base_ts = 1700000000000
+        # 15 bars rising to 100, then dropping to 80, then rising to 105 (breakout)
+        prices = [50 + i * 5 for i in range(11)] + [100 - i * 4 for i in range(1, 6)] + [80 + i * 6 for i in range(1, 6)]
+        for i, p in enumerate(prices):
+            candles.append({
+                "ts": base_ts + i * 60000,
+                "open": float(p - 1),
+                "high": float(p + 1),
+                "low": float(p - 1),
+                "close": float(p),
+                "volume": 100.0
+            })
+        
+        result = self.calc.calculate(candles, current_price=110.0)
+        self.assertIn("support", result)
+        self.assertIn("resistance", result)
+        self.assertIn("BREAKOUT_LONG", result["signals"])
+
+    def test_sr_levels_breakout_short(self):
+        # Create candles with a trough (support), then price dropping below it
+        candles = []
+        base_ts = 1700000000000
+        prices = [100 - i * 5 for i in range(11)] + [50 + i * 4 for i in range(1, 6)] + [70 - i * 6 for i in range(1, 6)]
+        for i, p in enumerate(prices):
+            candles.append({
+                "ts": base_ts + i * 60000,
+                "open": float(p + 1),
+                "high": float(p + 1),
+                "low": float(p - 1),
+                "close": float(p),
+                "volume": 100.0
+            })
+        
+        result = self.calc.calculate(candles, current_price=30.0)
+        self.assertIn("BREAKOUT_SHORT", result["signals"])
+
+
 class TestIndicatorsEngine(unittest.TestCase):
     def setUp(self):
         self.enter_rules = {
@@ -151,10 +209,21 @@ class TestIndicatorsEngine(unittest.TestCase):
                     "ENTER_LONG": "50 < x <= 75",
                     "ENTER_SHORT": "25 <= x < 50"
                 }
+            },
+            "sr_levels": {
+                "is_active": True,
+                "timeframe": "5m",
+                "swing_len": 5,
+                "window": 100,
+                "margin": 2.0,
+                "thickness_k": 0.17,
+                "max_zones": 5,
+                "level_mode": "latest",
+                "breakout_edge": "h",
+                "long_cond": "BREAKOUT_LONG",
+                "short_cond": "BREAKOUT_SHORT"
             }
         }
-        # In Python true is True
-        self.enter_rules["trend_htf"]["trend_positive"] = True
         self.engine = IndicatorsEngine(self.enter_rules)
 
     def test_required_timeframes(self):
@@ -170,10 +239,11 @@ class TestIndicatorsEngine(unittest.TestCase):
             "1h": closes_1h,
             "15m": closes_15m
         }
-        result = self.engine.calculate(data)
+        result = self.engine.calculate(data, current_price=60.0)
         self.assertIn("trend", result)
         self.assertIn("trend_htf", result)
         self.assertIn("rsi", result)
+        self.assertIn("sr_levels", result)
         self.assertEqual(result["trend"], "UP")
         self.assertEqual(result["trend_htf"], "DOWN")
         self.assertEqual(result["rsi"], [])

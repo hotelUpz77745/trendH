@@ -77,6 +77,7 @@ def setup_settings_handlers(router: Router, bot_core):
         trend_htf_cfg = ENTER_RULES.get("trend_htf", {})
         rsi_cfg = ENTER_RULES.get("rsi", {})
         rsi_wl_cfg = ENTER_RULES.get("rsi_waterline50", {})
+        sr_cfg = ENTER_RULES.get("sr_levels", {})
         exit_rev = EXIT_RULES.get("trend_reversal", {})
         exit_tp = EXIT_RULES.get("take_profit_ratio", {})
         exit_sl = EXIT_RULES.get("stop_loss_ratio", {})
@@ -98,6 +99,14 @@ def setup_settings_handlers(router: Router, bot_core):
                 f"Waterline={rsi_wl_cfg.get('waterline', 50.0)}, Long={rsi_wl_cfg.get('long_cond')}, Short={rsi_wl_cfg.get('short_cond')}\n"
             )
 
+        sr_info = ""
+        if sr_cfg.get("is_active", False):
+            sr_info = (
+                f"• <b>SR Levels ({sr_cfg.get('timeframe', '5m')})</b>: "
+                f"Swing={sr_cfg.get('swing_len', 15)}, Window={sr_cfg.get('window', 300)}, "
+                f"Margin={sr_cfg.get('margin', 2.0)}, Mode={sr_cfg.get('level_mode', 'latest')}\n"
+            )
+
         tp_val = exit_tp.get("value")
         tp_str = f"{tp_val * 100:.1f}% ({tp_val})" if tp_val is not None else "Отключен (null)"
         sl_val = exit_sl.get("value")
@@ -112,7 +121,8 @@ def setup_settings_handlers(router: Router, bot_core):
             f"{htf_info}"
             f"• <b>RSI ({rsi_cfg.get('timeframe', '5m')})</b>: "
             f"Window={rsi_cfg.get('window', 14)}, Conds={rsi_cfg.get('conditions', {})}\n"
-            f"{wl_info}\n"
+            f"{wl_info}"
+            f"{sr_info}\n"
             f"<b>Выход (Exit Rules):</b>\n"
             f"• <b>Trend Reversal</b>: Long={exit_rev.get('long_exit_trends')}, Short={exit_rev.get('short_exit_trends')}\n"
             f"• <b>Take Profit</b>: {tp_str}\n"

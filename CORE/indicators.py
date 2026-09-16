@@ -1,9 +1,10 @@
 # ============================================================
-# FILE: indicators.py
-# ROLE: Standalone modular indicator calculation engine (Trend & RSI)
+# FILE: CORE/indicators.py
+# ROLE: Standalone modular indicator calculation engine (Trend, RSI & SR Levels)
 # ============================================================
 
 from typing import Dict, List, Set, Any, Optional
+from CORE.sr_levels import SRLevelsCalculator
 
 
 class IndicatorsMath:
@@ -70,7 +71,6 @@ class TrendCalculator:
     """Изолированный калькулятор тренда на базе быстрой и медленной EMA."""
 
     def __init__(self, cfg: Dict[str, Any]):
-        # Чтение конфига строго по п. 2 протокола ([''])
         self.is_active: bool = bool(cfg["is_active"])
         self.timeframe: str = str(cfg["timeframe"])
         self.sma_fast: int = int(cfg["sma_fast"])
@@ -115,18 +115,12 @@ class RSICalculator:
     """Изолированный калькулятор осциллятора RSI."""
 
     def __init__(self, cfg: Dict[str, Any]):
-        # Чтение конфига строго по п. 2 протокола ([''])
         self.is_active: bool = bool(cfg["is_active"])
         self.timeframe: str = str(cfg["timeframe"])
         self.window: int = int(cfg["window"])
         self.conditions: Dict[str, str] = cfg.get("conditions", {})
 
     def calculate(self, closes: List[float]) -> List[str]:
-        """
-        Вычисляет состояние RSI:
-        Возвращает список ключей сработавших условий (напр. ['ENTER_LONG']).
-        Если данных недостаточно, возвращает ['UNSTABLE'].
-        """
         if not self.is_active or not closes:
             return ["UNSTABLE"]
         
@@ -143,7 +137,6 @@ class RSICalculator:
         return active_states
 
     def get_raw_value(self, closes: List[float]) -> Optional[float]:
-        """Возвращает числовое значение RSI (float) или None при нехватке данных."""
         if not self.is_active or not closes:
             return None
         return IndicatorsMath.calc_rsi(closes, length=self.window)
@@ -161,13 +154,6 @@ class RSIWaterlineCalculator:
         self.short_cond: str = str(cfg.get("short_cond", "CROSS_DOWN"))
 
     def calculate(self, closes: List[float]) -> List[str]:
-        """
-        Возвращает:
-        - ['CROSS_UP']: если RSI пересек ватерлинию снизу вверх (prev <= waterline < curr)
-        - ['CROSS_DOWN']: если RSI пересек ватерлинию сверху вниз (prev >= waterline > curr)
-        - ['UNSTABLE']: если недостаточно свечей
-        - []: если пересечения не произошло
-        """
         if not self.is_active or not closes:
             return ["UNSTABLE"]
 
@@ -210,6 +196,9 @@ class IndicatorsEngine:
         waterline_cfg = enter_rules.get("rsi_waterline50")
         self.rsi_waterline_calc = RSIWaterlineCalculator(waterline_cfg) if waterline_cfg else None
 
+        sr_cfg = enter_rules.get("sr_levels")
+        self.sr_calc = SRLevelsCalculator(sr_cfg) if sr_cfg else None
+
     def get_required_timeframes(self) -> Set[str]:
         """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
         tfs = set()
@@ -220,13 +209,29 @@ class IndicatorsEngine:
             tfs.add(self.rsi_calc.timeframe)
         if self.rsi_waterline_calc and self.rsi_waterline_calc.is_active:
             tfs.add(self.rsi_waterline_calc.timeframe)
+        if self.sr_calc and self.sr_calc.is_active:
+            tfs.add(self.sr_calc.timeframe)
         return tfs if tfs else {"5m"}
 
-    def calculate(self, closes_by_tf: Dict[str, List[float]]) -> Dict[str, Any]:
+    def calculate(self, klines_by_tf: Dict[str, Any], current_price: Optional[float] = None) -> Dict[str, Any]:
         """
-        Вычисляет показатели индикаторов по переданному словарю {таймфрейм: список_closes}.
-        Возвращает: {"trend": str, "trend_htf": str, "rsi": list[str], "rsi_value": float | None, "rsi_waterline50": list[str]}
+        Вычисляет показатели индикаторов по переданному словарю {таймфрейм: список_свечей_или_closes}.
+        Возвращает: {"trend": str, "trend_htf": str, "rsi": list[str], "rsi_value": float | None,
+                     "rsi_waterline50": list[str], "sr_levels": list[str], "sr_levels_data": dict}
         """
+        # Извлечение close цен для EMA и RSI
+        closes_by_tf: Dict[str, List[float]] = {}
+        for tf, raw in klines_by_tf.items():
+            if isinstance(raw, list):
+                if raw and isinstance(raw[0], dict):
+                    closes_by_tf[tf] = [float(c.get("close", 0.0)) for c in raw]
+                else:
+                    closes_by_tf[tf] = [float(c) for c in raw]
+            elif isinstance(raw, dict) and "close" in raw:
+                closes_by_tf[tf] = [float(x) for x in raw["close"]]
+            else:
+                closes_by_tf[tf] = []
+
         result: Dict[str, Any] = {}
         for key, calc in self.trend_calcs.items():
             if calc.is_active:
@@ -235,7 +240,6 @@ class IndicatorsEngine:
             else:
                 result[key] = "UNSTABLE"
 
-        # Дефолт для базового trend если не задан
         if "trend" not in result:
             result["trend"] = "UNSTABLE"
 
@@ -254,5 +258,14 @@ class IndicatorsEngine:
             result["rsi_waterline50"] = self.rsi_waterline_calc.calculate(closes_wl)
         else:
             result["rsi_waterline50"] = []
+
+        if self.sr_calc and self.sr_calc.is_active:
+            candles_sr = klines_by_tf.get(self.sr_calc.timeframe, [])
+            sr_res = self.sr_calc.calculate(candles_sr, current_price=current_price)
+            result["sr_levels"] = sr_res["signals"]
+            result["sr_levels_data"] = sr_res
+        else:
+            result["sr_levels"] = []
+            result["sr_levels_data"] = {"signals": [], "support": [], "resistance": []}
 
         return result
