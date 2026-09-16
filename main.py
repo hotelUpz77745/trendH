@@ -366,35 +366,35 @@ class Main:
                     if tasks:
                         await asyncio.gather(*tasks)
 
-                    # Логирование показателей тренда и RSI по всем отслеживаемым парам
-                    signal_summary = {"LONG": [], "SHORT": [], "NONE": 0}
-                    for sym in self.symbols:
-                        ind = self.symbol_indicators.get(sym)
-                        if not ind:
-                            continue
-                        trend = ind.get("trend", "UNSTABLE")
-                        rsi_val = ind.get("rsi_value")
-                        rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
-                        rsi_states = ind.get("rsi", [])
-                        
-                        has_long = self.check_entry(sym, "LONG")
-                        has_short = self.check_entry(sym, "SHORT")
-                        
-                        if has_long:
-                            sig_label = "🟢 [LONG]"
-                            signal_summary["LONG"].append(sym)
-                        elif has_short:
-                            sig_label = "🔴 [SHORT]"
-                            signal_summary["SHORT"].append(sym)
-                        else:
-                            sig_label = "⚪ [-]"
-                            signal_summary["NONE"] += 1
-                            
-                        log(f"📊 [IND] {sym:<12} | Trend: {trend:<8} | RSI: {rsi_str:>5} ({','.join(rsi_states)}) | Sig: {sig_label}", level="INFO")
-                        
-                    longs_str = ", ".join(signal_summary["LONG"]) if signal_summary["LONG"] else "нет"
-                    shorts_str = ", ".join(signal_summary["SHORT"]) if signal_summary["SHORT"] else "нет"
-                    log(f"📊 [IND SUMMARY] Обновлено {len(self.symbols)} пар. Сигналы входа: LONG [{len(signal_summary['LONG'])}]: {longs_str} | SHORT [{len(signal_summary['SHORT'])}]: {shorts_str} | Без сигнала: {signal_summary['NONE']}", level="INFO")
+                    # # Логирование показателей тренда и RSI по всем отслеживаемым парам
+                    # signal_summary = {"LONG": [], "SHORT": [], "NONE": 0}
+                    # for sym in self.symbols:
+                    #     ind = self.symbol_indicators.get(sym)
+                    #     if not ind:
+                    #         continue
+                    #     trend = ind.get("trend", "UNSTABLE")
+                    #     rsi_val = ind.get("rsi_value")
+                    #     rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
+                    #     rsi_states = ind.get("rsi", [])
+                    #     
+                    #     has_long = self.check_entry(sym, "LONG")
+                    #     has_short = self.check_entry(sym, "SHORT")
+                    #     
+                    #     if has_long:
+                    #         sig_label = "🟢 [LONG]"
+                    #         signal_summary["LONG"].append(sym)
+                    #     elif has_short:
+                    #         sig_label = "🔴 [SHORT]"
+                    #         signal_summary["SHORT"].append(sym)
+                    #     else:
+                    #         sig_label = "⚪ [-]"
+                    #         signal_summary["NONE"] += 1
+                    #         
+                    #     log(f"📊 [IND] {sym:<12} | Trend: {trend:<8} | RSI: {rsi_str:>5} ({','.join(rsi_states)}) | Sig: {sig_label}", level="INFO")
+                    #     
+                    # longs_str = ", ".join(signal_summary["LONG"]) if signal_summary["LONG"] else "нет"
+                    # shorts_str = ", ".join(signal_summary["SHORT"]) if signal_summary["SHORT"] else "нет"
+                    # log(f"📊 [IND SUMMARY] Обновлено {len(self.symbols)} пар. Сигналы входа: LONG [{len(signal_summary['LONG'])}]: {longs_str} | SHORT [{len(signal_summary['SHORT'])}]: {shorts_str} | Без сигнала: {signal_summary['NONE']}", level="INFO")
             except Exception as ex:
                 log(f"Error in indicators_daemon: {ex}", level="ERROR")
                 traceback.print_exc()
