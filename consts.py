@@ -51,3 +51,8 @@ TG_TOKEN = os.getenv("TG_BOT_TOKEN", "")
 TG_ENABLED = bool(cfg["telegram"].get("enabled", False))
 TG_ALLOWED_USERS = cfg["telegram"]["allowed_users"]
 CFG_PATH = BASE_DIR / "cfg.json"
+
+WATCHDOG_CFG = cfg.get("watchdog", {})
+BACKUP_CFG = cfg.get("backup", {})
+NOTIFICATIONS_CFG = cfg.get("notifications", {})
+AUTO_CLOSING_CFG = cfg.get("auto_closing", {})

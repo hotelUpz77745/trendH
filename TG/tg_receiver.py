@@ -106,3 +106,19 @@ class TelegramReceiver:
                 await self.bot.session.close()
             except Exception as e:
                 logger.warning(f"Ошибка при закрытии сессии бота: {e}")
+
+    async def send_message_to_all(self, text: str):
+        if not self._is_running or not self.bot: return
+        for uid in TG_ALLOWED_USERS:
+            try:
+                await self.bot.send_message(chat_id=uid, text=text, parse_mode="HTML")
+            except Exception as e:
+                logger.error(f"Failed to send message to {uid}: {e}")
+
+    async def send_document_to_all(self, document, caption: str = ""):
+        if not self._is_running or not self.bot: return
+        for uid in TG_ALLOWED_USERS:
+            try:
+                await self.bot.send_document(chat_id=uid, document=document, caption=caption, parse_mode="HTML")
+            except Exception as e:
+                logger.error(f"Failed to send document to {uid}: {e}")

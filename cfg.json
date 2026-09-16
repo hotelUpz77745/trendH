@@ -160,5 +160,31 @@
             "value": null,
             "_comment_take_profit_ratio": "null или доля от единицы, например 0.04 для 4%"
         }
+    },
+    "watchdog": {
+        "timeout_sec": 60,
+        "check_interval_sec": 1,
+        "heartbeat_interval_sec": 60,
+        "heartbeat_autodelete_sec": 180
+    },
+    "backup": {
+        "enabled": true,
+        "debounce_sec": 10,
+        "max_interval_sec": 300
+    },
+    "notifications": {
+        "enabled": true,
+        "negative_threshold": -20.0,
+        "positive_threshold": 20.0
+    },
+    "auto_closing": {
+        "negative": {
+            "threshold": null,
+            "threshold_increment": null
+        },
+        "positive": {
+            "threshold": null,
+            "threshold_increment": null
+        }
     }
 }

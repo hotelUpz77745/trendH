@@ -18,6 +18,9 @@ from notifier import NotifierManager
 from API.price_stream import BinanceHotPriceStream
 from TG.tg_receiver import TelegramReceiver
 from CORE.indicators import IndicatorsEngine
+from CORE.watchdog import LoopWatchdog
+from CORE.backup import RuntimeBackupManager
+from consts import AUTO_CLOSING_CFG
 
 if TYPE_CHECKING:
     from API.price_stream import HotPriceTick
@@ -32,7 +35,9 @@ from consts import (
     PAPER_TRADING_CFG,
     TG_ENABLED,
     TG_TOKEN,
-    CFG_PATH
+    CFG_PATH,
+    ANALYTICS_DIR,
+    DATA_DIR
 )
 
 
@@ -40,6 +45,54 @@ class BotState:
     def __init__(self):
         # symbol -> {"LONG": PositionState, "SHORT": PositionState}
         self.positions: Dict[str, Dict[str, PositionState]] = {}
+        self.backup_manager = None
+
+    def get_state_path(self):
+        from consts import DATA_DIR
+        return DATA_DIR / "state.json"
+
+    def load_state(self):
+        path = self.get_state_path()
+        if not path.exists():
+            return
+        try:
+            import json
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            for sym, sides in data.items():
+                if sym not in self.positions:
+                    self.positions[sym] = {
+                        "LONG": PositionState(symbol=sym, side="LONG"),
+                        "SHORT": PositionState(symbol=sym, side="SHORT")
+                    }
+                for side, pos_dict in sides.items():
+                    if pos_dict.get("is_active"):
+                        pos = self.positions[sym][side]
+                        pos.is_active = True
+                        pos.open_price = float(pos_dict.get("open_price", 0.0))
+                        pos.size = float(pos_dict.get("size", 0.0))
+                        pos.open_time_ms = int(pos_dict.get("open_time_ms", 0))
+            log(f"Успешно загружен стейт из {path.name}", level="INFO")
+        except Exception as e:
+            log(f"Ошибка загрузки стейта: {e}", level="ERROR")
+
+    def save_state(self):
+        path = self.get_state_path()
+        try:
+            import json
+            data = {}
+            for sym, sides in self.positions.items():
+                data[sym] = {
+                    "LONG": sides["LONG"].__dict__,
+                    "SHORT": sides["SHORT"].__dict__
+                }
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+            if self.backup_manager:
+                self.backup_manager.mark_changed()
+        except Exception as e:
+            log(f"Ошибка сохранения стейта: {e}", level="ERROR")
 
     def get_position(self, symbol: str, side: str):
         pos = self.positions.get(symbol, {}).get(side)
@@ -55,10 +108,12 @@ class BotState:
             }
         now_ms = int(time.time() * 1000)
         self.positions[symbol][side].set_active(price, size, now_ms)
+        self.save_state()
 
     def close_position(self, symbol: str, side: str):
         if symbol in self.positions and side in self.positions[symbol]:
             self.positions[symbol][side].reset()
+            self.save_state()
 
 class Main:
     def __init__(self):
@@ -83,8 +138,16 @@ class Main:
         self.stream_task = None
         self.tg_bot = None
         self.tg_task = None
+        self.watchdog_task = None
+        self.backup_task = None
+        self.auto_closing_task = None
         self.is_paused = not cfg.get("auto_start", True)
         self.direction_mode = DIRECTION_MODE
+        
+        self.watchdog = LoopWatchdog(self.notifier)
+        self.backup_manager = RuntimeBackupManager(self.notifier)
+        self.state.backup_manager = self.backup_manager
+        self.state.load_state()
 
     def set_paused(self, paused: bool):
         """Переключает флаг паузы и сохраняет состояние auto_start в cfg.json."""
@@ -122,7 +185,7 @@ class Main:
         return base_ratio * multiplier
         
     async def init_klines_cache(self, session):
-        log("🚀 Pre-fetching klines history for all symbols...", level="INFO")
+        log(" Pre-fetching klines history for all symbols...", level="INFO")
         history_size = cfg.get("klines_history_size", 300)
         tfs = self.indicators_engine.get_required_timeframes()
         
@@ -141,7 +204,7 @@ class Main:
 
         tasks = [_fetch(sym) for sym in self.symbols]
         await asyncio.gather(*tasks)
-        log(f"✅ Klines history loaded for {len(self.symbols)} symbols.", level="INFO")
+        log(f" Klines history loaded for {len(self.symbols)} symbols.", level="INFO")
 
     async def update_indicators(self, session, symbol: str):
         try:
@@ -273,11 +336,11 @@ class Main:
                 log(f"[{symbol}][{side}] Экстренное закрытие позиции. Цена: {current_price}, PnL: {pnl_usd:.4f}$", level="INFO")
                 closed_count += 1
                 
-        log(f"✅ Close All: Успешно закрыто {closed_count} виртуальных позиций.", level="INFO")
+        log(f" Close All: Успешно закрыто {closed_count} виртуальных позиций.", level="INFO")
 
     async def indicators_daemon(self):
         """Фоновый процесс обновления индикаторов (скачивание свечей)."""
-        log("🚀 Запущен indicators_daemon.", level="INFO")
+        log(" Запущен indicators_daemon.", level="INFO")
         while True:
             try:
                 if self.symbols and not self.is_paused:
@@ -291,7 +354,7 @@ class Main:
 
     async def volumes_daemon(self):
         """Фоновый процесс обновления объемов за 24 часа."""
-        log("🚀 Запущен volumes_daemon.", level="INFO")
+        log(" Запущен volumes_daemon.", level="INFO")
         while True:
             try:
                 if self.symbols:
@@ -302,6 +365,36 @@ class Main:
                 log(f"Error in volumes_daemon: {ex}", level="ERROR")
                 traceback.print_exc()
             await asyncio.sleep(INDICATORS_REFRESH_INTERVAL_SEC)
+
+    async def auto_closing_daemon(self):
+        if not AUTO_CLOSING_CFG:
+            return
+        log("Запущен auto_closing_daemon.", level="INFO")
+        while True:
+            try:
+                analytics_data = self.utils.read_json_file(self.utils.get_analytics_path()) if hasattr(self.utils, "get_analytics_path") else self.utils.read_json_file(ANALYTICS_DIR / "analytics.json")
+                if analytics_data:
+                    net_profit = float(analytics_data.get("net_profit_usdt", 0.0))
+                    
+                    neg_cfg = AUTO_CLOSING_CFG.get("negative", {})
+                    neg_thresh = neg_cfg.get("threshold")
+                    if neg_thresh is not None and net_profit <= float(neg_thresh):
+                        log(f"AUTO-CLOSING (Negative): {net_profit} <= {neg_thresh}", level="WARNING")
+                        asyncio.create_task(self.close_all_positions())
+                        msg = f"ВНИМАНИЕ! AUTO-CLOSING\nДостигнут лимит убытка ({neg_thresh} USDT). Все позиции закрываются!"
+                        asyncio.create_task(self.notifier.send_alert(msg) if not hasattr(self.notifier, "tg_bot") else self.notifier.tg_bot.send_message_to_all(msg))
+                        
+                    pos_cfg = AUTO_CLOSING_CFG.get("positive", {})
+                    pos_thresh = pos_cfg.get("threshold")
+                    if pos_thresh is not None and net_profit >= float(pos_thresh):
+                        log(f"AUTO-CLOSING (Positive): {net_profit} >= {pos_thresh}", level="WARNING")
+                        asyncio.create_task(self.close_all_positions())
+                        msg = f"ОТЛИЧНО! AUTO-CLOSING\nДостигнут лимит профита ({pos_thresh} USDT). Все позиции закрываются!"
+                        asyncio.create_task(self.notifier.send_alert(msg) if not hasattr(self.notifier, "tg_bot") else self.notifier.tg_bot.send_message_to_all(msg))
+            except Exception as e:
+                log(f"Error in auto_closing_daemon: {e}", level="ERROR")
+            
+            await asyncio.sleep(5)
 
     async def run(self):
         await self.network.initialize_session()
@@ -318,43 +411,78 @@ class Main:
             try:
                 self.tg_bot = TelegramReceiver(self)
                 self.tg_task = asyncio.create_task(self.tg_bot.start())
-                log("🚀 TelegramReceiver успешно запущен параллельно с ядром.", level="INFO")
+                log(" TelegramReceiver успешно запущен параллельно с ядром.", level="INFO")
             except Exception as e:
                 log(f"Не удалось инициализировать TelegramReceiver: {e}", level="ERROR")
 
-        log("✅ Бот успешно запущен (Paper Trading mode)", level="INFO")
+        log(" Бот успешно запущен (Paper Trading mode)", level="INFO")
         try:
             self.symbols = CronIntegration.get_symbols()
             if self.symbols:
                 await self.init_klines_cache(session)
                 self.price_stream = BinanceHotPriceStream(self.symbols)
                 self.stream_task = asyncio.create_task(self.price_stream.run(self.on_tick))
-                log(f"🚀 Запущен HotPriceStream для {len(self.symbols)} пар.", level="INFO")
+                log(f"Запущен HotPriceStream для {len(self.symbols)} пар.", level="INFO")
                 
             self.indicators_task = asyncio.create_task(self.indicators_daemon())
             self.volumes_task = asyncio.create_task(self.volumes_daemon())
+            self.auto_closing_task = asyncio.create_task(self.auto_closing_daemon())
+            
+            self.watchdog_task = asyncio.create_task(self.watchdog.start())
+            self.backup_task = asyncio.create_task(self.backup_manager.start())
                 
             while True:
+                self.watchdog.tick()
                 await asyncio.sleep(MAIN_LOOP_DELAY_SEC)
 
         except KeyboardInterrupt:
-            log("⛔ Остановка по Ctrl+C", level="INFO")
+            log("Остановка по Ctrl+C", level="INFO")
+        except asyncio.CancelledError:
+            log("Остановка (CancelledError)", level="INFO")
         except Exception as ex:
             log(f"Сбой выполнения: {ex}", level="ERROR")
+            import traceback
             traceback.print_exc()
         finally:
-            log("Завершение работы.", level="INFO")
+            log("Завершение работы...", level="INFO")
+            tasks_to_wait = []
+            
             if self.tg_task:
                 self.tg_task.cancel()
+                tasks_to_wait.append(self.tg_task)
             if hasattr(self, 'indicators_task') and self.indicators_task:
                 self.indicators_task.cancel()
+                tasks_to_wait.append(self.indicators_task)
             if hasattr(self, 'volumes_task') and self.volumes_task:
                 self.volumes_task.cancel()
+                tasks_to_wait.append(self.volumes_task)
+            if hasattr(self, 'auto_closing_task') and self.auto_closing_task:
+                self.auto_closing_task.cancel()
+                tasks_to_wait.append(self.auto_closing_task)
+            if self.stream_task:
+                self.stream_task.cancel()
+                tasks_to_wait.append(self.stream_task)
+                
+            self.watchdog.stop()
+            if self.watchdog_task:
+                self.watchdog_task.cancel()
+                tasks_to_wait.append(self.watchdog_task)
+                
+            self.backup_manager.stop()
+            if self.backup_task:
+                self.backup_task.cancel()
+                tasks_to_wait.append(self.backup_task)
+                
             if self.tg_bot:
                 await self.tg_bot.stop()
             if self.price_stream:
                 self.price_stream.stop()
+                
+            if tasks_to_wait:
+                await asyncio.gather(*tasks_to_wait, return_exceptions=True)
+                
             await self.network.shutdown_session()
+            log("Работа завершена. Сессии закрыты.", level="INFO")
 
 if __name__ == "__main__":
     try:
