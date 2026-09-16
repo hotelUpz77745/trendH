@@ -333,6 +333,52 @@ class ExitStopLossRule(BaseRule):
         return False
 
 
+class ExitRSIRule(BaseRule):
+    """
+    Правило выхода по RSI:
+    - Перекупленность / перепроданность (long_exit_rsi, short_exit_rsi)
+    - Потеря импульса (long_loss_rsi, short_loss_rsi)
+    - Кастомные строковые условия (long_cond, short_cond)
+    """
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.cfg = cfg
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.long_exit_rsi: Optional[float] = cfg.get("long_exit_rsi")
+        self.long_loss_rsi: Optional[float] = cfg.get("long_loss_rsi")
+        self.short_exit_rsi: Optional[float] = cfg.get("short_exit_rsi")
+        self.short_loss_rsi: Optional[float] = cfg.get("short_loss_rsi")
+        self.long_cond: Optional[str] = cfg.get("long_cond", "EXIT_LONG")
+        self.short_cond: Optional[str] = cfg.get("short_cond", "EXIT_SHORT")
+
+    def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
+        if not self.is_active:
+            return False
+
+        indicators = indicators or kwargs.get("indicators", {})
+        rsi_val = indicators.get("rsi_value", kwargs.get("rsi_value"))
+        rsi_states = indicators.get("rsi", kwargs.get("rsi", []))
+
+        if side == "LONG":
+            if self.long_cond and self.long_cond in rsi_states:
+                return True
+            if rsi_val is not None:
+                if self.long_exit_rsi is not None and rsi_val >= self.long_exit_rsi:
+                    return True
+                if self.long_loss_rsi is not None and rsi_val <= self.long_loss_rsi:
+                    return True
+        elif side == "SHORT":
+            if self.short_cond and self.short_cond in rsi_states:
+                return True
+            if rsi_val is not None:
+                if self.short_exit_rsi is not None and rsi_val <= self.short_exit_rsi:
+                    return True
+                if self.short_loss_rsi is not None and rsi_val >= self.short_loss_rsi:
+                    return True
+
+        return False
+
+
 class ExitSignalEngine:
     """
     Движок сигналов на выход.
@@ -348,17 +394,37 @@ class ExitSignalEngine:
         self.rules: List[BaseRule] = []
         if "trend_reversal" in exit_rules_cfg:
             self.rules.append(ExitTrendReversalRule(exit_rules_cfg["trend_reversal"]))
+        if "rsi" in exit_rules_cfg:
+            self.rules.append(ExitRSIRule(exit_rules_cfg["rsi"]))
         if "take_profit_ratio" in exit_rules_cfg:
             self.rules.append(ExitTakeProfitRule(exit_rules_cfg["take_profit_ratio"], analytics_cfg, get_slippage_ratio_fn))
         if "stop_loss_ratio" in exit_rules_cfg:
             self.rules.append(ExitStopLossRule(exit_rules_cfg["stop_loss_ratio"], analytics_cfg, get_slippage_ratio_fn))
 
-    def check_signal(self, side: str, symbol: str, trend: str, open_price: float, current_price: float) -> bool:
+    def check_signal(
+        self,
+        side: str,
+        symbol: str,
+        trend: str,
+        open_price: float,
+        current_price: float,
+        indicators: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """
         Проверяет правила выхода.
         Возвращает True, если ХОТЯ БЫ ОДНО активное правило сработало.
         """
+        indicators = indicators or {}
         for rule in self.rules:
-            if rule.check(side, symbol=symbol, trend=trend, open_price=open_price, current_price=current_price):
+            if rule.check(
+                side,
+                symbol=symbol,
+                trend=trend,
+                open_price=open_price,
+                current_price=current_price,
+                indicators=indicators,
+                rsi_value=indicators.get("rsi_value"),
+                rsi=indicators.get("rsi", [])
+            ):
                 return True
         return False

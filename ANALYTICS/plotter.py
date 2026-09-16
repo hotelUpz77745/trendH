@@ -21,16 +21,21 @@ CSV_FILE = ANALYTICS_DIR / "trades_ledger.txt"
 JSON_FILE = ANALYTICS_DIR / "analytics.json"
 PLOT_FILE = IMAGES_DIR / "equity_curve.png"
 
-def generate_equity_curve() -> str:
+def generate_equity_curve(universe_id: str = "default") -> str:
     if not MATPLOTLIB_AVAILABLE:
         return ""
-    if not CSV_FILE.exists():
+    suffix = f"_{universe_id}" if universe_id and universe_id != "default" else ""
+    csv_file = ANALYTICS_DIR / f"trades_ledger{suffix}.txt"
+    json_file = ANALYTICS_DIR / f"analytics{suffix}.json"
+    plot_file = IMAGES_DIR / f"equity_curve{suffix}.png"
+
+    if not csv_file.exists():
         return ""
         
     start_balance = 0.0
-    if JSON_FILE.exists():
+    if json_file.exists():
         try:
-            with open(JSON_FILE, "r", encoding="utf-8") as f:
+            with open(json_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 start_balance = float(data.get("start_balance_usdt", 0.0))
         except Exception:
@@ -43,7 +48,7 @@ def generate_equity_curve() -> str:
     
     # We add the initial point
     try:
-        with open(CSV_FILE, mode="r", encoding="utf-8") as f:
+        with open(csv_file, mode="r", encoding="utf-8") as f:
             reader = csv.reader(f, delimiter=";")
             header = next(reader, None)
             if not header:
@@ -116,10 +121,10 @@ def generate_equity_curve() -> str:
     plt.xticks(rotation=45)
     plt.tight_layout()
     
-    plt.savefig(PLOT_FILE, dpi=100)
+    plt.savefig(plot_file, dpi=100)
     plt.close()
     
-    return str(PLOT_FILE)
+    return str(plot_file)
 
 def generate_coin_analytics(symbol: str) -> str:
     if not MATPLOTLIB_AVAILABLE:

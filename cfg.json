@@ -221,6 +221,198 @@
             "_comment_stop_loss_ratio": "null или доля от единицы, например 0.03 для 3%"
         }
     },
+    "universes": {
+        "u1": {
+            "name": "Classic Trend (TP 5%, No SL)",
+            "description": "Базовый тренд 5m + 1h HTF + RSI 50-60, выход по смене тренда или TP 5%",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": true, "timeframe": "5m", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 3, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "trend_htf": { "is_active": true, "timeframe": "1h", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 2, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "rsi": { "is_active": true, "timeframe": "5m", "window": 14, "conditions": { "ENTER_LONG": "50 < x <= 60", "ENTER_SHORT": "40 <= x < 50" } },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": false }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": 0.05 },
+                "stop_loss_ratio": { "value": null }
+            }
+        },
+        "u2": {
+            "name": "Classic Trend + SL (TP 3.5%, SL 2%)",
+            "description": "Базовый тренд 5m + 1h HTF + RSI 50-60 с защитным Stop Loss 2.0% и TP 3.5%",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": true, "timeframe": "5m", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 3, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "trend_htf": { "is_active": true, "timeframe": "1h", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 2, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "rsi": { "is_active": true, "timeframe": "5m", "window": 14, "conditions": { "ENTER_LONG": "50 < x <= 60", "ENTER_SHORT": "40 <= x < 50" } },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": false }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": 0.035 },
+                "stop_loss_ratio": { "value": 0.02 }
+            }
+        },
+        "u3": {
+            "name": "Breakout & Volume (TP 5%, No SL)",
+            "description": "Пробой уровней LuxAlgo + всплеск объема 1m + 1h HTF, TP 5%",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": { "is_active": true, "timeframe": "1h", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 2, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": true, "timeframe": "5m", "swing_len": 15, "window": 300, "margin": 2.0, "thickness_k": 0.17, "max_zones": 10, "level_mode": "latest", "breakout_edge": "h", "long_cond": "BREAKOUT_LONG", "short_cond": "BREAKOUT_SHORT" },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": true, "timeframe": "1m", "mode": "a", "period": 14, "a": { "slice_factor": 1.1 }, "r": { "slice_factor": 2.1 }, "long_cond": "VOLF_PASSED", "short_cond": "VOLF_PASSED" }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": 0.05 },
+                "stop_loss_ratio": { "value": null }
+            }
+        },
+        "u4": {
+            "name": "Breakout & Volume + SL (TP 4%, SL 2%)",
+            "description": "Пробой уровней LuxAlgo + всплеск объема 1m + 1h HTF с SL 2.0% и TP 4.0%",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": { "is_active": true, "timeframe": "1h", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 2, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": true, "timeframe": "5m", "swing_len": 15, "window": 300, "margin": 2.0, "thickness_k": 0.17, "max_zones": 10, "level_mode": "latest", "breakout_edge": "h", "long_cond": "BREAKOUT_LONG", "short_cond": "BREAKOUT_SHORT" },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": true, "timeframe": "1m", "mode": "a", "period": 14, "a": { "slice_factor": 1.1 }, "r": { "slice_factor": 2.1 }, "long_cond": "VOLF_PASSED", "short_cond": "VOLF_PASSED" }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": 0.04 },
+                "stop_loss_ratio": { "value": 0.02 }
+            }
+        },
+        "u5": {
+            "name": "Momentum Kick-off (TP 3.5%, SL 1.5%)",
+            "description": "Пробой ватерлинии RSI 50 + всплеск объема (rolling) + 1h HTF, TP 3.5%, SL 1.5%",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": { "is_active": true, "timeframe": "1h", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 2, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": true, "timeframe": "5m", "window": 14, "waterline": 50.0, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN" },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": true, "timeframe": "1m", "mode": "r", "period": 14, "a": { "slice_factor": 1.1 }, "r": { "slice_factor": 2.1 }, "long_cond": "VOLF_PASSED", "short_cond": "VOLF_PASSED" }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": 0.035 },
+                "stop_loss_ratio": { "value": 0.015 }
+            }
+        },
+        "u6": {
+            "name": "EMA Acceleration (TP 3%, SL 1.5%)",
+            "description": "Боевой кроссовер EMA 9/21 с фильтром дельты + объем + 1h HTF, TP 3.0%, SL 1.5%",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": { "is_active": true, "timeframe": "1h", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 2, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": true, "timeframe": "5m", "period1": 9, "period2": 21, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN" },
+                "vol_filter": { "is_active": true, "timeframe": "1m", "mode": "a", "period": 14, "a": { "slice_factor": 1.1 }, "r": { "slice_factor": 2.1 }, "long_cond": "VOLF_PASSED", "short_cond": "VOLF_PASSED" }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": 0.03 },
+                "stop_loss_ratio": { "value": 0.015 }
+            }
+        },
+        "u7": {
+            "name": "Iron Confluence (TP 5%, SL 2.5%)",
+            "description": "Снайпер: пробой уровней + разгон EMA + объем + 1h HTF, TP 5.0%, SL 2.5%",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": { "is_active": true, "timeframe": "1h", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 2, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": true, "timeframe": "5m", "swing_len": 15, "window": 300, "margin": 2.0, "thickness_k": 0.17, "max_zones": 10, "level_mode": "latest", "breakout_edge": "h", "long_cond": "BREAKOUT_LONG", "short_cond": "BREAKOUT_SHORT" },
+                "ema_cross": { "is_active": true, "timeframe": "5m", "period1": 9, "period2": 21, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN" },
+                "vol_filter": { "is_active": true, "timeframe": "1m", "mode": "a", "period": 14, "a": { "slice_factor": 1.1 }, "r": { "slice_factor": 2.1 }, "long_cond": "VOLF_PASSED", "short_cond": "VOLF_PASSED" }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": 0.05 },
+                "stop_loss_ratio": { "value": 0.025 }
+            }
+        },
+        "u8": {
+            "name": "Pure Scalp (TP 2%, SL 1%)",
+            "description": "Локальный скальп: EMA Cross + RSI Waterline + объем (без HTF), TP 2.0%, SL 1.0%",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": { "is_active": false },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": true, "timeframe": "5m", "window": 14, "waterline": 50.0, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN" },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": true, "timeframe": "5m", "period1": 9, "period2": 21, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN" },
+                "vol_filter": { "is_active": true, "timeframe": "1m", "mode": "r", "period": 14, "a": { "slice_factor": 1.1 }, "r": { "slice_factor": 2.1 }, "long_cond": "VOLF_PASSED", "short_cond": "VOLF_PASSED" }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": 0.02 },
+                "stop_loss_ratio": { "value": 0.01 }
+            }
+        },
+        "u9": {
+            "name": "Trend Pullback (TP 3.5%, SL 1.8%)",
+            "description": "Откат по тренду: 5m + 1h тренд + возврат RSI 45..55 + объем, TP 3.5%, SL 1.8%",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": true, "timeframe": "5m", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 3, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "trend_htf": { "is_active": true, "timeframe": "1h", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 2, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "rsi": { "is_active": true, "timeframe": "5m", "window": 14, "conditions": { "ENTER_LONG": "45 <= x <= 55", "ENTER_SHORT": "45 <= x <= 55" } },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": true, "timeframe": "1m", "mode": "a", "period": 14, "a": { "slice_factor": 1.1 }, "r": { "slice_factor": 2.1 }, "long_cond": "VOLF_PASSED", "short_cond": "VOLF_PASSED" }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": 0.035 },
+                "stop_loss_ratio": { "value": 0.018 }
+            }
+        },
+        "u10": {
+            "name": "Trend Reversal Pure (No TP/SL)",
+            "description": "Чистый тренд-следящий вход, выход исключительно по смене/затуханию тренда (FLAT/DOWN)",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": true, "timeframe": "5m", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 3, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "trend_htf": { "is_active": true, "timeframe": "1h", "sma_fast": 10, "sma_slow": 30, "confirmation_candles": 2, "require_rising": true, "trend_positive": true, "long_cond": "UP", "short_cond": "DOWN" },
+                "rsi": { "is_active": true, "timeframe": "5m", "window": 14, "conditions": { "ENTER_LONG": "50 < x <= 60", "ENTER_SHORT": "40 <= x < 50" } },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": false }
+            },
+            "exit_rules": {
+                "trend_reversal": { "is_active": true, "long_exit_trends": ["FLAT", "DOWN"], "short_exit_trends": ["FLAT", "UP"] },
+                "take_profit_ratio": { "value": null },
+                "stop_loss_ratio": { "value": null }
+            }
+        }
+    },
     "watchdog": {
         "timeout_sec": 60,
         "check_interval_sec": 1,

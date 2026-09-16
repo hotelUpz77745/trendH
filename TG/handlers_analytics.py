@@ -1,11 +1,12 @@
 # ============================================================
 # FILE: TG/handlers_analytics.py
-# ROLE: Telegram analytics handlers (Equity, Ledger, Ranking, Stats)
+# ROLE: Telegram analytics handlers (Universes, Equity, Ledger, Leaderboard)
 # ============================================================
 
 import json
 import csv
 import time
+from typing import Optional
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.fsm.context import FSMContext
@@ -23,11 +24,21 @@ class AnalyticsStates(StatesGroup):
     waiting_for_balance = State()
 
 
-def _get_analytics_data() -> dict:
-    """Безопасное чтение файла аналитики с автоматическим перерасчетом метрик."""
-    file_path = ANALYTICS_DIR / "analytics.json"
+def _get_universe_list(bot_core) -> list:
+    if bot_core and hasattr(bot_core, "universe_manager"):
+        return bot_core.universe_manager.get_all_universes()
+    return []
+
+
+def _get_analytics_data(universe_id: str = "u1") -> dict:
+    """Безопасное чтение файла аналитики вселенной с перерасчетом метрик."""
+    suffix = f"_{universe_id}" if universe_id and universe_id != "default" else ""
+    file_path = ANALYTICS_DIR / f"analytics{suffix}.json"
     if not file_path.exists():
-        return {}
+        # Fallback to default if u1 not yet created
+        file_path = ANALYTICS_DIR / "analytics.json"
+        if not file_path.exists():
+            return {}
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -37,35 +48,40 @@ def _get_analytics_data() -> dict:
         return {}
 
 
-def _format_analytics_text(data: dict, bot_core=None) -> str:
-    """Форматирует глобальную математическую сводку аналитики с расчетом живого нереализованного PnL."""
+def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u1") -> str:
+    """Форматирует сводку аналитики выбранной вселенной с нереализованным PnL."""
+    univ_obj = None
+    if bot_core and hasattr(bot_core, "universe_manager"):
+        univ_obj = bot_core.universe_manager.get_universe(universe_id)
+
+    univ_title = f"🌐 <b>Вселенная: {univ_obj.name}</b>" if univ_obj else f"🌐 <b>Вселенная: {universe_id.upper()}</b>"
+    desc_str = f"<i>{univ_obj.description}</i>\n\n" if univ_obj and univ_obj.description else "\n"
+
     if not data:
-        return "📊 <b>Аналитика пока не содержит данных по сделкам.</b>"
+        return f"{univ_title}\n{desc_str}📊 <b>Аналитика пока не содержит данных по сделкам.</b>"
 
     start_bal = data.get("start_balance_usdt", 0.0)
     cur_bal = data.get("cur_balance_usdt", 0.0)
     net_profit = data.get("net_profit_usdt", 0.0)
     realized_pnl = data.get("realized_pnl_usdt", 0.0)
 
-    # Расчет текущего нереализованного PnL по активным позициям в памяти
+    # Расчет текущего нереализованного PnL по позициям этой вселенной
     unrealized_pnl = 0.0
-    if bot_core and hasattr(bot_core, "state"):
-        positions = getattr(bot_core.state, "positions", {})
+    active_count = 0
+    if univ_obj and hasattr(univ_obj, "state"):
+        positions = getattr(univ_obj.state, "positions", {})
         current_prices = getattr(bot_core, "current_prices", {})
         for sym, sides in positions.items():
             for side, pos_info in sides.items():
-                is_act = pos_info.is_active if hasattr(pos_info, "is_active") else (pos_info.get("is_active", False) if isinstance(pos_info, dict) else False)
-                if not is_act:
+                if not pos_info.is_active or pos_info.open_price <= 0:
                     continue
-                open_price = pos_info.open_price if hasattr(pos_info, "open_price") else float(pos_info.get("open_price", 0.0) if isinstance(pos_info, dict) else 0.0)
-                size_usd = pos_info.size if hasattr(pos_info, "size") else float(pos_info.get("size", 0.0) if isinstance(pos_info, dict) else 0.0)
-                cur_price = current_prices.get(sym, open_price)
-                if open_price > 0:
-                    if side == "LONG":
-                        pnl_ratio = (cur_price - open_price) / open_price
-                    else:
-                        pnl_ratio = (open_price - cur_price) / open_price
-                    unrealized_pnl += pnl_ratio * size_usd
+                active_count += 1
+                cur_price = current_prices.get(sym, pos_info.open_price)
+                if side == "LONG":
+                    pnl_ratio = (cur_price - pos_info.open_price) / pos_info.open_price
+                else:
+                    pnl_ratio = (pos_info.open_price - cur_price) / pos_info.open_price
+                unrealized_pnl += pnl_ratio * pos_info.size
     else:
         unrealized_pnl = float(data.get("unrealized_pnl_usdt", 0.0))
 
@@ -82,16 +98,46 @@ def _format_analytics_text(data: dict, bot_core=None) -> str:
     dd_val = -abs(max_dd) if max_dd > 0 else 0.0
 
     return (
-        f"<b>📊 Сводная аналитика (Paper Trading):</b>\n\n"
+        f"{univ_title}\n{desc_str}"
         f"• Стартовый баланс: <code>{start_bal:.2f} USDT</code>\n"
         f"• Текущий баланс: <code>{cur_bal:.2f} USDT</code>\n"
         f"• Чистый профит: <b>{pnl_sign}{net_profit:.4f} USDT</b> ({roi_sign}{roi_pct:.2f}%)\n"
         f"• Реализованный PnL: <code>{realized_pnl:.4f} USDT</code>\n"
-        f"• Нереализованный PnL: <code>{u_sign}{unrealized_pnl:.4f} USDT</code>\n"
+        f"• Нереализованный PnL: <code>{u_sign}{unrealized_pnl:.4f} USDT</code> ({active_count} поз.)\n"
         f"• Всего сделок: <b>{total_trades}</b> (Побед: {winning_trades} | Winrate: {winrate_pct:.1f}%)\n"
         f"• Макс. просадка (DD): <code>{dd_val:.4f} USDT</code>\n"
         f"• Фактор восстановления: <code>{rec_factor:.2f}</code>\n"
     )
+
+
+def _format_leaderboard_text(bot_core) -> str:
+    """Форматирует сравнительную таблицу всех параллельных вселенных."""
+    if not bot_core or not hasattr(bot_core, "universe_manager"):
+        return "🏆 <b>Менеджер вселенных не инициализирован.</b>"
+
+    board = bot_core.universe_manager.get_leaderboard(bot_core.current_prices)
+    if not board:
+        return "🏆 <b>Нет активных вселенных.</b>"
+
+    lines = [
+        "<b>🏆 Таблица лидеров параллельных вселенных:</b>",
+        "<i>Сравнение эффективности всех запущенных стратегий</i>\n"
+    ]
+
+    medals = ["🥇", "🥈", "🥉"] + ["▫️"] * 20
+    for idx, item in enumerate(board, 1):
+        medal = medals[idx - 1]
+        pnl_sign = "+" if item["net_profit"] >= 0 else ""
+        u_sign = "+" if item["unrealized_pnl"] >= 0 else ""
+        dd_val = -abs(item["max_dd"]) if item["max_dd"] > 0 else 0.0
+
+        lines.append(
+            f"{medal} <b>{idx}. {item['name']}</b> ({item['uid'].upper()}):\n"
+            f"   • Чистый PnL: <b>{pnl_sign}{item['net_profit']:.2f}$</b> | WR: <b>{item['winrate']:.1f}%</b> ({item['total_trades']} сд.)\n"
+            f"   • DD: <code>{dd_val:.2f}$</code> | Открыто: <code>{item['active_count']}</code> ({u_sign}{item['unrealized_pnl']:.2f}$)\n"
+        )
+
+    return "\n".join(lines)
 
 
 def setup_analytics_handlers(router: Router, bot_core):
@@ -100,55 +146,84 @@ def setup_analytics_handlers(router: Router, bot_core):
     @router.message(F.text == "📊 Analytics")
     async def on_analytics_menu(message: Message, state: FSMContext):
         await state.clear()
-        data = _get_analytics_data()
-        text = _format_analytics_text(data, bot_core=bot_core)
-        await message.answer(text, reply_markup=TGKeyboards.analytics_menu(), parse_mode="HTML")
+        data = _get_analytics_data("u1")
+        universes = _get_universe_list(bot_core)
+        text = _format_analytics_text(data, bot_core=bot_core, universe_id="u1")
+        await message.answer(text, reply_markup=TGKeyboards.analytics_menu("u1", universes), parse_mode="HTML")
 
     @router.callback_query(F.data == "analytics_back")
     async def on_analytics_back(callback: CallbackQuery, state: FSMContext):
         await state.clear()
         await callback.answer()
-        data = _get_analytics_data()
-        text = _format_analytics_text(data, bot_core=bot_core)
-        await callback.message.edit_text(text, reply_markup=TGKeyboards.analytics_menu(), parse_mode="HTML")
+        data = _get_analytics_data("u1")
+        universes = _get_universe_list(bot_core)
+        text = _format_analytics_text(data, bot_core=bot_core, universe_id="u1")
+        await callback.message.edit_text(text, reply_markup=TGKeyboards.analytics_menu("u1", universes), parse_mode="HTML")
 
-    @router.callback_query(F.data == "analytics_equity")
+    @router.callback_query(F.data.startswith("analytics_univ_"))
+    async def on_switch_universe(callback: CallbackQuery):
+        uid = callback.data.replace("analytics_univ_", "")
+        await callback.answer(f"Вселенная {uid.upper()}")
+        data = _get_analytics_data(uid)
+        universes = _get_universe_list(bot_core)
+        text = _format_analytics_text(data, bot_core=bot_core, universe_id=uid)
+        await callback.message.edit_text(text, reply_markup=TGKeyboards.analytics_menu(uid, universes), parse_mode="HTML")
+
+    @router.callback_query(F.data == "analytics_leaderboard")
+    async def on_analytics_leaderboard(callback: CallbackQuery):
+        await callback.answer()
+        text = _format_leaderboard_text(bot_core)
+        await callback.message.edit_text(text, reply_markup=TGKeyboards.leaderboard_menu(), parse_mode="HTML")
+
+    @router.callback_query(F.data.startswith("analytics_equity"))
     async def on_analytics_equity(callback: CallbackQuery):
-        await callback.answer("Генерация графика эквити...")
-        plot_path = generate_equity_curve()
-        if plot_path and (ANALYTICS_DIR / "images" / "equity_curve.png").exists():
+        uid = callback.data.replace("analytics_equity_", "").replace("analytics_equity", "")
+        uid = uid if uid else "u1"
+        await callback.answer(f"Генерация графика эквити [{uid.upper()}]...")
+        plot_path = generate_equity_curve(universe_id=uid)
+        suffix = f"_{uid}" if uid and uid != "default" else ""
+        if plot_path and (ANALYTICS_DIR / "images" / f"equity_curve{suffix}.png").exists():
             await callback.message.answer_photo(
                 photo=FSInputFile(plot_path),
-                caption="📈 <b>Кривая доходности (Equity Curve)</b>",
+                caption=f"📈 <b>Кривая доходности [{uid.upper()}]</b>",
                 parse_mode="HTML"
             )
         else:
-            await callback.message.answer("⚠️ Недостаточно закрытых сделок для построения графика эквити.")
+            await callback.message.answer(f"⚠️ Недостаточно закрытых сделок для построения графика [{uid.upper()}].")
 
-    @router.callback_query(F.data == "analytics_ledger")
+    @router.callback_query(F.data.startswith("analytics_ledger"))
     async def on_analytics_ledger(callback: CallbackQuery):
+        uid = callback.data.replace("analytics_ledger_", "").replace("analytics_ledger", "")
+        uid = uid if uid else "u1"
         await callback.answer()
-        txt_path = ANALYTICS_DIR / "trades_ledger.txt"
+        suffix = f"_{uid}" if uid and uid != "default" else ""
+        txt_path = ANALYTICS_DIR / f"trades_ledger{suffix}.txt"
+        if not txt_path.exists():
+            txt_path = ANALYTICS_DIR / "trades_ledger.txt"
+
         if txt_path.exists():
             await callback.message.answer_document(
                 FSInputFile(str(txt_path)),
-                caption="📄 <b>Журнал всех виртуальных сделок (CSV/TXT)</b>",
+                caption=f"📄 <b>Журнал сделок [{uid.upper()}] (CSV/TXT)</b>",
                 parse_mode="HTML"
             )
         else:
-            await callback.message.answer("⚠️ Журнал сделок trades_ledger.txt пока пуст.")
+            await callback.message.answer(f"⚠️ Журнал сделок для {uid.upper()} пока пуст.")
 
-    @router.callback_query(F.data.startswith("analytics_ranking"))
+    @router.callback_query(F.data.startswith("analytics_ranking_"))
     async def on_analytics_ranking(callback: CallbackQuery):
         await callback.answer()
-        sort_by = callback.data.split("_")[-1]  # profit, trades, winrate
-        data = _get_analytics_data()
+        parts = callback.data.split("_")  # analytics_ranking_{uid}_{sort_by}
+        uid = parts[2] if len(parts) >= 4 else "u1"
+        sort_by = parts[-1]  # profit, trades, winrate
+
+        data = _get_analytics_data(uid)
         per_coin = data.get("per_coin", {})
 
         if not per_coin:
             await callback.message.edit_text(
-                "🏆 <b>Рейтинг монет:</b> пока нет закрытых сделок.",
-                reply_markup=TGKeyboards.analytics_ranking_menu(),
+                f"🏆 <b>Рейтинг монет [{uid.upper()}]:</b> пока нет закрытых сделок.",
+                reply_markup=TGKeyboards.analytics_ranking_menu(uid),
                 parse_mode="HTML"
             )
             return
@@ -163,13 +238,13 @@ def setup_analytics_handlers(router: Router, bot_core):
 
         if sort_by == "trades":
             coin_items.sort(key=lambda x: x["trades"], reverse=True)
-            title = "📊 <b>Рейтинг монет по количеству сделок:</b>"
+            title = f"📊 <b>Рейтинг монет [{uid.upper()}] по количеству сделок:</b>"
         elif sort_by == "winrate":
             coin_items.sort(key=lambda x: (x["wr"], x["trades"]), reverse=True)
-            title = "🎯 <b>Рейтинг монет по Winrate:</b>"
+            title = f"🎯 <b>Рейтинг монет [{uid.upper()}] по Winrate:</b>"
         else:
             coin_items.sort(key=lambda x: x["pnl"], reverse=True)
-            title = "💵 <b>Рейтинг монет по PnL:</b>"
+            title = f"💵 <b>Рейтинг монет [{uid.upper()}] по PnL:</b>"
 
         lines = [title, ""]
         for idx, item in enumerate(coin_items[:15], 1):
@@ -180,7 +255,7 @@ def setup_analytics_handlers(router: Router, bot_core):
 
         await callback.message.edit_text(
             "\n".join(lines),
-            reply_markup=TGKeyboards.analytics_ranking_menu(),
+            reply_markup=TGKeyboards.analytics_ranking_menu(uid),
             parse_mode="HTML"
         )
 
@@ -195,21 +270,22 @@ def setup_analytics_handlers(router: Router, bot_core):
             "• <b>Winrate (%)</b>: Процент прибыльных сделок от общего числа.\n"
             "• <b>Max Drawdown</b>: Максимальная историческая просадка баланса.\n"
             "• <b>Recovery Factor</b>: Отношение прибыли к макс. просадке (PnL / DD).\n"
-            "• <b>DRME</b>: Дневная доходность на максимальный сайз (Daily Return on Max Exposure).\n"
-            "• <b>MDME</b>: Максимальная просадка на максимальный сайз (Max DD on Max Exposure)."
+            "• <b>Leaderboard</b>: Сравнительная таблица всех параллельных вселенных."
         )
         await callback.message.edit_text(
             help_text,
-            reply_markup=TGKeyboards.analytics_ranking_menu(),
+            reply_markup=TGKeyboards.leaderboard_menu(),
             parse_mode="HTML"
         )
 
-    @router.callback_query(F.data == "analytics_set_balance")
+    @router.callback_query(F.data.startswith("analytics_set_balance_"))
     async def on_set_balance_btn(callback: CallbackQuery, state: FSMContext):
+        uid = callback.data.replace("analytics_set_balance_", "")
         await callback.answer()
+        await state.update_data(target_uid=uid)
         await state.set_state(AnalyticsStates.waiting_for_balance)
         await callback.message.answer(
-            "💰 <b>Введите стартовый баланс депозита в USDT</b> (например: <code>1000</code>):",
+            f"💰 <b>Введите стартовый баланс депозита [{uid.upper()}] в USDT</b> (например: <code>1000</code>):",
             parse_mode="HTML",
             reply_markup=TGKeyboards.back_reply()
         )
@@ -218,7 +294,6 @@ def setup_analytics_handlers(router: Router, bot_core):
     async def on_balance_input(message: Message, state: FSMContext):
         if message.text == "🔙 Back":
             await state.clear()
-            data = _get_analytics_data()
             await message.answer("Ввод отменен.", reply_markup=TGKeyboards.main_menu(getattr(bot_core, "is_paused", True)))
             return
 
@@ -230,8 +305,12 @@ def setup_analytics_handlers(router: Router, bot_core):
             await message.answer("❌ Введите корректное положительное число (например: 1000):")
             return
 
-        file_path = ANALYTICS_DIR / "analytics.json"
-        data = _get_analytics_data()
+        state_data = await state.get_data()
+        target_uid = state_data.get("target_uid", "u1")
+        suffix = f"_{target_uid}" if target_uid and target_uid != "default" else ""
+        file_path = ANALYTICS_DIR / f"analytics{suffix}.json"
+
+        data = _get_analytics_data(target_uid)
         data["start_balance_usdt"] = val
         if "cur_balance_usdt" not in data or data["cur_balance_usdt"] == 0:
             data["cur_balance_usdt"] = val
@@ -242,24 +321,26 @@ def setup_analytics_handlers(router: Router, bot_core):
         await state.clear()
         is_paused = getattr(bot_core, "is_paused", True)
         await message.answer(
-            f"✅ Стартовый баланс установлен: <b>{val:.2f} USDT</b>",
+            f"✅ Стартовый баланс для [{target_uid.upper()}] установлен: <b>{val:.2f} USDT</b>",
             reply_markup=TGKeyboards.main_menu(is_paused),
             parse_mode="HTML"
         )
 
-    @router.callback_query(F.data == "analytics_reset")
+    @router.callback_query(F.data.startswith("analytics_reset_"))
     async def on_reset_prompt(callback: CallbackQuery):
+        uid = callback.data.replace("analytics_reset_", "")
         await callback.answer()
         await callback.message.edit_text(
-            "⚠️ <b>Вы уверены, что хотите сбросить всю аналитику?</b>\n"
-            "Все записи по сделкам и расчетные метрики будут очищены.",
-            reply_markup=TGKeyboards.confirm_reset_analytics(),
+            f"⚠️ <b>Вы уверены, что хотите сбросить аналитику для [{uid.upper()}]?</b>\n"
+            "Все записи по сделкам и расчетные метрики этой вселенной будут очищены.",
+            reply_markup=TGKeyboards.confirm_reset_analytics(uid),
             parse_mode="HTML"
         )
 
-    @router.callback_query(F.data == "reset_analytics_confirm")
+    @router.callback_query(F.data.startswith("reset_analytics_confirm_"))
     async def on_reset_confirm(callback: CallbackQuery):
-        await callback.answer("Сброс аналитики...")
+        uid = callback.data.replace("reset_analytics_confirm_", "")
+        await callback.answer(f"Сброс аналитики [{uid.upper()}]...")
         current_ms = int(time.time() * 1000)
         default_data = {
             "start_balance_usdt": 1000.0,
@@ -274,15 +355,15 @@ def setup_analytics_handlers(router: Router, bot_core):
             "per_coin": {}
         }
         AnalyticsMathEngine.calculate(default_data)
-        (ANALYTICS_DIR / "analytics.json").write_text(json.dumps(default_data, indent=4), encoding="utf-8")
+        suffix = f"_{uid}" if uid and uid != "default" else ""
+        (ANALYTICS_DIR / f"analytics{suffix}.json").write_text(json.dumps(default_data, indent=4), encoding="utf-8")
 
-        # Очищаем ledger
-        txt_path = ANALYTICS_DIR / "trades_ledger.txt"
+        txt_path = ANALYTICS_DIR / f"trades_ledger{suffix}.txt"
         with open(txt_path, mode="w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f, delimiter=';')
             writer.writerow(["Symbol", "Side", "Open Time", "Close Time", "PnL", "Balance"])
 
         await callback.message.edit_text(
-            "✅ <b>Аналитика и журнал сделок успешно сброшены.</b>",
+            f"✅ <b>Аналитика и журнал сделок для [{uid.upper()}] успешно сброшены.</b>",
             parse_mode="HTML"
         )

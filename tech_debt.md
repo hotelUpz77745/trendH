@@ -230,3 +230,53 @@ C:\Users\user\Desktop\My_Pro\HP_EliteBook_735_old\MY\HRON_3\cron3Papper\CFG\runt
 и как я уже сказал аналитику и тг интерфейс делаем такую же как в бумажом сеточнике cron3Papper.
 
 выкатывай план имплементации. -->
+
+
+
+добавь еще вот какую стратегию.
+
+еще предыдущего поколения стратегию:
+        "trend": {
+            "is_active": true,
+            "timeframe": "5m",
+            "sma_fast": 10,
+            "sma_slow": 30,
+            "confirmation_candles": 3,
+            "require_rising": true,
+            "trend_positive": true,
+            "long_cond": "UP",
+            "short_cond": "DOWN"
+        }, +
+        "trend": {
+            "is_active": true,
+            "timeframe": "5m",
+            "sma_fast": 10,
+            "sma_slow": 30,
+            "confirmation_candles": 3,
+            "require_rising": true,
+            "trend_positive": true,
+            "long_cond": "UP",
+            "short_cond": "DOWN"
+        },
+        "trend_htf": {
+            "is_active": true,
+            "timeframe": "1h",
+            "sma_fast": 10,
+            "sma_slow": 30,
+            "confirmation_candles": 2,
+            "require_rising": true,
+            "trend_positive": true,
+            "long_cond": "UP",
+            "short_cond": "DOWN"
+        },
+        "rsi": {
+            "is_active": true,
+            "timeframe": "5m",
+            "window": 14,
+            "conditions": {
+                "ENTER_LONG": "50 < x <= 70",
+                "ENTER_SHORT": "30 <= x < 50"
+            }
+        },
+
+только оценка сигнала шиворот навыворот. вместо плановых лонгов -- шорты а вместо плановых шортов лонги. раз она так сильно и стремительно сливала знячит нужно сделать антидурака

@@ -24,6 +24,7 @@ INDICATORS_REFRESH_INTERVAL_SEC = cfg["INDICATORS_REFRESH_INTERVAL_SEC"]
 # Strategy settings
 ENTER_RULES = cfg["enter_rules"]
 EXIT_RULES = cfg["exit_rules"]
+UNIVERSES_CFG = cfg.get("universes", {})
 ANALYTICS_CFG = cfg["analytics"]
 DIRECTION_MODE = cfg["DIRECTION_MODE"]
 PAPER_TRADING_CFG = cfg["paper_trading"]

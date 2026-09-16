@@ -31,6 +31,7 @@ from consts import (
     DIRECTION_MODE,
     ENTER_RULES,
     EXIT_RULES,
+    UNIVERSES_CFG,
     ANALYTICS_CFG,
     PAPER_TRADING_CFG,
     TG_ENABLED,
@@ -39,101 +40,45 @@ from consts import (
     ANALYTICS_DIR,
     DATA_DIR
 )
+from CORE.universe import UniverseManager
 
-
-class BotState:
-    def __init__(self):
-        # symbol -> {"LONG": PositionState, "SHORT": PositionState}
-        self.positions: Dict[str, Dict[str, PositionState]] = {}
-        self.backup_manager = None
-
-    def get_state_path(self):
-        from consts import DATA_DIR
-        return DATA_DIR / "state.json"
-
-    def load_state(self):
-        path = self.get_state_path()
-        if not path.exists():
-            return
-        try:
-            import json
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            
-            for sym, sides in data.items():
-                if sym not in self.positions:
-                    self.positions[sym] = {
-                        "LONG": PositionState(symbol=sym, side="LONG"),
-                        "SHORT": PositionState(symbol=sym, side="SHORT")
-                    }
-                for side, pos_dict in sides.items():
-                    if pos_dict.get("is_active"):
-                        pos = self.positions[sym][side]
-                        pos.is_active = True
-                        pos.open_price = float(pos_dict.get("open_price", 0.0))
-                        pos.size = float(pos_dict.get("size", 0.0))
-                        pos.open_time = int(pos_dict.get("open_time", pos_dict.get("open_time_ms", 0)))
-            log(f"Успешно загружен стейт из {path.name}", level="INFO")
-        except Exception as e:
-            log(f"Ошибка загрузки стейта: {e}", level="ERROR")
-
-    def save_state(self):
-        path = self.get_state_path()
-        try:
-            import json
-            data = {}
-            for sym, sides in self.positions.items():
-                data[sym] = {
-                    "LONG": sides["LONG"].__dict__,
-                    "SHORT": sides["SHORT"].__dict__
-                }
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=4)
-            if self.backup_manager:
-                self.backup_manager.mark_changed()
-        except Exception as e:
-            log(f"Ошибка сохранения стейта: {e}", level="ERROR")
-
-    def get_position(self, symbol: str, side: str):
-        pos = self.positions.get(symbol, {}).get(side)
-        if pos and pos.is_active:
-            return pos
-        return None
-
-    def open_position(self, symbol: str, side: str, price: float, size: float):
-        if symbol not in self.positions:
-            self.positions[symbol] = {
-                "LONG": PositionState(symbol=symbol, side="LONG"),
-                "SHORT": PositionState(symbol=symbol, side="SHORT")
-            }
-        now_ms = int(time.time() * 1000)
-        self.positions[symbol][side].set_active(price, size, now_ms)
-        self.save_state()
-
-    def close_position(self, symbol: str, side: str):
-        if symbol in self.positions and side in self.positions[symbol]:
-            self.positions[symbol][side].reset()
-            self.save_state()
 
 class Main:
     def __init__(self):
         self.utils = Utils()
         self.binance_client = BinanceAdapter()
         self.network = NetworkServices()
-        self.analytics = AnalyticsManager()
-        self.state = BotState()
         self.symbols = []
-        self.symbol_indicators = {} # symbol -> {"rsi": float, "trend": str}
+        self.symbol_indicators = {}  # symbol -> {"rsi": float, "trend": str}
         self.symbol_volume_24h = {}
-        self.current_prices = {} # symbol -> float
-        self.klines_cache = {} # symbol -> tf -> timestamp -> close
+        self.current_prices = {}  # symbol -> float
+        self.klines_cache = {}  # symbol -> tf -> timestamp -> close
         self.api_semaphore = asyncio.Semaphore(10)
-        
-        self.entry_engine = EntrySignalEngine(ENTER_RULES)
-        self.exit_engine = ExitSignalEngine(EXIT_RULES, ANALYTICS_CFG, self.get_slippage_ratio)
-        self.indicators_engine = IndicatorsEngine(ENTER_RULES)
         self.notifier = NotifierManager()
-        
+
+        self.watchdog = LoopWatchdog(self.notifier)
+        self.backup_manager = RuntimeBackupManager(self.notifier)
+
+        # Менеджер параллельных вселенных (мульти-стратегия)
+        self.universe_manager = UniverseManager(
+            universes_cfg=UNIVERSES_CFG,
+            default_enter_rules=ENTER_RULES,
+            default_exit_rules=EXIT_RULES,
+            get_slippage_ratio_fn=self.get_slippage_ratio,
+            backup_manager=self.backup_manager
+        )
+
+        # Фасадный расчет всех индикаторов, требуемых активными вселенными
+        combined_rules = self.universe_manager.get_combined_enter_rules()
+        self.indicators_engine = IndicatorsEngine(combined_rules)
+
+        # Ссылки для обратной совместимости (первая активная вселенная)
+        first_univ = list(self.universe_manager.universes.values())[0] if self.universe_manager.universes else None
+        self.state = first_univ.state if first_univ else None
+        self.analytics = first_univ.analytics if first_univ else AnalyticsManager()
+        self.entry_engine = first_univ.entry_engine if first_univ else EntrySignalEngine(ENTER_RULES)
+        self.exit_engine = first_univ.exit_engine if first_univ else ExitSignalEngine(EXIT_RULES, ANALYTICS_CFG, self.get_slippage_ratio)
+
         self.price_stream = None
         self.stream_task = None
         self.tg_bot = None
@@ -143,11 +88,6 @@ class Main:
         self.auto_closing_task = None
         self.is_paused = not cfg.get("auto_start", True)
         self.direction_mode = DIRECTION_MODE
-        
-        self.watchdog = LoopWatchdog(self.notifier)
-        self.backup_manager = RuntimeBackupManager(self.notifier)
-        self.state.backup_manager = self.backup_manager
-        self.state.load_state()
 
     def set_paused(self, paused: bool):
         """Переключает флаг паузы и сохраняет состояние auto_start в cfg.json."""
@@ -271,18 +211,14 @@ class Main:
 
     def check_entry(self, symbol: str, side: str) -> bool:
         indicators = self.symbol_indicators.get(symbol)
-        if not indicators: return False
-        return self.entry_engine.check_signal(side, indicators)
+        return self.entry_engine.check_signal(side, indicators) if indicators else False
 
     def check_exit(self, symbol: str, side: str, open_price: float, current_price: float) -> bool:
         indicators = self.symbol_indicators.get(symbol)
-        if not indicators: return False
+        if not indicators:
+            return False
         return self.exit_engine.check_signal(
-            side, 
-            symbol=symbol, 
-            trend=indicators["trend"], 
-            open_price=open_price, 
-            current_price=current_price
+            side, symbol=symbol, trend=indicators.get("trend", "UNSTABLE"), open_price=open_price, current_price=current_price
         )
 
     async def on_tick(self, tick: 'HotPriceTick'):
@@ -290,96 +226,35 @@ class Main:
         symbol = tick.symbol
         current_price = tick.price
         self.current_prices[symbol] = current_price
-        
+
         indicators = self.symbol_indicators.get(symbol)
-        if not indicators: return
-        
+        if not indicators:
+            return
+
+        cron_state = CronIntegration.get_symbol_state(symbol)
         allow_long = self.direction_mode in ("LONG", "HEDGE", "MONO")
         allow_short = self.direction_mode in ("SHORT", "HEDGE", "MONO")
-        
-        has_long = self.state.get_position(symbol, "LONG") is not None
-        has_short = self.state.get_position(symbol, "SHORT") is not None
-        
-        if self.direction_mode == "MONO":
-            if has_long: allow_short = False
-            if has_short: allow_long = False
-            
+
         for side in ["LONG", "SHORT"]:
-            if side == "LONG" and not allow_long: continue
-            if side == "SHORT" and not allow_short: continue
-            
-            pos = self.state.get_position(symbol, side)
-            if pos:
-                # Check exit
-                if self.check_exit(symbol, side, pos.open_price, current_price):
-                    fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
-                    slippage_ratio = self.get_slippage_ratio(symbol) * 2
-                    fee_slip_ratio = fee_ratio + slippage_ratio
-                    
-                    if side == "LONG":
-                        pnl_ratio = (current_price - pos.open_price) / pos.open_price
-                    else:
-                        pnl_ratio = (pos.open_price - current_price) / pos.open_price
-                        
-                    pnl_usd = (pnl_ratio * pos.size)
-                    comm_usd = -(fee_slip_ratio * pos.size)
-                    pnl_pct = pnl_ratio * 100
-                    
-                    log(f"🎯 [SIGNAL EXIT] [{symbol}][{side}] Выход по сигналу! Вход: {pos.open_price:.4f} → Выход: {current_price:.4f} | PnL: {pnl_pct:+.2f}% ({pnl_usd:+.2f}$)", level="INFO")
-                    self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd, open_time_ms=pos.open_time)
-                    self.state.close_position(symbol, side)
-                    log(f"🔴 [POSITION CLOSED] [{symbol}][{side}] Закрыта позиция. PnL: {pnl_usd:.4f}$, комиссия/проскальзывание: {comm_usd:.4f}$", level="INFO")
-            else:
-                # Check entry
-                if not self.is_paused and self.check_entry(symbol, side):
-                    cron_state = CronIntegration.get_symbol_state(symbol)
-                    invest_size = cron_state.get(side, {}).get("invest_size", 0.0)
-                    rsi_val = indicators.get("rsi_value")
-                    rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
-                    htf_str = f", HTF: {indicators['trend_htf']}" if "trend_htf" in indicators else ""
-                    sr_states = indicators.get("sr_levels", [])
-                    sr_str = f", SR: {','.join(sr_states)}" if sr_states else ""
-                    ec_states = indicators.get("ema_cross", [])
-                    ec_str = f", EMACross: {','.join(ec_states)}" if ec_states else ""
-                    vol_states = indicators.get("vol_filter", [])
-                    vol_str = f", VolF: {','.join(vol_states)}" if vol_states else ""
-                    log(f"🎯 [SIGNAL ENTRY] [{symbol}][{side}] Сигнал на вход! Trend: {indicators['trend']}{htf_str}, RSI: {rsi_str} ({','.join(indicators['rsi'])}){sr_str}{ec_str}{vol_str}, Цена: {current_price}", level="INFO")
-                    if invest_size > 0:
-                        log(f"🟢 [POSITION OPEN] [{symbol}][{side}] Открытие позиции. Цена: {current_price}, Размер: {invest_size}$", level="INFO")
-                        self.state.open_position(symbol, side, current_price, invest_size)
-                    else:
-                        log(f"⚠️ [SIGNAL SKIPPED] [{symbol}][{side}] Сигнал есть, но invest_size={invest_size}$ (вход пропущен)", level="WARNING")
+            if side == "LONG" and not allow_long:
+                continue
+            if side == "SHORT" and not allow_short:
+                continue
+            invest_size = cron_state.get(side, {}).get("invest_size", 0.0)
+            self.universe_manager.process_tick(
+                symbol=symbol,
+                side=side,
+                current_price=current_price,
+                indicators=indicators,
+                get_slippage_ratio_fn=self.get_slippage_ratio,
+                is_paused=self.is_paused,
+                invest_size=invest_size
+            )
 
     async def close_all_positions(self):
-        """Экстренное закрытие всех виртуальных позиций по рынку."""
-        closed_count = 0
-        for symbol, sides in list(self.state.positions.items()):
-            for side in list(sides.keys()):
-                pos = sides[side]
-                if not pos.is_active:
-                    continue
-                current_price = self.current_prices.get(symbol)
-                if not current_price:
-                    continue # Не можем закрыть без цены
-                    
-                fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
-                slippage_ratio = self.get_slippage_ratio(symbol) * 2
-                fee_slip_ratio = fee_ratio + slippage_ratio
-                
-                if side == "LONG":
-                    pnl_ratio = (current_price - pos.open_price) / pos.open_price
-                else:
-                    pnl_ratio = (pos.open_price - current_price) / pos.open_price
-                    
-                pnl_usd = (pnl_ratio * pos.size)
-                comm_usd = -(fee_slip_ratio * pos.size)
-                
-                self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd, open_time_ms=pos.open_time)
-                self.state.close_position(symbol, side)
-                log(f"[{symbol}][{side}] Экстренное закрытие позиции. Цена: {current_price}, PnL: {pnl_usd:.4f}$", level="INFO")
-                closed_count += 1
-                
-        log(f" Close All: Успешно закрыто {closed_count} виртуальных позиций.", level="INFO")
+        """Экстренное закрытие всех виртуальных позиций по рынку во всех вселенных."""
+        closed_count = self.universe_manager.close_all_positions(self.current_prices, self.get_slippage_ratio)
+        log(f" Close All: Успешно закрыто {closed_count} виртуальных позиций во всех вселенных.", level="INFO")
 
     async def indicators_daemon(self):
         """Фоновый процесс обновления индикаторов (скачивание свечей)."""
@@ -561,19 +436,9 @@ class Main:
 if __name__ == "__main__":
     try:
         asyncio.run(Main().run())
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
         pass
-    except asyncio.exceptions.CancelledError:
-        pass
-
 
 ## шпору не трогать!!
-# # chmod 600 ssh_key.txt
-# # eval "$(ssh-agent -s)" 
-# # ssh-add ssh_key.txt
-# # git remote set-url origin git@github.com:hotelUpz/uranus_bot.git
-# # source .ssh-autostart.sh
-# В терминале Git Bash, находясь в папке с проектом:
 # source C:/Users/User/Desktop/My_Pro/HP_EliteBook_735_old/WORKSPACE/COMMON/.ssh-autostart.sh
-
 # taskkill /F /IM python.exe

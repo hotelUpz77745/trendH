@@ -3,6 +3,7 @@
 # ROLE: Telegram UI keyboard markup builder
 # ============================================================
 
+from typing import List, Optional, Any
 from aiogram.types import (
     ReplyKeyboardMarkup,
     KeyboardButton,
@@ -41,50 +42,77 @@ class TGKeyboards:
 
     @staticmethod
     def confirm_close_all() -> InlineKeyboardMarkup:
-        """Подтверждение экстренного закрытия всех виртуальных позиций."""
+        """Подтверждение экстренного закрытия всех виртуальных позиций во всех вселенных."""
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="⚠️ Да, закрыть все позиции", callback_data="close_all_confirm")],
             [InlineKeyboardButton(text="🔙 Отмена", callback_data="close_all_cancel")]
         ])
 
     @staticmethod
-    def analytics_menu() -> InlineKeyboardMarkup:
-        """Меню аналитики торговой активности."""
+    def analytics_menu(selected_uid: str = "u1", universes: Optional[List[Any]] = None) -> InlineKeyboardMarkup:
+        """
+        Меню аналитики торговой активности с селектором вселенных и кнопкой Leaderboard.
+        Позволяет переключать вид между параллельными стратегиями.
+        """
+        univ_rows = []
+        if universes:
+            row = []
+            for idx, u in enumerate(universes, 1):
+                uid = u.universe_id if hasattr(u, "universe_id") else (u.get("universe_id", f"u{idx}") if isinstance(u, dict) else f"u{idx}")
+                prefix = "🔘 " if uid == selected_uid else ""
+                short_label = f"{prefix}У{idx}"
+                row.append(InlineKeyboardButton(text=short_label, callback_data=f"analytics_univ_{uid}"))
+                if len(row) == 5:
+                    univ_rows.append(row)
+                    row = []
+            if row:
+                univ_rows.append(row)
+
+        menu_rows = [
+            [
+                InlineKeyboardButton(text="🏆 Leaderboard (Все)", callback_data="analytics_leaderboard"),
+                InlineKeyboardButton(text="📈 Equity Curve", callback_data=f"analytics_equity_{selected_uid}"),
+            ],
+            [
+                InlineKeyboardButton(text="📄 Trades Ledger", callback_data=f"analytics_ledger_{selected_uid}"),
+                InlineKeyboardButton(text="🪙 Coin Ranking", callback_data=f"analytics_ranking_{selected_uid}_profit"),
+            ],
+            [
+                InlineKeyboardButton(text="💰 Set Balance", callback_data=f"analytics_set_balance_{selected_uid}"),
+                InlineKeyboardButton(text="🔄 Reset", callback_data=f"analytics_reset_{selected_uid}"),
+                InlineKeyboardButton(text="ℹ️ Help", callback_data="analytics_help"),
+            ]
+        ]
+        return InlineKeyboardMarkup(inline_keyboard=univ_rows + menu_rows)
+
+    @staticmethod
+    def leaderboard_menu() -> InlineKeyboardMarkup:
+        """Клавиатура таблицы лидеров параллельных вселенных."""
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить Leaderboard", callback_data="analytics_leaderboard")],
+            [InlineKeyboardButton(text="🔙 Назад в Аналитику", callback_data="analytics_back")]
+        ])
+
+    @staticmethod
+    def analytics_ranking_menu(selected_uid: str = "u1") -> InlineKeyboardMarkup:
+        """Фильтры ранжирования монет по PnL, сделкам и винрейту."""
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="📈 Equity Curve", callback_data="analytics_equity"),
-                InlineKeyboardButton(text="📄 Trades Ledger", callback_data="analytics_ledger")
+                InlineKeyboardButton(text="💵 By Profit", callback_data=f"analytics_ranking_{selected_uid}_profit"),
+                InlineKeyboardButton(text="📊 By Trades", callback_data=f"analytics_ranking_{selected_uid}_trades"),
+                InlineKeyboardButton(text="🎯 By Winrate", callback_data=f"analytics_ranking_{selected_uid}_winrate")
             ],
             [
-                InlineKeyboardButton(text="🏆 Ranking", callback_data="analytics_ranking_profit"),
-                InlineKeyboardButton(text="ℹ️ Metrics Help", callback_data="analytics_help")
-            ],
-            [
-                InlineKeyboardButton(text="💰 Set Balance", callback_data="analytics_set_balance"),
-                InlineKeyboardButton(text="🔄 Reset Analytics", callback_data="analytics_reset")
+                InlineKeyboardButton(text="🔙 Back to Analytics", callback_data=f"analytics_univ_{selected_uid}")
             ]
         ])
 
     @staticmethod
-    def analytics_ranking_menu() -> InlineKeyboardMarkup:
-        """Фильтры ранжирования монет."""
+    def confirm_reset_analytics(selected_uid: str = "u1") -> InlineKeyboardMarkup:
+        """Подтверждение сброса аналитики выбранной вселенной."""
         return InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="💵 By Profit", callback_data="analytics_ranking_profit"),
-                InlineKeyboardButton(text="📊 By Trades", callback_data="analytics_ranking_trades"),
-                InlineKeyboardButton(text="🎯 By Winrate", callback_data="analytics_ranking_winrate")
-            ],
-            [
-                InlineKeyboardButton(text="🔙 Back to Analytics", callback_data="analytics_back")
-            ]
-        ])
-
-    @staticmethod
-    def confirm_reset_analytics() -> InlineKeyboardMarkup:
-        """Подтверждение сброса аналитики."""
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⚠️ Да, сбросить аналитику", callback_data="reset_analytics_confirm")],
-            [InlineKeyboardButton(text="🔙 Отмена", callback_data="analytics_back")]
+            [InlineKeyboardButton(text="⚠️ Да, сбросить аналитику", callback_data=f"reset_analytics_confirm_{selected_uid}")],
+            [InlineKeyboardButton(text="🔙 Отмена", callback_data=f"analytics_univ_{selected_uid}")]
         ])
 
     @staticmethod
@@ -102,7 +130,7 @@ class TGKeyboards:
 
     @staticmethod
     def direction_mode_menu(current_mode: str) -> InlineKeyboardMarkup:
-        """Выбор режима направления торговли."""
+        """Выбор режима направления торговли (HEDGE, MONO, LONG, SHORT)."""
         modes = ["HEDGE", "MONO", "LONG", "SHORT"]
         buttons = []
         for m in modes:
@@ -117,7 +145,7 @@ class TGKeyboards:
 
     @staticmethod
     def logs_menu() -> InlineKeyboardMarkup:
-        """Меню скачивания логов и конфига."""
+        """Меню скачивания логов, конфига и архива бэкапа состояния."""
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📜 Get Logs", callback_data="logs_get_logs")],
             [InlineKeyboardButton(text="📂 Get Config", callback_data="logs_get_cfg")],
