@@ -8,6 +8,7 @@ from CORE.indicators import (
     IndicatorsMath,
     TrendCalculator,
     RSICalculator,
+    RSIWaterlineCalculator,
     IndicatorsEngine
 )
 
@@ -90,6 +91,31 @@ class TestRSICalculator(unittest.TestCase):
     def test_rsi_neutral(self):
         prices = [100.0] * 30
         self.assertEqual(self.calc.calculate(prices), [])
+
+
+class TestRSIWaterlineCalculator(unittest.TestCase):
+    def setUp(self):
+        self.cfg = {
+            "is_active": True,
+            "timeframe": "5m",
+            "window": 14,
+            "waterline": 50.0,
+            "long_cond": "CROSS_UP",
+            "short_cond": "CROSS_DOWN"
+        }
+        self.calc = RSIWaterlineCalculator(self.cfg)
+
+    def test_cross_up(self):
+        # Falling prices to put RSI below 50, then a big upward jump
+        prices = [100.0 - i * 1.0 for i in range(20)] + [150.0]
+        states = self.calc.calculate(prices)
+        self.assertIn("CROSS_UP", states)
+
+    def test_cross_down(self):
+        # Rising prices to put RSI above 50, then a big drop
+        prices = [10.0 + i * 1.0 for i in range(20)] + [5.0]
+        states = self.calc.calculate(prices)
+        self.assertIn("CROSS_DOWN", states)
 
 
 class TestIndicatorsEngine(unittest.TestCase):

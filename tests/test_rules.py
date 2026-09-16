@@ -7,6 +7,7 @@ import unittest
 from CORE.rules import (
     EntryTrendRule,
     EntryRSIRule,
+    EntryRSIWaterlineRule,
     EntrySignalEngine,
     ExitTrendReversalRule,
     ExitTakeProfitRule,
@@ -43,19 +44,34 @@ class TestEntryRules(unittest.TestCase):
         self.assertTrue(rule.check("LONG", indicators={"rsi": ["ENTER_LONG"]}))
         self.assertFalse(rule.check("LONG", indicators={"rsi": ["ENTER_SHORT"]}))
         self.assertFalse(rule.check("LONG", indicators={"rsi": ["UNSTABLE"]}))
-        self.assertFalse(rule.check("LONG", indicators={"rsi": []}))
+    def test_entry_rsi_waterline_rule(self):
+        cfg = {"is_active": True, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN"}
+        rule = EntryRSIWaterlineRule(cfg)
+
+        self.assertTrue(rule.check("LONG", indicators={"rsi_waterline50": ["CROSS_UP"]}))
+        self.assertFalse(rule.check("LONG", indicators={"rsi_waterline50": ["CROSS_DOWN"]}))
+        self.assertFalse(rule.check("LONG", indicators={"rsi_waterline50": []}))
+        self.assertFalse(rule.check("LONG", indicators={"rsi_waterline50": ["UNSTABLE"]}))
+
+        self.assertTrue(rule.check("SHORT", indicators={"rsi_waterline50": ["CROSS_DOWN"]}))
+        self.assertFalse(rule.check("SHORT", indicators={"rsi_waterline50": ["CROSS_UP"]}))
 
     def test_entry_signal_engine_combined(self):
         enter_rules = {
             "trend": {"is_active": True, "trend_positive": True, "long_cond": "UP", "short_cond": "DOWN"},
             "trend_htf": {"is_active": True, "trend_positive": True, "long_cond": "UP", "short_cond": "DOWN"},
-            "rsi": {"is_active": True}
+            "rsi": {"is_active": True},
+            "rsi_waterline50": {"is_active": True, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN"}
         }
         engine = EntrySignalEngine(enter_rules)
 
         # All matching
-        ind_valid_long = {"trend": "UP", "trend_htf": "UP", "rsi": ["ENTER_LONG"]}
+        ind_valid_long = {"trend": "UP", "trend_htf": "UP", "rsi": ["ENTER_LONG"], "rsi_waterline50": ["CROSS_UP"]}
         self.assertTrue(engine.check_signal("LONG", ind_valid_long))
+
+        # Waterline mismatch -> False
+        ind_wl_mismatch = {"trend": "UP", "trend_htf": "UP", "rsi": ["ENTER_LONG"], "rsi_waterline50": []}
+        self.assertFalse(engine.check_signal("LONG", ind_wl_mismatch))
 
         # HTF mismatch -> False
         ind_htf_mismatch = {"trend": "UP", "trend_htf": "FLAT", "rsi": ["ENTER_LONG"]}

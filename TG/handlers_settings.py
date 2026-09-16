@@ -76,6 +76,7 @@ def setup_settings_handlers(router: Router, bot_core):
         trend_cfg = ENTER_RULES.get("trend", {})
         trend_htf_cfg = ENTER_RULES.get("trend_htf", {})
         rsi_cfg = ENTER_RULES.get("rsi", {})
+        rsi_wl_cfg = ENTER_RULES.get("rsi_waterline50", {})
         exit_rev = EXIT_RULES.get("trend_reversal", {})
         exit_tp = EXIT_RULES.get("take_profit_ratio", {})
         exit_sl = EXIT_RULES.get("stop_loss_ratio", {})
@@ -88,6 +89,13 @@ def setup_settings_handlers(router: Router, bot_core):
                 f"• <b>Trend HTF ({trend_htf_cfg.get('timeframe', '1h')})</b>: "
                 f"Fast={trend_htf_cfg.get('sma_fast', 10)}, Slow={trend_htf_cfg.get('sma_slow', 30)}, "
                 f"Подтверждение={trend_htf_cfg.get('confirmation_candles', 2)}\n"
+            )
+
+        wl_info = ""
+        if rsi_wl_cfg.get("is_active", False):
+            wl_info = (
+                f"• <b>RSI Waterline ({rsi_wl_cfg.get('timeframe', '5m')})</b>: "
+                f"Waterline={rsi_wl_cfg.get('waterline', 50.0)}, Long={rsi_wl_cfg.get('long_cond')}, Short={rsi_wl_cfg.get('short_cond')}\n"
             )
 
         tp_val = exit_tp.get("value")
@@ -103,7 +111,8 @@ def setup_settings_handlers(router: Router, bot_core):
             f"Подтверждение={trend_cfg.get('confirmation_candles', 2)}\n"
             f"{htf_info}"
             f"• <b>RSI ({rsi_cfg.get('timeframe', '5m')})</b>: "
-            f"Window={rsi_cfg.get('window', 14)}, Conds={rsi_cfg.get('conditions', {})}\n\n"
+            f"Window={rsi_cfg.get('window', 14)}, Conds={rsi_cfg.get('conditions', {})}\n"
+            f"{wl_info}\n"
             f"<b>Выход (Exit Rules):</b>\n"
             f"• <b>Trend Reversal</b>: Long={exit_rev.get('long_exit_trends')}, Short={exit_rev.get('short_exit_trends')}\n"
             f"• <b>Take Profit</b>: {tp_str}\n"

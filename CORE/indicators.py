@@ -24,10 +24,10 @@ class IndicatorsMath:
         return ema_list
 
     @staticmethod
-    def calc_rsi(closes: List[float], length: int = 14) -> Optional[float]:
-        """Расчет Relative Strength Index (RSI) по формуле Уайлдера."""
+    def calc_rsi_series(closes: List[float], length: int = 14) -> List[float]:
+        """Расчет серии Relative Strength Index (RSI) по формуле Уайлдера."""
         if not closes or len(closes) < length + 1:
-            return None
+            return []
 
         diffs = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
         gains = [d if d > 0 else 0.0 for d in diffs]
@@ -36,16 +36,34 @@ class IndicatorsMath:
         avg_gain = sum(gains[:length]) / length
         avg_loss = sum(losses[:length]) / length
 
+        rsi_list = []
+        if avg_loss == 0 and avg_gain == 0:
+            rsi_list.append(50.0)
+        elif avg_loss == 0:
+            rsi_list.append(100.0)
+        else:
+            rs = avg_gain / avg_loss
+            rsi_list.append(100.0 - (100.0 / (1.0 + rs)))
+
         for i in range(length, len(gains)):
             avg_gain = (avg_gain * (length - 1) + gains[i]) / length
             avg_loss = (avg_loss * (length - 1) + losses[i]) / length
 
-        if avg_loss == 0 and avg_gain == 0:
-            return 50.0
-        if avg_loss == 0:
-            return 100.0
-        rs = avg_gain / avg_loss
-        return 100 - (100 / (1 + rs))
+            if avg_loss == 0 and avg_gain == 0:
+                rsi_list.append(50.0)
+            elif avg_loss == 0:
+                rsi_list.append(100.0)
+            else:
+                rs = avg_gain / avg_loss
+                rsi_list.append(100.0 - (100.0 / (1.0 + rs)))
+
+        return rsi_list
+
+    @staticmethod
+    def calc_rsi(closes: List[float], length: int = 14) -> Optional[float]:
+        """Расчет последнего значения Relative Strength Index (RSI)."""
+        series = IndicatorsMath.calc_rsi_series(closes, length)
+        return series[-1] if series else None
 
 
 class TrendCalculator:
@@ -124,12 +142,49 @@ class RSICalculator:
                 
         return active_states
 
-
     def get_raw_value(self, closes: List[float]) -> Optional[float]:
         """Возвращает числовое значение RSI (float) или None при нехватке данных."""
         if not self.is_active or not closes:
             return None
         return IndicatorsMath.calc_rsi(closes, length=self.window)
+
+
+class RSIWaterlineCalculator:
+    """Изолированный калькулятор пересечения ватерлинии RSI (напр. 50)."""
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.timeframe: str = str(cfg.get("timeframe", "5m"))
+        self.window: int = int(cfg.get("window", 14))
+        self.waterline: float = float(cfg.get("waterline", 50.0))
+        self.long_cond: str = str(cfg.get("long_cond", "CROSS_UP"))
+        self.short_cond: str = str(cfg.get("short_cond", "CROSS_DOWN"))
+
+    def calculate(self, closes: List[float]) -> List[str]:
+        """
+        Возвращает:
+        - ['CROSS_UP']: если RSI пересек ватерлинию снизу вверх (prev <= waterline < curr)
+        - ['CROSS_DOWN']: если RSI пересек ватерлинию сверху вниз (prev >= waterline > curr)
+        - ['UNSTABLE']: если недостаточно свечей
+        - []: если пересечения не произошло
+        """
+        if not self.is_active or not closes:
+            return ["UNSTABLE"]
+
+        series = IndicatorsMath.calc_rsi_series(closes, length=self.window)
+        if len(series) < 2:
+            return ["UNSTABLE"]
+
+        prev_rsi = series[-2]
+        curr_rsi = series[-1]
+
+        states = []
+        if prev_rsi <= self.waterline and curr_rsi > self.waterline:
+            states.append("CROSS_UP")
+        elif prev_rsi >= self.waterline and curr_rsi < self.waterline:
+            states.append("CROSS_DOWN")
+
+        return states
 
 
 class IndicatorsEngine:
@@ -152,6 +207,9 @@ class IndicatorsEngine:
         rsi_cfg = enter_rules.get("rsi")
         self.rsi_calc = RSICalculator(rsi_cfg) if rsi_cfg else None
 
+        waterline_cfg = enter_rules.get("rsi_waterline50")
+        self.rsi_waterline_calc = RSIWaterlineCalculator(waterline_cfg) if waterline_cfg else None
+
     def get_required_timeframes(self) -> Set[str]:
         """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
         tfs = set()
@@ -160,12 +218,14 @@ class IndicatorsEngine:
                 tfs.add(calc.timeframe)
         if self.rsi_calc and self.rsi_calc.is_active:
             tfs.add(self.rsi_calc.timeframe)
+        if self.rsi_waterline_calc and self.rsi_waterline_calc.is_active:
+            tfs.add(self.rsi_waterline_calc.timeframe)
         return tfs if tfs else {"5m"}
 
     def calculate(self, closes_by_tf: Dict[str, List[float]]) -> Dict[str, Any]:
         """
         Вычисляет показатели индикаторов по переданному словарю {таймфрейм: список_closes}.
-        Возвращает: {"trend": str, "trend_htf": str, "rsi": list[str], "rsi_value": float | None}
+        Возвращает: {"trend": str, "trend_htf": str, "rsi": list[str], "rsi_value": float | None, "rsi_waterline50": list[str]}
         """
         result: Dict[str, Any] = {}
         for key, calc in self.trend_calcs.items():
@@ -188,4 +248,11 @@ class IndicatorsEngine:
 
         result["rsi"] = rsi_states
         result["rsi_value"] = rsi_val
+
+        if self.rsi_waterline_calc and self.rsi_waterline_calc.is_active:
+            closes_wl = closes_by_tf.get(self.rsi_waterline_calc.timeframe, [])
+            result["rsi_waterline50"] = self.rsi_waterline_calc.calculate(closes_wl)
+        else:
+            result["rsi_waterline50"] = []
+
         return result

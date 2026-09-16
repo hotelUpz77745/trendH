@@ -147,9 +147,18 @@
             "timeframe": "5m",
             "window": 14,
             "conditions": {
-                "ENTER_LONG": "50 < x <= 75",
-                "ENTER_SHORT": "25 <= x < 50"
+                "ENTER_LONG": "50 < x <= 60",
+                "ENTER_SHORT": "40 <= x < 50"
             }
+        },
+        "rsi_waterline50": {
+            "is_active": false,
+            "timeframe": "5m",
+            "window": 14,
+            "waterline": 50.0,
+            "long_cond": "CROSS_UP",
+            "short_cond": "CROSS_DOWN",
+            "_comment_rsi_waterline50": "Фиксирует момент пересечения ватерлинии 50 (CROSS_UP для входа в лонг, CROSS_DOWN для шорта)"
         }
     },
     "exit_rules": {
