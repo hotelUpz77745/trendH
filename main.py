@@ -205,6 +205,17 @@ class Main:
         tasks = [_fetch(sym) for sym in self.symbols]
         await asyncio.gather(*tasks)
         log(f" Klines history loaded for {len(self.symbols)} symbols.", level="INFO")
+        
+        # Рассчитываем стартовые индикаторы для всех символов сразу
+        for sym in self.symbols:
+            if sym in self.klines_cache:
+                klines_data = {}
+                for tf, ts_dict in self.klines_cache[sym].items():
+                    sorted_ts = sorted(ts_dict.keys())
+                    if sorted_ts:
+                        klines_data[tf] = [ts_dict[ts] for ts in sorted_ts[-history_size:]]
+                if klines_data:
+                    self.symbol_indicators[sym] = self.indicators_engine.calculate(klines_data)
 
     async def update_indicators(self, session, symbol: str):
         try:
@@ -283,7 +294,6 @@ class Main:
             if pos:
                 # Check exit
                 if self.check_exit(symbol, side, pos.open_price, current_price):
-                    log(f"[{symbol}][{side}] Закрытие виртуальной позиции. Цена: {current_price}", level="INFO")
                     fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
                     slippage_ratio = self.get_slippage_ratio(symbol) * 2
                     fee_slip_ratio = fee_ratio + slippage_ratio
@@ -295,17 +305,25 @@ class Main:
                         
                     pnl_usd = (pnl_ratio * pos.size)
                     comm_usd = -(fee_slip_ratio * pos.size)
+                    pnl_pct = pnl_ratio * 100
                     
+                    log(f"🎯 [SIGNAL EXIT] [{symbol}][{side}] Выход по сигналу! Вход: {pos.open_price:.4f} → Выход: {current_price:.4f} | PnL: {pnl_pct:+.2f}% ({pnl_usd:+.2f}$)", level="INFO")
                     self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd)
                     self.state.close_position(symbol, side)
+                    log(f"🔴 [POSITION CLOSED] [{symbol}][{side}] Закрыта позиция. PnL: {pnl_usd:.4f}$, комиссия/проскальзывание: {comm_usd:.4f}$", level="INFO")
             else:
                 # Check entry
                 if not self.is_paused and self.check_entry(symbol, side):
                     cron_state = CronIntegration.get_symbol_state(symbol)
                     invest_size = cron_state.get(side, {}).get("invest_size", 0.0)
+                    rsi_val = indicators.get("rsi_value")
+                    rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
+                    log(f"🎯 [SIGNAL ENTRY] [{symbol}][{side}] Сигнал на вход! Trend: {indicators['trend']}, RSI: {rsi_str} ({','.join(indicators['rsi'])}), Цена: {current_price}", level="INFO")
                     if invest_size > 0:
-                        log(f"[{symbol}][{side}] Открытие виртуальной позиции. Цена: {current_price}, Размер: {invest_size}$", level="INFO")
+                        log(f"🟢 [POSITION OPEN] [{symbol}][{side}] Открытие позиции. Цена: {current_price}, Размер: {invest_size}$", level="INFO")
                         self.state.open_position(symbol, side, current_price, invest_size)
+                    else:
+                        log(f"⚠️ [SIGNAL SKIPPED] [{symbol}][{side}] Сигнал есть, но invest_size={invest_size}$ (вход пропущен)", level="WARNING")
 
     async def close_all_positions(self):
         """Экстренное закрытие всех виртуальных позиций по рынку."""
@@ -347,6 +365,36 @@ class Main:
                     tasks = [self.update_indicators(self.network.session, sym) for sym in self.symbols]
                     if tasks:
                         await asyncio.gather(*tasks)
+
+                    # Логирование показателей тренда и RSI по всем отслеживаемым парам
+                    signal_summary = {"LONG": [], "SHORT": [], "NONE": 0}
+                    for sym in self.symbols:
+                        ind = self.symbol_indicators.get(sym)
+                        if not ind:
+                            continue
+                        trend = ind.get("trend", "UNSTABLE")
+                        rsi_val = ind.get("rsi_value")
+                        rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
+                        rsi_states = ind.get("rsi", [])
+                        
+                        has_long = self.check_entry(sym, "LONG")
+                        has_short = self.check_entry(sym, "SHORT")
+                        
+                        if has_long:
+                            sig_label = "🟢 [LONG]"
+                            signal_summary["LONG"].append(sym)
+                        elif has_short:
+                            sig_label = "🔴 [SHORT]"
+                            signal_summary["SHORT"].append(sym)
+                        else:
+                            sig_label = "⚪ [-]"
+                            signal_summary["NONE"] += 1
+                            
+                        log(f"📊 [IND] {sym:<12} | Trend: {trend:<8} | RSI: {rsi_str:>5} ({','.join(rsi_states)}) | Sig: {sig_label}", level="INFO")
+                        
+                    longs_str = ", ".join(signal_summary["LONG"]) if signal_summary["LONG"] else "нет"
+                    shorts_str = ", ".join(signal_summary["SHORT"]) if signal_summary["SHORT"] else "нет"
+                    log(f"📊 [IND SUMMARY] Обновлено {len(self.symbols)} пар. Сигналы входа: LONG [{len(signal_summary['LONG'])}]: {longs_str} | SHORT [{len(signal_summary['SHORT'])}]: {shorts_str} | Без сигнала: {signal_summary['NONE']}", level="INFO")
             except Exception as ex:
                 log(f"Error in indicators_daemon: {ex}", level="ERROR")
                 traceback.print_exc()

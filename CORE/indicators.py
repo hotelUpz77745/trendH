@@ -125,6 +125,13 @@ class RSICalculator:
         return active_states
 
 
+    def get_raw_value(self, closes: List[float]) -> Optional[float]:
+        """Возвращает числовое значение RSI (float) или None при нехватке данных."""
+        if not self.is_active or not closes:
+            return None
+        return IndicatorsMath.calc_rsi(closes, length=self.window)
+
+
 class IndicatorsEngine:
     """
     Фасадный интерфейс индикаторного блока системы.
@@ -151,7 +158,7 @@ class IndicatorsEngine:
     def calculate(self, closes_by_tf: Dict[str, List[float]]) -> Dict[str, Any]:
         """
         Вычисляет показатели индикаторов по переданному словарю {таймфрейм: список_closes}.
-        Пример возвращаемого значения: {"trend": "UP", "rsi": 62.4}
+        Возвращает: {"trend": str, "rsi": list[str], "rsi_value": float | None}
         """
         trend_val = "UNSTABLE"
         if self.trend_calc.is_active:
@@ -159,11 +166,14 @@ class IndicatorsEngine:
             trend_val = self.trend_calc.calculate(closes_trend)
 
         rsi_states = ["UNSTABLE"]
+        rsi_val = None
         if self.rsi_calc.is_active:
             closes_rsi = closes_by_tf.get(self.rsi_calc.timeframe, [])
             rsi_states = self.rsi_calc.calculate(closes_rsi)
+            rsi_val = self.rsi_calc.get_raw_value(closes_rsi)
 
         return {
             "trend": trend_val,
-            "rsi": rsi_states
+            "rsi": rsi_states,
+            "rsi_value": rsi_val
         }

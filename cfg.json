@@ -100,7 +100,7 @@
         "TIME_ZONE": "UTC"
     },
     "telegram": {
-        "enabled": false,
+        "enabled": true,
         "allowed_users": [
             610822492
         ]

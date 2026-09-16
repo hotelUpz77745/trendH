@@ -8,9 +8,8 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-
 from c_log import log
-from consts import CFG_PATH, BASE_DIR
+from consts import CFG_PATH, BASE_DIR, DATA_DIR
 from cron_integration import CronIntegration
 from TG.keyboards import TGKeyboards
 
@@ -97,9 +96,12 @@ def setup_control_handlers(router: Router, bot_core):
         open_positions = []
         for sym, sides in positions.items():
             for side, pos_info in sides.items():
-                open_price = pos_info.get("open_price", 0.0)
+                is_act = pos_info.is_active if hasattr(pos_info, "is_active") else (pos_info.get("is_active", False) if isinstance(pos_info, dict) else False)
+                if not is_act:
+                    continue
+                open_price = pos_info.open_price if hasattr(pos_info, "open_price") else float(pos_info.get("open_price", 0.0) if isinstance(pos_info, dict) else 0.0)
+                size_usd = pos_info.size if hasattr(pos_info, "size") else float(pos_info.get("size", 0.0) if isinstance(pos_info, dict) else 0.0)
                 cur_price = getattr(bot_core, "current_prices", {}).get(sym, open_price)
-                size_usd = pos_info.get("size", 0.0)
                 
                 if open_price > 0:
                     if side == "LONG":
@@ -136,7 +138,12 @@ def setup_control_handlers(router: Router, bot_core):
     async def on_close_all_prompt(message: Message, state: FSMContext):
         await state.clear()
         positions = getattr(bot_core.state, "positions", {}) if hasattr(bot_core, "state") else {}
-        total_open = sum(len(sides) for sides in positions.values())
+        total_open = 0
+        for sides in positions.values():
+            for pos in sides.values():
+                is_act = pos.is_active if hasattr(pos, "is_active") else (pos.get("is_active", False) if isinstance(pos, dict) else False)
+                if is_act:
+                    total_open += 1
 
         if total_open == 0:
             await message.answer("ℹ️ Нет открытых позиций для закрытия.")
@@ -187,3 +194,12 @@ def setup_control_handlers(router: Router, bot_core):
             await callback.message.answer_document(FSInputFile(str(CFG_PATH)))
         else:
             await callback.message.answer("⚠️ Файл конфигурации cfg.json не найден.")
+
+    @router.callback_query(F.data == "logs_get_state")
+    async def on_get_state(callback: CallbackQuery):
+        await callback.answer()
+        state_path = DATA_DIR / "state.json"
+        if state_path.exists():
+            await callback.message.answer_document(FSInputFile(str(state_path)), caption="💾 Актуальный слепок state.json (позиции)")
+        else:
+            await callback.message.answer("⚠️ Файл state.json пока не создан (нет активных сохраненных позиций).")

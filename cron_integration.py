@@ -47,14 +47,20 @@ class CronIntegration:
         
         try:
             data_sources = cfg.get("data_sources", {})
-            runtime_path = data_sources.get("runtime_path")
             hardcoded_size = data_sources.get("hardcoded_size")
             
-            if not runtime_path:
+            # If hardcoded_size is provided and > 0, use it as default size
+            if hardcoded_size is not None and float(hardcoded_size) > 0:
+                size_val = float(hardcoded_size)
+                result["LONG"] = {"invest_size": size_val, "volume": 0.0, "enabled": True}
+                result["SHORT"] = {"invest_size": size_val, "volume": 0.0, "enabled": True}
+                return result
+
+            runtime_path = data_sources.get("runtime_path")
+            if not runtime_path or not os.path.exists(runtime_path):
                 return result
                 
             file_path = os.path.join(runtime_path, f"{symbol}.json")
-            
             if not os.path.exists(file_path):
                 return result
 

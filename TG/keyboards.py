@@ -17,12 +17,10 @@ class TGKeyboards:
     @staticmethod
     def main_menu(is_paused: bool = True) -> ReplyKeyboardMarkup:
         """Главное меню управления ботом."""
-        status_btn = "▶️ Start" if is_paused else "⏸️ Stop"
         keyboard = [
-            [KeyboardButton(text="▶️ Start"), KeyboardButton(text="⏸️ Stop")],
-            [KeyboardButton(text="ℹ️ Status"), KeyboardButton(text="📊 Analytics")],
-            [KeyboardButton(text="⚙️ Settings"), KeyboardButton(text="📜 Logs")],
-            [KeyboardButton(text="🚨 Close All")]
+            [KeyboardButton(text="▶️ Start"), KeyboardButton(text="ℹ️ Status"), KeyboardButton(text="⏸️ Stop")],
+            [KeyboardButton(text="📊 Analytics"), KeyboardButton(text="📜 Logs")],
+            [KeyboardButton(text="⚙️ Settings"), KeyboardButton(text="🚨 Close All")]
         ]
         return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
@@ -122,5 +120,6 @@ class TGKeyboards:
         """Меню скачивания логов и конфига."""
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📜 Get Logs", callback_data="logs_get_logs")],
-            [InlineKeyboardButton(text="📂 Get Config", callback_data="logs_get_cfg")]
+            [InlineKeyboardButton(text="📂 Get Config", callback_data="logs_get_cfg")],
+            [InlineKeyboardButton(text="💾 Get State Backup", callback_data="logs_get_state")]
         ])
