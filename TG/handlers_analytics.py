@@ -37,8 +37,8 @@ def _get_analytics_data() -> dict:
         return {}
 
 
-def _format_analytics_text(data: dict) -> str:
-    """Форматирует глобальную математическую сводку аналитики."""
+def _format_analytics_text(data: dict, bot_core=None) -> str:
+    """Форматирует глобальную математическую сводку аналитики с расчетом живого нереализованного PnL."""
     if not data:
         return "📊 <b>Аналитика пока не содержит данных по сделкам.</b>"
 
@@ -46,7 +46,29 @@ def _format_analytics_text(data: dict) -> str:
     cur_bal = data.get("cur_balance_usdt", 0.0)
     net_profit = data.get("net_profit_usdt", 0.0)
     realized_pnl = data.get("realized_pnl_usdt", 0.0)
-    unrealized_pnl = data.get("unrealized_pnl_usdt", 0.0)
+
+    # Расчет текущего нереализованного PnL по активным позициям в памяти
+    unrealized_pnl = 0.0
+    if bot_core and hasattr(bot_core, "state"):
+        positions = getattr(bot_core.state, "positions", {})
+        current_prices = getattr(bot_core, "current_prices", {})
+        for sym, sides in positions.items():
+            for side, pos_info in sides.items():
+                is_act = pos_info.is_active if hasattr(pos_info, "is_active") else (pos_info.get("is_active", False) if isinstance(pos_info, dict) else False)
+                if not is_act:
+                    continue
+                open_price = pos_info.open_price if hasattr(pos_info, "open_price") else float(pos_info.get("open_price", 0.0) if isinstance(pos_info, dict) else 0.0)
+                size_usd = pos_info.size if hasattr(pos_info, "size") else float(pos_info.get("size", 0.0) if isinstance(pos_info, dict) else 0.0)
+                cur_price = current_prices.get(sym, open_price)
+                if open_price > 0:
+                    if side == "LONG":
+                        pnl_ratio = (cur_price - open_price) / open_price
+                    else:
+                        pnl_ratio = (open_price - cur_price) / open_price
+                    unrealized_pnl += pnl_ratio * size_usd
+    else:
+        unrealized_pnl = float(data.get("unrealized_pnl_usdt", 0.0))
+
     total_trades = data.get("total_trades", 0)
     winning_trades = data.get("winning_trades", 0)
     winrate_pct = data.get("winrate_pct", 0.0)
@@ -56,6 +78,7 @@ def _format_analytics_text(data: dict) -> str:
 
     pnl_sign = "+" if net_profit >= 0 else ""
     roi_sign = "+" if roi_pct >= 0 else ""
+    u_sign = "+" if unrealized_pnl >= 0 else ""
     dd_val = -abs(max_dd) if max_dd > 0 else 0.0
 
     return (
@@ -64,7 +87,7 @@ def _format_analytics_text(data: dict) -> str:
         f"• Текущий баланс: <code>{cur_bal:.2f} USDT</code>\n"
         f"• Чистый профит: <b>{pnl_sign}{net_profit:.4f} USDT</b> ({roi_sign}{roi_pct:.2f}%)\n"
         f"• Реализованный PnL: <code>{realized_pnl:.4f} USDT</code>\n"
-        f"• Плавающий PnL: <code>{unrealized_pnl:.4f} USDT</code>\n"
+        f"• Нереализованный PnL: <code>{u_sign}{unrealized_pnl:.4f} USDT</code>\n"
         f"• Всего сделок: <b>{total_trades}</b> (Побед: {winning_trades} | Winrate: {winrate_pct:.1f}%)\n"
         f"• Макс. просадка (DD): <code>{dd_val:.4f} USDT</code>\n"
         f"• Фактор восстановления: <code>{rec_factor:.2f}</code>\n"
@@ -78,7 +101,7 @@ def setup_analytics_handlers(router: Router, bot_core):
     async def on_analytics_menu(message: Message, state: FSMContext):
         await state.clear()
         data = _get_analytics_data()
-        text = _format_analytics_text(data)
+        text = _format_analytics_text(data, bot_core=bot_core)
         await message.answer(text, reply_markup=TGKeyboards.analytics_menu(), parse_mode="HTML")
 
     @router.callback_query(F.data == "analytics_back")
@@ -86,7 +109,7 @@ def setup_analytics_handlers(router: Router, bot_core):
         await state.clear()
         await callback.answer()
         data = _get_analytics_data()
-        text = _format_analytics_text(data)
+        text = _format_analytics_text(data, bot_core=bot_core)
         await callback.message.edit_text(text, reply_markup=TGKeyboards.analytics_menu(), parse_mode="HTML")
 
     @router.callback_query(F.data == "analytics_equity")
