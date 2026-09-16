@@ -59,7 +59,7 @@ class AnalyticsMathEngine:
     @staticmethod
     def _calculate_global_metrics(data: dict) -> None:
         """
-        Рассчитывает глобальные балансы и ROI.
+        Рассчитывает глобальные балансы, ROI, Winrate, Drawdowns и фактор восстановления.
         """
         initial = float(data.get("start_balance_usdt", 0.0))
         net_profit = float(data.get("net_profit_usdt", 0.0))
@@ -69,6 +69,60 @@ class AnalyticsMathEngine:
             data["roi_pct"] = round(((bot_cur_balance - initial) / initial) * 100, 2)
         else:
             data["roi_pct"] = 0.0
+
+        total_trades = int(data.get("total_trades", 0))
+        winning_trades = int(data.get("winning_trades", 0))
+        if total_trades > 0:
+            data["winrate_pct"] = round((winning_trades / total_trades) * 100.0, 2)
+        else:
+            data["winrate_pct"] = 0.0
+
+        # Чтение истории балансов из trades_ledger.txt для точного расчета просадки
+        from consts import ANALYTICS_DIR
+        ledger_file = ANALYTICS_DIR / "trades_ledger.txt"
+        peak = max(initial, bot_cur_balance)
+        min_bal = min(initial, bot_cur_balance)
+        max_dd = 0.0
+
+        if ledger_file.exists():
+            try:
+                import csv
+                balances = []
+                with open(ledger_file, "r", encoding="utf-8") as f:
+                    reader = csv.reader(f, delimiter=';')
+                    header = next(reader, None)
+                    for row in reader:
+                        if row and len(row) >= 6:
+                            try:
+                                bal = float(row[5])
+                                balances.append(bal)
+                            except ValueError:
+                                pass
+                if balances:
+                    all_bals = [initial] + balances
+                    cur_peak = initial
+                    for b in all_bals:
+                        if b > cur_peak:
+                            cur_peak = b
+                        dd = cur_peak - b
+                        if dd > max_dd:
+                            max_dd = dd
+                    peak = cur_peak
+                    min_bal = min(all_bals)
+            except Exception:
+                pass
+
+        if max_dd == 0.0 and (peak - bot_cur_balance) > 0:
+            max_dd = peak - bot_cur_balance
+
+        data["peak_balance_usdt"] = round(peak, 4)
+        data["min_balance_usdt"] = round(min_bal, 4)
+        data["max_drawdown_usdt"] = round(max_dd, 4)
+
+        if max_dd > 0:
+            data["recovery_factor"] = round(net_profit / max_dd, 2)
+        else:
+            data["recovery_factor"] = 0.0
 
     @staticmethod
     def _calculate_per_coin_metrics(data: dict) -> None:
@@ -84,14 +138,22 @@ class AnalyticsMathEngine:
             else:
                 days_active = max(1.0, (current_ts - first_trade_ts) / 86400000.0)
             
-            realized_net = cdata.get("realized_pnl_net_usdt", 0.0)
-            net_profit = cdata.get("net_profit_usdt", 0.0)
+            realized_pnl = cdata.get("realized_pnl_usdt", 0.0)
+            comm = cdata.get("commission_usdt", 0.0)
+            realized_net = realized_pnl + comm
+            net_profit = realized_net
+            cdata["realized_pnl_net_usdt"] = round(realized_net, 4)
+            cdata["net_profit_usdt"] = round(net_profit, 4)
             
             cdata["max_net_profit"] = round(max(cdata.get("max_net_profit", net_profit), net_profit), 4)
             cdata["min_net_profit"] = round(min(cdata.get("min_net_profit", net_profit), net_profit), 4)
             
             avg_daily_profit = round(realized_net / days_active, 4)
             cdata["avg_daily_profit"] = avg_daily_profit
+
+            wins = cdata.get("win_count", 0)
+            trades = cdata.get("trades", 0)
+            cdata["winrate_pct"] = round((wins / trades) * 100.0, 2) if trades > 0 else 0.0
             
             max_dd = abs(cdata.get("max_drawdown", 0.0))
             if avg_daily_profit > 0:

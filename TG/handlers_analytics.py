@@ -24,13 +24,15 @@ class AnalyticsStates(StatesGroup):
 
 
 def _get_analytics_data() -> dict:
-    """Безопасное чтение файла аналитики."""
+    """Безопасное чтение файла аналитики с автоматическим перерасчетом метрик."""
     file_path = ANALYTICS_DIR / "analytics.json"
     if not file_path.exists():
         return {}
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        AnalyticsMathEngine.calculate(data)
+        return data
     except Exception:
         return {}
 
