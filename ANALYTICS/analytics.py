@@ -90,11 +90,11 @@ class AnalyticsManager:
             except Exception as e:
                 log(f"Error appending to CSV: {e}", level="ERROR")
 
-    def record_virtual_trade(self, symbol: str, side: str, pnl: float, comm: float):
+    def record_virtual_trade(self, symbol: str, side: str, pnl: float, comm: float, open_time_ms: int = 0):
         """Считает PNL и комиссии от каждой виртуальной сделки на лету."""
-        asyncio.create_task(self._process_virtual_trade(symbol, side, pnl, comm))
+        asyncio.create_task(self._process_virtual_trade(symbol, side, pnl, comm, open_time_ms=open_time_ms))
 
-    async def _process_virtual_trade(self, symbol: str, side: str, pnl: float, comm: float):
+    async def _process_virtual_trade(self, symbol: str, side: str, pnl: float, comm: float, open_time_ms: int = 0):
         async with self._lock:
             data = self._read_data()
             if not data:
@@ -131,4 +131,5 @@ class AnalyticsManager:
             
         if pnl != 0:
             now_ms = int(time.time() * 1000)
-            await self._append_to_csv(symbol, side, now_ms, now_ms, net, data.get("cur_balance_usdt", 0.0))
+            ot = open_time_ms if open_time_ms > 0 else now_ms
+            await self._append_to_csv(symbol, side, ot, now_ms, net, data.get("cur_balance_usdt", 0.0))

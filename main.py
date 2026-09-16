@@ -72,7 +72,7 @@ class BotState:
                         pos.is_active = True
                         pos.open_price = float(pos_dict.get("open_price", 0.0))
                         pos.size = float(pos_dict.get("size", 0.0))
-                        pos.open_time_ms = int(pos_dict.get("open_time_ms", 0))
+                        pos.open_time = int(pos_dict.get("open_time", pos_dict.get("open_time_ms", 0)))
             log(f"Успешно загружен стейт из {path.name}", level="INFO")
         except Exception as e:
             log(f"Ошибка загрузки стейта: {e}", level="ERROR")
@@ -308,7 +308,7 @@ class Main:
                     pnl_pct = pnl_ratio * 100
                     
                     log(f"🎯 [SIGNAL EXIT] [{symbol}][{side}] Выход по сигналу! Вход: {pos.open_price:.4f} → Выход: {current_price:.4f} | PnL: {pnl_pct:+.2f}% ({pnl_usd:+.2f}$)", level="INFO")
-                    self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd)
+                    self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd, open_time_ms=pos.open_time)
                     self.state.close_position(symbol, side)
                     log(f"🔴 [POSITION CLOSED] [{symbol}][{side}] Закрыта позиция. PnL: {pnl_usd:.4f}$, комиссия/проскальзывание: {comm_usd:.4f}$", level="INFO")
             else:
@@ -349,7 +349,7 @@ class Main:
                 pnl_usd = (pnl_ratio * pos.size)
                 comm_usd = -(fee_slip_ratio * pos.size)
                 
-                self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd)
+                self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd, open_time_ms=pos.open_time)
                 self.state.close_position(symbol, side)
                 log(f"[{symbol}][{side}] Экстренное закрытие позиции. Цена: {current_price}, PnL: {pnl_usd:.4f}$", level="INFO")
                 closed_count += 1
