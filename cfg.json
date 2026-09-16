@@ -173,6 +173,15 @@
             "long_cond": "BREAKOUT_LONG",
             "short_cond": "BREAKOUT_SHORT",
             "_comment_sr_levels": "Пробой уровней поддержки/сопротивления LuxAlgo (long: price >= resistance, short: price <= support)"
+        },
+        "ema_cross": {
+            "is_active": false,
+            "timeframe": "5m",
+            "period1": 9,
+            "period2": 21,
+            "long_cond": "CROSS_UP",
+            "short_cond": "CROSS_DOWN",
+            "_comment_ema_cross": "Боевой EMA-кроссовер с фильтром ускорения и импульса (period1 x period2 + expanding diff)"
         }
     },
     "exit_rules": {

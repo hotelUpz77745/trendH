@@ -9,6 +9,7 @@ from CORE.rules import (
     EntryRSIRule,
     EntryRSIWaterlineRule,
     EntrySRLevelsRule,
+    EntryEMACrossRule,
     EntrySignalEngine,
     ExitTrendReversalRule,
     ExitTakeProfitRule,
@@ -70,13 +71,26 @@ class TestEntryRules(unittest.TestCase):
         self.assertTrue(rule.check("SHORT", indicators={"sr_levels": ["BREAKOUT_SHORT"]}))
         self.assertFalse(rule.check("SHORT", indicators={"sr_levels": ["BREAKOUT_LONG"]}))
 
+    def test_entry_ema_cross_rule(self):
+        cfg = {"is_active": True, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN"}
+        rule = EntryEMACrossRule(cfg)
+
+        self.assertTrue(rule.check("LONG", indicators={"ema_cross": ["CROSS_UP"]}))
+        self.assertFalse(rule.check("LONG", indicators={"ema_cross": ["CROSS_DOWN"]}))
+        self.assertFalse(rule.check("LONG", indicators={"ema_cross": []}))
+        self.assertFalse(rule.check("LONG", indicators={"ema_cross": ["UNSTABLE"]}))
+
+        self.assertTrue(rule.check("SHORT", indicators={"ema_cross": ["CROSS_DOWN"]}))
+        self.assertFalse(rule.check("SHORT", indicators={"ema_cross": ["CROSS_UP"]}))
+
     def test_entry_signal_engine_combined(self):
         enter_rules = {
             "trend": {"is_active": True, "trend_positive": True, "long_cond": "UP", "short_cond": "DOWN"},
             "trend_htf": {"is_active": True, "trend_positive": True, "long_cond": "UP", "short_cond": "DOWN"},
             "rsi": {"is_active": True},
             "rsi_waterline50": {"is_active": True, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN"},
-            "sr_levels": {"is_active": True, "long_cond": "BREAKOUT_LONG", "short_cond": "BREAKOUT_SHORT"}
+            "sr_levels": {"is_active": True, "long_cond": "BREAKOUT_LONG", "short_cond": "BREAKOUT_SHORT"},
+            "ema_cross": {"is_active": True, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN"}
         }
         engine = EntrySignalEngine(enter_rules)
 
@@ -86,9 +100,21 @@ class TestEntryRules(unittest.TestCase):
             "trend_htf": "UP",
             "rsi": ["ENTER_LONG"],
             "rsi_waterline50": ["CROSS_UP"],
-            "sr_levels": ["BREAKOUT_LONG"]
+            "sr_levels": ["BREAKOUT_LONG"],
+            "ema_cross": ["CROSS_UP"]
         }
         self.assertTrue(engine.check_signal("LONG", ind_valid_long))
+
+        # EMA cross mismatch -> False
+        ind_ec_mismatch = {
+            "trend": "UP",
+            "trend_htf": "UP",
+            "rsi": ["ENTER_LONG"],
+            "rsi_waterline50": ["CROSS_UP"],
+            "sr_levels": ["BREAKOUT_LONG"],
+            "ema_cross": []
+        }
+        self.assertFalse(engine.check_signal("LONG", ind_ec_mismatch))
 
         # SR levels mismatch -> False
         ind_sr_mismatch = {
@@ -96,7 +122,8 @@ class TestEntryRules(unittest.TestCase):
             "trend_htf": "UP",
             "rsi": ["ENTER_LONG"],
             "rsi_waterline50": ["CROSS_UP"],
-            "sr_levels": []
+            "sr_levels": [],
+            "ema_cross": ["CROSS_UP"]
         }
         self.assertFalse(engine.check_signal("LONG", ind_sr_mismatch))
 
@@ -106,7 +133,8 @@ class TestEntryRules(unittest.TestCase):
             "trend_htf": "UP",
             "rsi": ["ENTER_LONG"],
             "rsi_waterline50": [],
-            "sr_levels": ["BREAKOUT_LONG"]
+            "sr_levels": ["BREAKOUT_LONG"],
+            "ema_cross": ["CROSS_UP"]
         }
         self.assertFalse(engine.check_signal("LONG", ind_wl_mismatch))
 
@@ -115,7 +143,8 @@ class TestEntryRules(unittest.TestCase):
             "trend": "UP",
             "trend_htf": "FLAT",
             "rsi": ["ENTER_LONG"],
-            "sr_levels": ["BREAKOUT_LONG"]
+            "sr_levels": ["BREAKOUT_LONG"],
+            "ema_cross": ["CROSS_UP"]
         }
         self.assertFalse(engine.check_signal("LONG", ind_htf_mismatch))
 
@@ -124,7 +153,8 @@ class TestEntryRules(unittest.TestCase):
             "trend": "UP",
             "trend_htf": "UP",
             "rsi": [],
-            "sr_levels": ["BREAKOUT_LONG"]
+            "sr_levels": ["BREAKOUT_LONG"],
+            "ema_cross": ["CROSS_UP"]
         }
         self.assertFalse(engine.check_signal("LONG", ind_rsi_mismatch))
 

@@ -10,6 +10,7 @@ from CORE.indicators import (
     RSICalculator,
     RSIWaterlineCalculator,
     SRLevelsCalculator,
+    EMACrossCalculator,
     IndicatorsEngine
 )
 
@@ -176,6 +177,34 @@ class TestSRLevelsCalculator(unittest.TestCase):
         self.assertIn("BREAKOUT_SHORT", result["signals"])
 
 
+class TestEMACrossCalculator(unittest.TestCase):
+    def setUp(self):
+        self.cfg = {
+            "is_active": True,
+            "timeframe": "5m",
+            "period1": 5,
+            "period2": 10,
+            "long_cond": "CROSS_UP",
+            "short_cond": "CROSS_DOWN"
+        }
+        self.calc = EMACrossCalculator(self.cfg)
+
+    def test_insufficient_data(self):
+        self.assertEqual(self.calc.calculate([10.0] * 5), ["UNSTABLE"])
+
+    def test_ema_cross_up_with_impulse(self):
+        # Long downtrend so ema1 < ema2, then explosive upside surge
+        prices = [100.0 - i * 2.0 for i in range(25)] + [80.0, 110.0, 150.0]
+        states = self.calc.calculate(prices)
+        self.assertIn("CROSS_UP", states)
+
+    def test_ema_cross_down_with_impulse(self):
+        # Long uptrend so ema1 > ema2, then sharp downward plunge
+        prices = [10.0 + i * 2.0 for i in range(25)] + [50.0, 30.0, 5.0]
+        states = self.calc.calculate(prices)
+        self.assertIn("CROSS_DOWN", states)
+
+
 class TestIndicatorsEngine(unittest.TestCase):
     def setUp(self):
         self.enter_rules = {
@@ -222,6 +251,14 @@ class TestIndicatorsEngine(unittest.TestCase):
                 "breakout_edge": "h",
                 "long_cond": "BREAKOUT_LONG",
                 "short_cond": "BREAKOUT_SHORT"
+            },
+            "ema_cross": {
+                "is_active": True,
+                "timeframe": "5m",
+                "period1": 5,
+                "period2": 10,
+                "long_cond": "CROSS_UP",
+                "short_cond": "CROSS_DOWN"
             }
         }
         self.engine = IndicatorsEngine(self.enter_rules)
@@ -244,6 +281,7 @@ class TestIndicatorsEngine(unittest.TestCase):
         self.assertIn("trend_htf", result)
         self.assertIn("rsi", result)
         self.assertIn("sr_levels", result)
+        self.assertIn("ema_cross", result)
         self.assertEqual(result["trend"], "UP")
         self.assertEqual(result["trend_htf"], "DOWN")
         self.assertEqual(result["rsi"], [])

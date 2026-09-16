@@ -138,6 +138,33 @@ class EntrySRLevelsRule(BaseRule):
         return False
 
 
+class EntryEMACrossRule(BaseRule):
+    """Правило входа по боевому EMA-кроссоверу с импульсом (CROSS_UP / CROSS_DOWN)."""
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.cfg = cfg
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.long_cond: str = str(cfg.get("long_cond", "CROSS_UP"))
+        self.short_cond: str = str(cfg.get("short_cond", "CROSS_DOWN"))
+
+    def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
+        if not self.is_active:
+            return True
+
+        indicators = indicators or kwargs.get("indicators", {})
+        ec_states = indicators.get("ema_cross", kwargs.get("ema_cross", []))
+
+        if not ec_states or "UNSTABLE" in ec_states:
+            return False
+
+        if side == "LONG":
+            return self.long_cond in ec_states
+        elif side == "SHORT":
+            return self.short_cond in ec_states
+
+        return False
+
+
 class EntrySignalEngine:
     """
     Движок сигналов на вход.
@@ -166,6 +193,9 @@ class EntrySignalEngine:
 
         if "sr_levels" in enter_rules_cfg:
             self.rules.append(EntrySRLevelsRule(enter_rules_cfg["sr_levels"]))
+
+        if "ema_cross" in enter_rules_cfg:
+            self.rules.append(EntryEMACrossRule(enter_rules_cfg["ema_cross"]))
 
     def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
         """

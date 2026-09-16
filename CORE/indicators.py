@@ -173,6 +173,66 @@ class RSIWaterlineCalculator:
         return states
 
 
+class EMACrossCalculator:
+    """Изолированный калькулятор боевого EMA-кроссовера с фильтром ускорения и импульса."""
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.timeframe: str = str(cfg.get("timeframe", "5m"))
+        self.period1: int = int(cfg.get("period1", 9))
+        self.period2: int = int(cfg.get("period2", 21))
+        self.long_cond: str = str(cfg.get("long_cond", "CROSS_UP"))
+        self.short_cond: str = str(cfg.get("short_cond", "CROSS_DOWN"))
+
+    def calculate(self, closes: List[float]) -> List[str]:
+        """
+        Вычисляет состояние EMA-кроссовера с фильтром ускорения и импульса:
+        - CROSS_UP: быстрая EMA пересекает медленную снизу вверх с нарастающим расхождением (импульс)
+        - CROSS_DOWN: быстрая EMA пересекает медленную сверху вниз с нарастающим расхождением (импульс)
+        - UNSTABLE: недостаточно свечей
+        - []: нет сигнала
+        """
+        if not self.is_active or not closes:
+            return ["UNSTABLE"]
+
+        req_len = max(self.period1, self.period2) + 5
+        if len(closes) < req_len:
+            return ["UNSTABLE"]
+
+        ema1 = IndicatorsMath.calc_ema(closes, self.period1)
+        ema2 = IndicatorsMath.calc_ema(closes, self.period2)
+
+        min_len = min(len(ema1), len(ema2))
+        if min_len < 3:
+            return ["UNSTABLE"]
+
+        e1_tail = ema1[-min_len:]
+        e2_tail = ema2[-min_len:]
+
+        diff = [e1 - e2 for e1, e2 in zip(e1_tail, e2_tail)]
+        if len(diff) < 3:
+            return ["UNSTABLE"]
+
+        d_now = diff[-1]
+        d_prev = diff[-2]
+        d_prev2 = diff[-3]
+
+        delta_now = abs(d_now - d_prev)
+        delta_prev = abs(d_prev - d_prev2)
+        impulse = delta_now > delta_prev
+
+        cross_up = (d_now > 0) and (d_prev2 < 0) and (d_prev > d_prev2) and impulse
+        cross_down = (d_now < 0) and (d_prev2 > 0) and (d_prev < d_prev2) and impulse
+
+        signals = []
+        if cross_up:
+            signals.append(self.long_cond)
+        if cross_down:
+            signals.append(self.short_cond)
+
+        return signals
+
+
 class IndicatorsEngine:
     """
     Фасадный интерфейс индикаторного блока системы.
@@ -199,6 +259,9 @@ class IndicatorsEngine:
         sr_cfg = enter_rules.get("sr_levels")
         self.sr_calc = SRLevelsCalculator(sr_cfg) if sr_cfg else None
 
+        ema_cross_cfg = enter_rules.get("ema_cross")
+        self.ema_cross_calc = EMACrossCalculator(ema_cross_cfg) if ema_cross_cfg else None
+
     def get_required_timeframes(self) -> Set[str]:
         """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
         tfs = set()
@@ -211,13 +274,16 @@ class IndicatorsEngine:
             tfs.add(self.rsi_waterline_calc.timeframe)
         if self.sr_calc and self.sr_calc.is_active:
             tfs.add(self.sr_calc.timeframe)
+        if self.ema_cross_calc and self.ema_cross_calc.is_active:
+            tfs.add(self.ema_cross_calc.timeframe)
         return tfs if tfs else {"5m"}
 
     def calculate(self, klines_by_tf: Dict[str, Any], current_price: Optional[float] = None) -> Dict[str, Any]:
         """
         Вычисляет показатели индикаторов по переданному словарю {таймфрейм: список_свечей_или_closes}.
         Возвращает: {"trend": str, "trend_htf": str, "rsi": list[str], "rsi_value": float | None,
-                     "rsi_waterline50": list[str], "sr_levels": list[str], "sr_levels_data": dict}
+                     "rsi_waterline50": list[str], "sr_levels": list[str], "sr_levels_data": dict,
+                     "ema_cross": list[str]}
         """
         # Извлечение close цен для EMA и RSI
         closes_by_tf: Dict[str, List[float]] = {}
@@ -267,5 +333,11 @@ class IndicatorsEngine:
         else:
             result["sr_levels"] = []
             result["sr_levels_data"] = {"signals": [], "support": [], "resistance": []}
+
+        if self.ema_cross_calc and self.ema_cross_calc.is_active:
+            closes_ec = closes_by_tf.get(self.ema_cross_calc.timeframe, [])
+            result["ema_cross"] = self.ema_cross_calc.calculate(closes_ec)
+        else:
+            result["ema_cross"] = []
 
         return result
