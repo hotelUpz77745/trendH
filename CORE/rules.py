@@ -3,63 +3,117 @@
 # ROLE: Strategy Pattern Rules Engine for Entry and Exit Signals
 # ============================================================
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Callable, Optional
+from typing import Dict, Any, Callable, Optional, List
 from c_log import log
-from utils import eval_condition
+
 
 class BaseRule(ABC):
+    """Базовый абстрактный класс торгового правила."""
+
     @abstractmethod
     def check(self, side: str, **kwargs) -> bool:
+        """
+        Проверяет выполнение условия правила.
+        Возвращает True, если условие выполнено, иначе False.
+        """
         pass
 
 
 # ==========================================
-# ENTRY RULES (All must pass for signal)
+# ENTRY RULES (All active must pass for signal)
 # ==========================================
 class EntryTrendRule(BaseRule):
-    def __init__(self, cfg: Dict[str, Any]):
-        self.cfg = cfg
-        self.is_active = cfg.get("is_active", False)
+    """
+    Правило входа по направлению тренда (базовый таймфрейм или HTF).
+    Поддерживает прямую проверку (trend_positive=True) и от обратного (False).
+    """
 
-    def check(self, side: str, trend: str, **kwargs) -> bool:
+    def __init__(self, cfg: Dict[str, Any], indicator_key: str = "trend"):
+        self.cfg = cfg
+        self.indicator_key = indicator_key
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.trend_positive: bool = bool(cfg.get("trend_positive", True))
+        self.long_cond: str = str(cfg.get("long_cond", "UP"))
+        self.short_cond: str = str(cfg.get("short_cond", "DOWN"))
+
+    def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
             return True
+
+        indicators = indicators or kwargs.get("indicators", {})
+        trend = indicators.get(self.indicator_key, kwargs.get(self.indicator_key, kwargs.get("trend")))
+
+        if not trend or trend == "UNSTABLE":
+            return False
+
         if side == "LONG":
-            return trend == self.cfg.get("long_cond", "UP")
+            if self.trend_positive:
+                return trend == self.long_cond
+            else:
+                return trend != self.short_cond
         elif side == "SHORT":
-            return trend == self.cfg.get("short_cond", "DOWN")
+            if self.trend_positive:
+                return trend == self.short_cond
+            else:
+                return trend != self.long_cond
         return False
 
+
 class EntryRSIRule(BaseRule):
+    """Правило входа по осциллятору RSI (вхождение в диапазон импульса)."""
+
     def __init__(self, cfg: Dict[str, Any]):
         self.cfg = cfg
-        self.is_active = cfg.get("is_active", False)
-        
-    def check(self, side: str, rsi: list, **kwargs) -> bool:
+        self.is_active: bool = bool(cfg.get("is_active", False))
+
+    def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
             return True
-        if "UNSTABLE" in rsi:
+
+        indicators = indicators or kwargs.get("indicators", {})
+        rsi = indicators.get("rsi", kwargs.get("rsi", []))
+
+        if not rsi or "UNSTABLE" in rsi:
             return False
-            
+
         if side == "LONG":
             return "ENTER_LONG" in rsi
         elif side == "SHORT":
             return "ENTER_SHORT" in rsi
-            
+
         return False
 
+
 class EntrySignalEngine:
+    """
+    Движок сигналов на вход.
+    Агрегирует все активные правила входа; сигнал генерируется только при успехе ВСЕХ правил.
+    """
+
     def __init__(self, enter_rules_cfg: Dict[str, Any]):
-        self.rules = []
+        self.rules: List[BaseRule] = []
+
         if "trend" in enter_rules_cfg:
-            self.rules.append(EntryTrendRule(enter_rules_cfg["trend"]))
+            self.rules.append(EntryTrendRule(enter_rules_cfg["trend"], indicator_key="trend"))
+
+        if "trend_htf" in enter_rules_cfg:
+            self.rules.append(EntryTrendRule(enter_rules_cfg["trend_htf"], indicator_key="trend_htf"))
+
+        # Регистрация дополнительных индикаторов тренда при наличии
+        for key, val in enter_rules_cfg.items():
+            if key.startswith("trend") and key not in ("trend", "trend_htf") and isinstance(val, dict):
+                self.rules.append(EntryTrendRule(val, indicator_key=key))
+
         if "rsi" in enter_rules_cfg:
             self.rules.append(EntryRSIRule(enter_rules_cfg["rsi"]))
-            
-    def check_signal(self, side: str, trend: str, rsi: list) -> bool:
-        """Returns True only if ALL active entry rules pass."""
+
+    def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
+        """
+        Проверяет все правила входа.
+        Возвращает True только если ВСЕ активные правила возвращают True.
+        """
         for rule in self.rules:
-            if not rule.check(side, trend=trend, rsi=rsi):
+            if not rule.check(side, indicators=indicators):
                 return False
         return True
 
@@ -68,55 +122,122 @@ class EntrySignalEngine:
 # EXIT RULES (Any one passing triggers exit)
 # ==========================================
 class ExitTrendReversalRule(BaseRule):
+    """Правило выхода по изменению тренда (например, при переходе в FLAT или развороте)."""
+
     def __init__(self, cfg: Dict[str, Any]):
         self.cfg = cfg
-        self.is_active = cfg.get("is_active", False)
-        
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.long_exit_trends: List[str] = list(cfg.get("long_exit_trends", []))
+        self.short_exit_trends: List[str] = list(cfg.get("short_exit_trends", []))
+
     def check(self, side: str, trend: str, **kwargs) -> bool:
         if not self.is_active:
             return False
-        if side == "LONG" and trend in self.cfg.get("long_exit_trends", []):
+        if side == "LONG" and trend in self.long_exit_trends:
             return True
-        if side == "SHORT" and trend in self.cfg.get("short_exit_trends", []):
+        if side == "SHORT" and trend in self.short_exit_trends:
             return True
         return False
 
+
 class ExitTakeProfitRule(BaseRule):
-    def __init__(self, cfg: Dict[str, Any], analytics_cfg: Dict[str, Any], get_slippage_ratio_fn: Callable[[str], float]):
+    """
+    Правило выхода по тейк-профиту с учетом комиссии и проскальзывания.
+    """
+
+    def __init__(
+        self,
+        cfg: Dict[str, Any],
+        analytics_cfg: Dict[str, Any],
+        get_slippage_ratio_fn: Callable[[str], float]
+    ):
         self.cfg = cfg
         self.analytics_cfg = analytics_cfg
-        self.value = cfg.get("value")
+        self.value: Optional[float] = cfg.get("value")
         self.get_slippage_ratio_fn = get_slippage_ratio_fn
-        
+
     def check(self, side: str, symbol: str, open_price: float, current_price: float, **kwargs) -> bool:
-        if self.value is None:
+        if self.value is None or open_price <= 0 or current_price <= 0:
             return False
-            
+
         fee_ratio = self.analytics_cfg.get("taker_fee_ratio", 0.0) * 2
         slippage_ratio = self.get_slippage_ratio_fn(symbol) * 2
         fee_slip_ratio = fee_ratio + slippage_ratio
-        
+
         if side == "LONG":
             pnl_ratio = (current_price - open_price) / open_price - fee_slip_ratio
         else:
             pnl_ratio = (open_price - current_price) / open_price - fee_slip_ratio
-            
+
         if pnl_ratio >= self.value:
-            log(f"[{symbol}][TAKE PROFIT] PnL {pnl_ratio*100:.2f}% >= {self.value*100:.2f}%", level="DEBUG")
+            log(f"[{symbol}][TAKE PROFIT] PnL {pnl_ratio * 100:.2f}% >= {self.value * 100:.2f}%", level="DEBUG")
             return True
-            
+
         return False
 
+
+class ExitStopLossRule(BaseRule):
+    """
+    Правило выхода по стоп-лоссу с учетом комиссии и проскальзывания.
+    """
+
+    def __init__(
+        self,
+        cfg: Dict[str, Any],
+        analytics_cfg: Dict[str, Any],
+        get_slippage_ratio_fn: Callable[[str], float]
+    ):
+        self.cfg = cfg
+        self.analytics_cfg = analytics_cfg
+        self.value: Optional[float] = cfg.get("value")
+        self.get_slippage_ratio_fn = get_slippage_ratio_fn
+
+    def check(self, side: str, symbol: str, open_price: float, current_price: float, **kwargs) -> bool:
+        if self.value is None or open_price <= 0 or current_price <= 0:
+            return False
+
+        fee_ratio = self.analytics_cfg.get("taker_fee_ratio", 0.0) * 2
+        slippage_ratio = self.get_slippage_ratio_fn(symbol) * 2
+        fee_slip_ratio = fee_ratio + slippage_ratio
+
+        if side == "LONG":
+            pnl_ratio = (current_price - open_price) / open_price - fee_slip_ratio
+        else:
+            pnl_ratio = (open_price - current_price) / open_price - fee_slip_ratio
+
+        threshold = -abs(self.value)
+        if pnl_ratio <= threshold:
+            log(f"[{symbol}][STOP LOSS] PnL {pnl_ratio * 100:.2f}% <= {threshold * 100:.2f}%", level="DEBUG")
+            return True
+
+        return False
+
+
 class ExitSignalEngine:
-    def __init__(self, exit_rules_cfg: Dict[str, Any], analytics_cfg: Dict[str, Any], get_slippage_ratio_fn: Callable[[str], float]):
-        self.rules = []
+    """
+    Движок сигналов на выход.
+    Агрегирует все активные правила выхода; сигнал генерируется при срабатывании ХОТЯ БЫ ОДНОГО правила.
+    """
+
+    def __init__(
+        self,
+        exit_rules_cfg: Dict[str, Any],
+        analytics_cfg: Dict[str, Any],
+        get_slippage_ratio_fn: Callable[[str], float]
+    ):
+        self.rules: List[BaseRule] = []
         if "trend_reversal" in exit_rules_cfg:
             self.rules.append(ExitTrendReversalRule(exit_rules_cfg["trend_reversal"]))
         if "take_profit_ratio" in exit_rules_cfg:
             self.rules.append(ExitTakeProfitRule(exit_rules_cfg["take_profit_ratio"], analytics_cfg, get_slippage_ratio_fn))
-            
+        if "stop_loss_ratio" in exit_rules_cfg:
+            self.rules.append(ExitStopLossRule(exit_rules_cfg["stop_loss_ratio"], analytics_cfg, get_slippage_ratio_fn))
+
     def check_signal(self, side: str, symbol: str, trend: str, open_price: float, current_price: float) -> bool:
-        """Returns True if ANY active exit rule passes."""
+        """
+        Проверяет правила выхода.
+        Возвращает True, если ХОТЯ БЫ ОДНО активное правило сработало.
+        """
         for rule in self.rules:
             if rule.check(side, symbol=symbol, trend=trend, open_price=open_price, current_price=current_price):
                 return True

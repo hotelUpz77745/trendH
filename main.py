@@ -254,7 +254,7 @@ class Main:
     def check_entry(self, symbol: str, side: str) -> bool:
         indicators = self.symbol_indicators.get(symbol)
         if not indicators: return False
-        return self.entry_engine.check_signal(side, indicators["trend"], indicators["rsi"])
+        return self.entry_engine.check_signal(side, indicators)
 
     def check_exit(self, symbol: str, side: str, open_price: float, current_price: float) -> bool:
         indicators = self.symbol_indicators.get(symbol)
@@ -318,7 +318,8 @@ class Main:
                     invest_size = cron_state.get(side, {}).get("invest_size", 0.0)
                     rsi_val = indicators.get("rsi_value")
                     rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
-                    log(f"🎯 [SIGNAL ENTRY] [{symbol}][{side}] Сигнал на вход! Trend: {indicators['trend']}, RSI: {rsi_str} ({','.join(indicators['rsi'])}), Цена: {current_price}", level="INFO")
+                    htf_str = f", HTF: {indicators['trend_htf']}" if "trend_htf" in indicators else ""
+                    log(f"🎯 [SIGNAL ENTRY] [{symbol}][{side}] Сигнал на вход! Trend: {indicators['trend']}{htf_str}, RSI: {rsi_str} ({','.join(indicators['rsi'])}), Цена: {current_price}", level="INFO")
                     if invest_size > 0:
                         log(f"🟢 [POSITION OPEN] [{symbol}][{side}] Открытие позиции. Цена: {current_price}, Размер: {invest_size}$", level="INFO")
                         self.state.open_position(symbol, side, current_price, invest_size)

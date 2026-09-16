@@ -103,10 +103,19 @@ class TestIndicatorsEngine(unittest.TestCase):
                 "confirmation_candles": 3,
                 "require_rising": True,
                 "trend_positive": True,
-                "conditions": {
-                    "UP": "UP",
-                    "DOWN": "DOWN"
-                }
+                "long_cond": "UP",
+                "short_cond": "DOWN"
+            },
+            "trend_htf": {
+                "is_active": True,
+                "timeframe": "1h",
+                "sma_fast": 5,
+                "sma_slow": 10,
+                "confirmation_candles": 2,
+                "require_rising": False,
+                "trend_positive": True,
+                "long_cond": "UP",
+                "short_cond": "DOWN"
             },
             "rsi": {
                 "is_active": True,
@@ -118,23 +127,29 @@ class TestIndicatorsEngine(unittest.TestCase):
                 }
             }
         }
+        # In Python true is True
+        self.enter_rules["trend_htf"]["trend_positive"] = True
         self.engine = IndicatorsEngine(self.enter_rules)
 
     def test_required_timeframes(self):
         tfs = self.engine.get_required_timeframes()
-        self.assertEqual(tfs, {"5m", "15m"})
+        self.assertEqual(tfs, {"5m", "1h", "15m"})
 
     def test_calculate_facade(self):
         closes_5m = [10.0 + i * 1.5 for i in range(30)]
+        closes_1h = [100.0 - i * 1.0 for i in range(30)]
         closes_15m = [50.0 + i * 0.5 for i in range(30)]
         data = {
             "5m": closes_5m,
+            "1h": closes_1h,
             "15m": closes_15m
         }
         result = self.engine.calculate(data)
         self.assertIn("trend", result)
+        self.assertIn("trend_htf", result)
         self.assertIn("rsi", result)
         self.assertEqual(result["trend"], "UP")
+        self.assertEqual(result["trend_htf"], "DOWN")
         self.assertEqual(result["rsi"], [])
 
 

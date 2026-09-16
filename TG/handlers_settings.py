@@ -49,8 +49,8 @@ def setup_settings_handlers(router: Router, bot_core):
             f"<b>⚙️ Параметры и настройки бота (TrendH):</b>\n\n"
             f"• Режим торговли (Direction): <b>{cur_mode}</b>\n"
             f"• Монет в пуле: <b>{len(symbols)}</b>\n"
-            f"• Индикаторы: <b>Trend (SMA 10/30) + RSI (14)</b>\n"
-            f"• Выход: <b>Trend Reversal / TP Ratio</b>\n\n"
+            f"• Индикаторы: <b>Trend (5m) + Trend HTF (1h) + RSI (14)</b>\n"
+            f"• Выход: <b>Trend Reversal / TP Ratio / Stop Loss</b>\n\n"
             f"Выберите категорию для просмотра или изменения:"
         )
         await message.answer(text, reply_markup=TGKeyboards.settings_menu(), parse_mode="HTML")
@@ -65,7 +65,7 @@ def setup_settings_handlers(router: Router, bot_core):
             f"<b>⚙️ Параметры и настройки бота (TrendH):</b>\n\n"
             f"• Режим торговли (Direction): <b>{cur_mode}</b>\n"
             f"• Монет в пуле: <b>{len(symbols)}</b>\n"
-            f"• Индикаторы: <b>Trend (SMA 10/30) + RSI (14)</b>\n\n"
+            f"• Индикаторы: <b>Trend (5m) + Trend HTF (1h) + RSI (14)</b>\n\n"
             f"Выберите категорию для просмотра или изменения:"
         )
         await callback.message.edit_text(text, reply_markup=TGKeyboards.settings_menu(), parse_mode="HTML")
@@ -74,23 +74,40 @@ def setup_settings_handlers(router: Router, bot_core):
     async def on_settings_rules(callback: CallbackQuery):
         await callback.answer()
         trend_cfg = ENTER_RULES.get("trend", {})
+        trend_htf_cfg = ENTER_RULES.get("trend_htf", {})
         rsi_cfg = ENTER_RULES.get("rsi", {})
         exit_rev = EXIT_RULES.get("trend_reversal", {})
         exit_tp = EXIT_RULES.get("take_profit_ratio", {})
+        exit_sl = EXIT_RULES.get("stop_loss_ratio", {})
         slip_base = PAPER_TRADING_CFG.get("slippage_base_ratio", 0.001)
         fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0.0006)
+
+        htf_info = ""
+        if trend_htf_cfg.get("is_active", False):
+            htf_info = (
+                f"• <b>Trend HTF ({trend_htf_cfg.get('timeframe', '1h')})</b>: "
+                f"Fast={trend_htf_cfg.get('sma_fast', 10)}, Slow={trend_htf_cfg.get('sma_slow', 30)}, "
+                f"Подтверждение={trend_htf_cfg.get('confirmation_candles', 2)}\n"
+            )
+
+        tp_val = exit_tp.get("value")
+        tp_str = f"{tp_val * 100:.1f}% ({tp_val})" if tp_val is not None else "Отключен (null)"
+        sl_val = exit_sl.get("value")
+        sl_str = f"{sl_val * 100:.1f}% ({sl_val})" if sl_val is not None else "Отключен (null)"
 
         rules_text = (
             f"<b>📊 Правила торговой стратегии:</b>\n\n"
             f"<b>Вход (Enter Rules):</b>\n"
             f"• <b>Trend ({trend_cfg.get('timeframe', '5m')})</b>: "
-            f"SMA Fast={trend_cfg.get('sma_fast', 10)}, Slow={trend_cfg.get('sma_slow', 30)}, "
-            f"Свечей подтверждения={trend_cfg.get('confirmation_candles', 5)}\n"
+            f"Fast={trend_cfg.get('sma_fast', 10)}, Slow={trend_cfg.get('sma_slow', 30)}, "
+            f"Подтверждение={trend_cfg.get('confirmation_candles', 2)}\n"
+            f"{htf_info}"
             f"• <b>RSI ({rsi_cfg.get('timeframe', '5m')})</b>: "
-            f"Window={rsi_cfg.get('window', 14)}, Long='{rsi_cfg.get('long_cond')}', Short='{rsi_cfg.get('short_cond')}'\n\n"
+            f"Window={rsi_cfg.get('window', 14)}, Conds={rsi_cfg.get('conditions', {})}\n\n"
             f"<b>Выход (Exit Rules):</b>\n"
-            f"• <b>Trend Reversal</b>: Long выходы: {exit_rev.get('long_exit_trends')}, Short выходы: {exit_rev.get('short_exit_trends')}\n"
-            f"• <b>Take Profit Ratio</b>: {exit_tp.get('value', 'null')}\n\n"
+            f"• <b>Trend Reversal</b>: Long={exit_rev.get('long_exit_trends')}, Short={exit_rev.get('short_exit_trends')}\n"
+            f"• <b>Take Profit</b>: {tp_str}\n"
+            f"• <b>Stop Loss</b>: {sl_str}\n\n"
             f"<b>Исполнение (Paper Trading):</b>\n"
             f"• Базовый слиппедж (ratio): <code>{slip_base}</code> ({slip_base * 100:.2f}%)\n"
             f"• Комиссия тейкера (ratio): <code>{fee_ratio}</code> ({fee_ratio * 100:.2f}%)"

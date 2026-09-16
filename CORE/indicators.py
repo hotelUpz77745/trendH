@@ -139,41 +139,53 @@ class IndicatorsEngine:
     """
 
     def __init__(self, enter_rules: Dict[str, Any]):
-        # Чтение структуры правил входа
-        trend_cfg = enter_rules["trend"]
-        rsi_cfg = enter_rules["rsi"]
+        self.trend_calcs: Dict[str, TrendCalculator] = {}
+        for key in ["trend", "trend_htf"]:
+            if key in enter_rules:
+                self.trend_calcs[key] = TrendCalculator(enter_rules[key])
+        
+        # Поддержка дополнительных ключей тренда при их наличии
+        for key, val in enter_rules.items():
+            if key.startswith("trend") and key not in self.trend_calcs and isinstance(val, dict):
+                self.trend_calcs[key] = TrendCalculator(val)
 
-        self.trend_calc = TrendCalculator(trend_cfg)
-        self.rsi_calc = RSICalculator(rsi_cfg)
+        rsi_cfg = enter_rules.get("rsi")
+        self.rsi_calc = RSICalculator(rsi_cfg) if rsi_cfg else None
 
     def get_required_timeframes(self) -> Set[str]:
         """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
         tfs = set()
-        if self.trend_calc.is_active:
-            tfs.add(self.trend_calc.timeframe)
-        if self.rsi_calc.is_active:
+        for calc in self.trend_calcs.values():
+            if calc.is_active:
+                tfs.add(calc.timeframe)
+        if self.rsi_calc and self.rsi_calc.is_active:
             tfs.add(self.rsi_calc.timeframe)
         return tfs if tfs else {"5m"}
 
     def calculate(self, closes_by_tf: Dict[str, List[float]]) -> Dict[str, Any]:
         """
         Вычисляет показатели индикаторов по переданному словарю {таймфрейм: список_closes}.
-        Возвращает: {"trend": str, "rsi": list[str], "rsi_value": float | None}
+        Возвращает: {"trend": str, "trend_htf": str, "rsi": list[str], "rsi_value": float | None}
         """
-        trend_val = "UNSTABLE"
-        if self.trend_calc.is_active:
-            closes_trend = closes_by_tf.get(self.trend_calc.timeframe, [])
-            trend_val = self.trend_calc.calculate(closes_trend)
+        result: Dict[str, Any] = {}
+        for key, calc in self.trend_calcs.items():
+            if calc.is_active:
+                closes = closes_by_tf.get(calc.timeframe, [])
+                result[key] = calc.calculate(closes)
+            else:
+                result[key] = "UNSTABLE"
+
+        # Дефолт для базового trend если не задан
+        if "trend" not in result:
+            result["trend"] = "UNSTABLE"
 
         rsi_states = ["UNSTABLE"]
         rsi_val = None
-        if self.rsi_calc.is_active:
+        if self.rsi_calc and self.rsi_calc.is_active:
             closes_rsi = closes_by_tf.get(self.rsi_calc.timeframe, [])
             rsi_states = self.rsi_calc.calculate(closes_rsi)
             rsi_val = self.rsi_calc.get_raw_value(closes_rsi)
 
-        return {
-            "trend": trend_val,
-            "rsi": rsi_states,
-            "rsi_value": rsi_val
-        }
+        result["rsi"] = rsi_states
+        result["rsi_value"] = rsi_val
+        return result
