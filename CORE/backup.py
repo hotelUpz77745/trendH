@@ -58,7 +58,10 @@ class RuntimeBackupManager:
             caption = "💾 Runtime Backup\n\nСвежий слепок data/state.json"
             if hasattr(self.notifier, "tg_bot") and self.notifier.tg_bot:
                 file_obj = FSInputFile(path=str(zip_filename))
-                await self.notifier.tg_bot.send_document_to_all(file_obj, caption)
+                if hasattr(self.notifier.tg_bot, "send_backup_document"):
+                    await self.notifier.tg_bot.send_backup_document(file_obj, caption)
+                else:
+                    await self.notifier.tg_bot.send_document_to_all(file_obj, caption)
                 log(f"[BACKUP] Sent backup {zip_filename.name} to Telegram.", level="INFO")
             else:
                 log("[BACKUP] No TG bot available to send backup.", level="WARNING")

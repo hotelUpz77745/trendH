@@ -33,6 +33,7 @@ class TelegramReceiver:
 
         self.bot = Bot(token=self.token)
         self.dp = Dispatcher(storage=MemoryStorage())
+        self.last_backup_messages = {}  # uid -> message_id
 
         self._setup_middleware()
         self._setup_error_handling()
@@ -122,3 +123,20 @@ class TelegramReceiver:
                 await self.bot.send_document(chat_id=uid, document=document, caption=caption, parse_mode="HTML")
             except Exception as e:
                 logger.error(f"Failed to send document to {uid}: {e}")
+
+    async def send_backup_document(self, document, caption: str = ""):
+        """Отправляет бэкап стейта и автоматически удаляет предыдущий отправленный бэкап."""
+        if not self._is_running or not self.bot: return
+        for uid in TG_ALLOWED_USERS:
+            old_msg_id = self.last_backup_messages.get(uid)
+            if old_msg_id:
+                try:
+                    await self.bot.delete_message(chat_id=uid, message_id=old_msg_id)
+                except Exception as e:
+                    logger.debug(f"Не удалось удалить старый бэкап у {uid}: {e}")
+            try:
+                msg = await self.bot.send_document(chat_id=uid, document=document, caption=caption, parse_mode="HTML")
+                if msg:
+                    self.last_backup_messages[uid] = msg.message_id
+            except Exception as e:
+                logger.error(f"Failed to send backup to {uid}: {e}")
