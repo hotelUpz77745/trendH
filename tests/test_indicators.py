@@ -4,7 +4,7 @@
 # ============================================================
 
 import unittest
-from INDICATORS.indicators_engine import (
+from CORE.INDICATORS.indicators_engine import (
     IndicatorsMath,
     TrendCalculator,
     RSICalculator,
@@ -71,6 +71,27 @@ class TestTrendCalculator(unittest.TestCase):
         self.assertIn(self.calc.calculate(prices), ["FLAT", "UNSTABLE"])
 
 
+class TestRSICalculator(unittest.TestCase):
+    def setUp(self):
+        self.cfg = {
+            "is_active": True,
+            "timeframe": "15m",
+            "window": 14,
+            "conditions": {
+                "ENTER_LONG": "50 < x <= 75",
+                "ENTER_SHORT": "25 <= x < 50"
+            }
+        }
+        self.calc = RSICalculator(self.cfg)
+
+    def test_insufficient_data(self):
+        self.assertEqual(self.calc.calculate([100.0] * 10), ["UNSTABLE"])
+
+    def test_rsi_neutral(self):
+        prices = [100.0] * 30
+        self.assertEqual(self.calc.calculate(prices), [])
+
+
 class TestIndicatorsEngine(unittest.TestCase):
     def setUp(self):
         self.enter_rules = {
@@ -82,15 +103,19 @@ class TestIndicatorsEngine(unittest.TestCase):
                 "confirmation_candles": 3,
                 "require_rising": True,
                 "trend_positive": True,
-                "long_cond": "UP",
-                "short_cond": "DOWN"
+                "conditions": {
+                    "UP": "UP",
+                    "DOWN": "DOWN"
+                }
             },
             "rsi": {
                 "is_active": True,
                 "timeframe": "15m",
                 "window": 14,
-                "long_cond": "50 < x <= 75",
-                "short_cond": "25 <= x < 50"
+                "conditions": {
+                    "ENTER_LONG": "50 < x <= 75",
+                    "ENTER_SHORT": "25 <= x < 50"
+                }
             }
         }
         self.engine = IndicatorsEngine(self.enter_rules)
@@ -110,7 +135,7 @@ class TestIndicatorsEngine(unittest.TestCase):
         self.assertIn("trend", result)
         self.assertIn("rsi", result)
         self.assertEqual(result["trend"], "UP")
-        self.assertEqual(result["rsi"], "NEUTRAL")
+        self.assertEqual(result["rsi"], [])
 
 
 if __name__ == "__main__":

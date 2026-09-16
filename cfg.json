@@ -133,8 +133,10 @@
             "is_active": true,
             "timeframe": "5m",
             "window": 14,
-            "long_cond": "50 < x <= 75",
-            "short_cond": "25 <= x < 50"
+            "conditions": {
+                "ENTER_LONG": "50 < x <= 75",
+                "ENTER_SHORT": "25 <= x < 50"
+            }
         }
     },
     "exit_rules": {

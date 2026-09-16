@@ -11,12 +11,13 @@ from API.binance import BinanceAdapter
 from utils import Utils, NetworkServices
 from cron_integration import CronIntegration
 from ANALYTICS.analytics import AnalyticsManager
-from rules_engine import EntrySignalEngine, ExitSignalEngine
+from CORE.rules_engine import EntrySignalEngine, ExitSignalEngine
+from CORE.models import PositionState
 import json
 from notifier import NotifierManager
 from API.price_stream import BinanceHotPriceStream
 from TG.tg_receiver import TelegramReceiver
-from INDICATORS.indicators_engine import IndicatorsEngine
+from CORE.INDICATORS.indicators_engine import IndicatorsEngine
 
 if TYPE_CHECKING:
     from API.price_stream import HotPriceTick
@@ -37,20 +38,27 @@ from consts import (
 
 class BotState:
     def __init__(self):
-        # symbol -> {"LONG": {"open_price": float, "size": float}, "SHORT": {"open_price": float, "size": float}}
-        self.positions: Dict[str, Dict[str, dict]] = {}
+        # symbol -> {"LONG": PositionState, "SHORT": PositionState}
+        self.positions: Dict[str, Dict[str, PositionState]] = {}
 
     def get_position(self, symbol: str, side: str):
-        return self.positions.get(symbol, {}).get(side)
+        pos = self.positions.get(symbol, {}).get(side)
+        if pos and pos.is_active:
+            return pos
+        return None
 
     def open_position(self, symbol: str, side: str, price: float, size: float):
         if symbol not in self.positions:
-            self.positions[symbol] = {}
-        self.positions[symbol][side] = {"open_price": price, "size": size}
+            self.positions[symbol] = {
+                "LONG": PositionState(symbol=symbol, side="LONG"),
+                "SHORT": PositionState(symbol=symbol, side="SHORT")
+            }
+        now_ms = int(time.time() * 1000)
+        self.positions[symbol][side].set_active(price, size, now_ms)
 
     def close_position(self, symbol: str, side: str):
         if symbol in self.positions and side in self.positions[symbol]:
-            del self.positions[symbol][side]
+            self.positions[symbol][side].reset()
 
 class Main:
     def __init__(self):
@@ -170,19 +178,19 @@ class Main:
             pos = self.state.get_position(symbol, side)
             if pos:
                 # Check exit
-                if self.check_exit(symbol, side, pos["open_price"], current_price):
+                if self.check_exit(symbol, side, pos.open_price, current_price):
                     log(f"[{symbol}][{side}] Закрытие виртуальной позиции. Цена: {current_price}", level="INFO")
                     fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
                     slippage_ratio = self.get_slippage_ratio(symbol) * 2
                     fee_slip_ratio = fee_ratio + slippage_ratio
                     
                     if side == "LONG":
-                        pnl_ratio = (current_price - pos["open_price"]) / pos["open_price"]
+                        pnl_ratio = (current_price - pos.open_price) / pos.open_price
                     else:
-                        pnl_ratio = (pos["open_price"] - current_price) / pos["open_price"]
+                        pnl_ratio = (pos.open_price - current_price) / pos.open_price
                         
-                    pnl_usd = (pnl_ratio * pos["size"])
-                    comm_usd = -(fee_slip_ratio * pos["size"])
+                    pnl_usd = (pnl_ratio * pos.size)
+                    comm_usd = -(fee_slip_ratio * pos.size)
                     
                     self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd)
                     self.state.close_position(symbol, side)
@@ -201,6 +209,8 @@ class Main:
         for symbol, sides in list(self.state.positions.items()):
             for side in list(sides.keys()):
                 pos = sides[side]
+                if not pos.is_active:
+                    continue
                 current_price = self.current_prices.get(symbol)
                 if not current_price:
                     continue # Не можем закрыть без цены
@@ -210,12 +220,12 @@ class Main:
                 fee_slip_ratio = fee_ratio + slippage_ratio
                 
                 if side == "LONG":
-                    pnl_ratio = (current_price - pos["open_price"]) / pos["open_price"]
+                    pnl_ratio = (current_price - pos.open_price) / pos.open_price
                 else:
-                    pnl_ratio = (pos["open_price"] - current_price) / pos["open_price"]
+                    pnl_ratio = (pos.open_price - current_price) / pos.open_price
                     
-                pnl_usd = (pnl_ratio * pos["size"])
-                comm_usd = -(fee_slip_ratio * pos["size"])
+                pnl_usd = (pnl_ratio * pos.size)
+                comm_usd = -(fee_slip_ratio * pos.size)
                 
                 self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd)
                 self.state.close_position(symbol, side)
@@ -224,6 +234,34 @@ class Main:
                 
         log(f"✅ Close All: Успешно закрыто {closed_count} виртуальных позиций.", level="INFO")
 
+    async def indicators_daemon(self):
+        """Фоновый процесс обновления индикаторов (скачивание свечей)."""
+        log("🚀 Запущен indicators_daemon.", level="INFO")
+        while True:
+            try:
+                if self.symbols and not self.is_paused:
+                    tasks = [self.update_indicators(self.network.session, sym) for sym in self.symbols]
+                    if tasks:
+                        await asyncio.gather(*tasks)
+            except Exception as ex:
+                log(f"Error in indicators_daemon: {ex}", level="ERROR")
+                traceback.print_exc()
+            await asyncio.sleep(INDICATORS_REFRESH_INTERVAL_SEC)
+
+    async def volumes_daemon(self):
+        """Фоновый процесс обновления объемов за 24 часа."""
+        log("🚀 Запущен volumes_daemon.", level="INFO")
+        while True:
+            try:
+                if self.symbols:
+                    vol_tasks = [self.fetch_24h_volume(sym) for sym in self.symbols]
+                    if vol_tasks:
+                        await asyncio.gather(*vol_tasks)
+            except Exception as ex:
+                log(f"Error in volumes_daemon: {ex}", level="ERROR")
+                traceback.print_exc()
+            await asyncio.sleep(INDICATORS_REFRESH_INTERVAL_SEC)
+
     async def run(self):
         await self.network.initialize_session()
         if not await self.network.validate_session():
@@ -231,7 +269,6 @@ class Main:
             return
 
         session = self.network.session
-        last_indicators_refresh = 0
 
         await self.notifier.start()
 
@@ -252,26 +289,10 @@ class Main:
                 self.stream_task = asyncio.create_task(self.price_stream.run(self.on_tick))
                 log(f"🚀 Запущен HotPriceStream для {len(self.symbols)} пар.", level="INFO")
                 
+            self.indicators_task = asyncio.create_task(self.indicators_daemon())
+            self.volumes_task = asyncio.create_task(self.volumes_daemon())
+                
             while True:
-                try:
-                    now = time.time()
-                    if now - last_indicators_refresh >= INDICATORS_REFRESH_INTERVAL_SEC:
-                        last_indicators_refresh = now
-                        
-                        # fetch volumes
-                        vol_tasks = [self.fetch_24h_volume(sym) for sym in self.symbols]
-                        if vol_tasks:
-                            await asyncio.gather(*vol_tasks)
-                            
-                        # fetch indicators
-                        tasks = [self.update_indicators(session, sym) for sym in self.symbols]
-                        if tasks:
-                            await asyncio.gather(*tasks)
-
-                except Exception as ex:
-                    log(f"Main loop error: {ex}", level="ERROR")
-                    traceback.print_exc()
-
                 await asyncio.sleep(MAIN_LOOP_DELAY_SEC)
 
         except KeyboardInterrupt:
@@ -283,6 +304,10 @@ class Main:
             log("Завершение работы.", level="INFO")
             if self.tg_task:
                 self.tg_task.cancel()
+            if hasattr(self, 'indicators_task') and self.indicators_task:
+                self.indicators_task.cancel()
+            if hasattr(self, 'volumes_task') and self.volumes_task:
+                self.volumes_task.cancel()
             if self.tg_bot:
                 await self.tg_bot.stop()
             if self.price_stream:
@@ -296,3 +321,15 @@ if __name__ == "__main__":
         pass
     except asyncio.exceptions.CancelledError:
         pass
+
+
+## шпору не трогать!!
+# # chmod 600 ssh_key.txt
+# # eval "$(ssh-agent -s)" 
+# # ssh-add ssh_key.txt
+# # git remote set-url origin git@github.com:hotelUpz/uranus_bot.git
+# # source .ssh-autostart.sh
+# В терминале Git Bash, находясь в папке с проектом:
+# source C:/Users/User/Desktop/My_Pro/HP_EliteBook_735_old/WORKSPACE/COMMON/.ssh-autostart.sh
+
+# taskkill /F /IM python.exe

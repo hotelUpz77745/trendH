@@ -35,16 +35,16 @@ class EntryRSIRule(BaseRule):
         self.cfg = cfg
         self.is_active = cfg.get("is_active", False)
         
-    def check(self, side: str, rsi: str = "NEUTRAL", **kwargs) -> bool:
+    def check(self, side: str, rsi: list, **kwargs) -> bool:
         if not self.is_active:
             return True
-        if rsi == "UNSTABLE":
+        if "UNSTABLE" in rsi:
             return False
             
         if side == "LONG":
-            return rsi == "LONG"
+            return "ENTER_LONG" in rsi
         elif side == "SHORT":
-            return rsi == "SHORT"
+            return "ENTER_SHORT" in rsi
             
         return False
 
@@ -56,7 +56,7 @@ class EntrySignalEngine:
         if "rsi" in enter_rules_cfg:
             self.rules.append(EntryRSIRule(enter_rules_cfg["rsi"]))
             
-    def check_signal(self, side: str, trend: str, rsi: str) -> bool:
+    def check_signal(self, side: str, trend: str, rsi: list) -> bool:
         """Returns True only if ALL active entry rules pass."""
         for rule in self.rules:
             if not rule.check(side, trend=trend, rsi=rsi):

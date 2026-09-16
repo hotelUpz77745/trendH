@@ -98,36 +98,31 @@ class RSICalculator:
 
     def __init__(self, cfg: Dict[str, Any]):
         # Чтение конфига строго по п. 2 протокола ([''])
-        self.is_active: bool = bool(cfg.get("is_active", False))
-        self.timeframe: str = str(cfg.get("timeframe", "5m"))
-        self.window: int = int(cfg.get("window", 14))
-        self.long_cond: str = str(cfg.get("long_cond", ""))
-        self.short_cond: str = str(cfg.get("short_cond", ""))
+        self.is_active: bool = bool(cfg["is_active"])
+        self.timeframe: str = str(cfg["timeframe"])
+        self.window: int = int(cfg["window"])
+        self.conditions: Dict[str, str] = cfg.get("conditions", {})
 
-    def calculate(self, closes: List[float]) -> str:
+    def calculate(self, closes: List[float]) -> List[str]:
         """
         Вычисляет состояние RSI:
-        - 'LONG': если удовлетворяет long_cond
-        - 'SHORT': если удовлетворяет short_cond
-        - 'NEUTRAL': если условия не выполнены
-        - 'UNSTABLE': если недостаточно данных или индикатор отключен
+        Возвращает список ключей сработавших условий (напр. ['ENTER_LONG']).
+        Если данных недостаточно, возвращает ['UNSTABLE'].
         """
         if not self.is_active or not closes:
-            return "UNSTABLE"
+            return ["UNSTABLE"]
         
         raw_rsi = IndicatorsMath.calc_rsi(closes, length=self.window)
         if raw_rsi is None:
-            return "UNSTABLE"
+            return ["UNSTABLE"]
             
         from utils import eval_condition
-        is_long = eval_condition(self.long_cond, raw_rsi) if self.long_cond else False
-        is_short = eval_condition(self.short_cond, raw_rsi) if self.short_cond else False
-        
-        if is_long:
-            return "LONG"
-        if is_short:
-            return "SHORT"
-        return "NEUTRAL"
+        active_states = []
+        for state_key, cond_expr in self.conditions.items():
+            if cond_expr and eval_condition(cond_expr, raw_rsi):
+                active_states.append(state_key)
+                
+        return active_states
 
 
 class IndicatorsEngine:
@@ -163,12 +158,12 @@ class IndicatorsEngine:
             closes_trend = closes_by_tf.get(self.trend_calc.timeframe, [])
             trend_val = self.trend_calc.calculate(closes_trend)
 
-        rsi_state = "UNSTABLE"
+        rsi_states = ["UNSTABLE"]
         if self.rsi_calc.is_active:
             closes_rsi = closes_by_tf.get(self.rsi_calc.timeframe, [])
-            rsi_state = self.rsi_calc.calculate(closes_rsi)
+            rsi_states = self.rsi_calc.calculate(closes_rsi)
 
         return {
             "trend": trend_val,
-            "rsi": rsi_state
+            "rsi": rsi_states
         }
