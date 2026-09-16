@@ -196,8 +196,8 @@
     },
     "notifications": {
         "enabled": true,
-        "negative_threshold": -20.0,
-        "positive_threshold": 20.0
+        "negative_threshold": -10.0,
+        "positive_threshold": 10.0
     },
     "auto_closing": {
         "negative": {

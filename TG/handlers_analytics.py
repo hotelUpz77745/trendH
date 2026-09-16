@@ -56,6 +56,7 @@ def _format_analytics_text(data: dict) -> str:
 
     pnl_sign = "+" if net_profit >= 0 else ""
     roi_sign = "+" if roi_pct >= 0 else ""
+    dd_val = -abs(max_dd) if max_dd > 0 else 0.0
 
     return (
         f"<b>📊 Сводная аналитика (Paper Trading):</b>\n\n"
@@ -65,7 +66,7 @@ def _format_analytics_text(data: dict) -> str:
         f"• Реализованный PnL: <code>{realized_pnl:.4f} USDT</code>\n"
         f"• Плавающий PnL: <code>{unrealized_pnl:.4f} USDT</code>\n"
         f"• Всего сделок: <b>{total_trades}</b> (Побед: {winning_trades} | Winrate: {winrate_pct:.1f}%)\n"
-        f"• Макс. просадка (DD): <code>{max_dd:.4f} USDT</code>\n"
+        f"• Макс. просадка (DD): <code>{dd_val:.4f} USDT</code>\n"
         f"• Фактор восстановления: <code>{rec_factor:.2f}</code>\n"
     )
 
