@@ -1,5 +1,5 @@
 # ============================================================
-# FILE: rules_engine.py
+# FILE: rules.py
 # ROLE: Strategy Pattern Rules Engine for Entry and Exit Signals
 # ============================================================
 from abc import ABC, abstractmethod

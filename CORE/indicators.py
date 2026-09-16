@@ -1,5 +1,5 @@
 # ============================================================
-# FILE: INDICATORS/indicators_engine.py
+# FILE: indicators.py
 # ROLE: Standalone modular indicator calculation engine (Trend & RSI)
 # ============================================================
 

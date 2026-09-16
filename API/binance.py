@@ -42,7 +42,7 @@ class BinanceAdapter(BaseCEXAdapter):
             return False
 
     async def get_klines(self, session: AsyncSession, symbol: str, interval: str = "5m", limit: int = 200) -> Optional[list]:
-        full_symbol = f"{symbol}USDT"
+        full_symbol = f"{symbol}USDT" if not symbol.endswith("USDT") else symbol
         url = f"https://fapi.binance.com/fapi/v1/klines?symbol={full_symbol}&interval={interval}&limit={limit}"
         try:
             response = await session.get(url, timeout=10.0)
@@ -54,13 +54,13 @@ class BinanceAdapter(BaseCEXAdapter):
             logger.error(f"Exception fetching klines for {full_symbol}: {e}")
             return None
 
-    async def get_24h_volume(self, symbol: str) -> float:
+    async def get_24h_volume(self, session: AsyncSession, symbol: str) -> float:
         """Fetch 24hr quote volume in USDT for slippage mapping."""
-        url = f"{self.base_url}/fapi/v1/ticker/24hr"
+        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
         params = {"symbol": symbol}
-        for attempt in range(self.max_retries):
+        for attempt in range(3):
             try:
-                resp = await self.session.get(url, params=params, timeout=5)
+                resp = await session.get(url, params=params, timeout=5.0)
                 if resp.status_code == 200:
                     data = resp.json()
                     # Return quote volume
@@ -78,7 +78,7 @@ class BinanceAdapter(BaseCEXAdapter):
             except Exception as e:
                 from c_log import log
                 log(f"[BinanceAdapter] Exception on ticker attempt {attempt+1}: {e}", level="WARNING")
-                if attempt < self.max_retries - 1:
+                if attempt < 2:
                     import asyncio
                     await asyncio.sleep(1)
                 else:

@@ -4,7 +4,7 @@
 # ============================================================
 
 import unittest
-from CORE.INDICATORS.indicators_engine import (
+from CORE.indicators import (
     IndicatorsMath,
     TrendCalculator,
     RSICalculator,

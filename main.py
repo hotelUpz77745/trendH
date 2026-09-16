@@ -11,13 +11,13 @@ from API.binance import BinanceAdapter
 from utils import Utils, NetworkServices
 from cron_integration import CronIntegration
 from ANALYTICS.analytics import AnalyticsManager
-from CORE.rules_engine import EntrySignalEngine, ExitSignalEngine
+from CORE.rules import EntrySignalEngine, ExitSignalEngine
 from CORE.models import PositionState
 import json
 from notifier import NotifierManager
 from API.price_stream import BinanceHotPriceStream
 from TG.tg_receiver import TelegramReceiver
-from CORE.INDICATORS.indicators_engine import IndicatorsEngine
+from CORE.indicators import IndicatorsEngine
 
 if TYPE_CHECKING:
     from API.price_stream import HotPriceTick
@@ -71,6 +71,8 @@ class Main:
         self.symbol_indicators = {} # symbol -> {"rsi": float, "trend": str}
         self.symbol_volume_24h = {}
         self.current_prices = {} # symbol -> float
+        self.klines_cache = {} # symbol -> tf -> timestamp -> close
+        self.api_semaphore = asyncio.Semaphore(10)
         
         self.entry_engine = EntrySignalEngine(ENTER_RULES)
         self.exit_engine = ExitSignalEngine(EXIT_RULES, ANALYTICS_CFG, self.get_slippage_ratio)
@@ -99,7 +101,7 @@ class Main:
             log(f"[Main] Ошибка сохранения auto_start: {e}", level="ERROR")
         
     async def fetch_24h_volume(self, symbol: str):
-        vol = await self.binance_client.get_24h_volume(symbol)
+        vol = await self.binance_client.get_24h_volume(self.network.session, symbol)
         self.symbol_volume_24h[symbol] = vol
 
     def get_slippage_ratio(self, symbol: str) -> float:
@@ -119,15 +121,54 @@ class Main:
         
         return base_ratio * multiplier
         
+    async def init_klines_cache(self, session):
+        log("🚀 Pre-fetching klines history for all symbols...", level="INFO")
+        history_size = cfg.get("klines_history_size", 300)
+        tfs = self.indicators_engine.get_required_timeframes()
+        
+        async def _fetch(sym):
+            if sym not in self.klines_cache:
+                self.klines_cache[sym] = {}
+            for tf in tfs:
+                async with self.api_semaphore:
+                    klines = await self.binance_client.get_klines(session, sym, interval=tf, limit=history_size)
+                    if klines:
+                        if tf not in self.klines_cache[sym]:
+                            self.klines_cache[sym][tf] = {}
+                        for k in klines:
+                            self.klines_cache[sym][tf][int(k[0])] = float(k[4])
+                await asyncio.sleep(0.01)
+
+        tasks = [_fetch(sym) for sym in self.symbols]
+        await asyncio.gather(*tasks)
+        log(f"✅ Klines history loaded for {len(self.symbols)} symbols.", level="INFO")
+
     async def update_indicators(self, session, symbol: str):
         try:
             tfs = self.indicators_engine.get_required_timeframes()
+            history_size = cfg.get("klines_history_size", 300)
+            
+            if symbol not in self.klines_cache:
+                self.klines_cache[symbol] = {}
+                
             klines_data = {}
             for tf in tfs:
-                klines = await self.binance_client.get_klines(session, symbol, interval=tf, limit=100)
+                if tf not in self.klines_cache[symbol]:
+                    self.klines_cache[symbol][tf] = {}
+                    
+                async with self.api_semaphore:
+                    klines = await self.binance_client.get_klines(session, symbol, interval=tf, limit=5)
+                    
                 if klines:
-                    klines_data[tf] = [float(k[4]) for k in klines]
-                await asyncio.sleep(0.1)  # rate limiting
+                    for k in klines:
+                        self.klines_cache[symbol][tf][int(k[0])] = float(k[4])
+                        
+                sorted_ts = sorted(self.klines_cache[symbol][tf].keys())
+                for ts in sorted_ts[:-history_size]:
+                    del self.klines_cache[symbol][tf][ts]
+                    
+                if sorted_ts:
+                    klines_data[tf] = [self.klines_cache[symbol][tf][ts] for ts in sorted_ts[-history_size:]]
 
             if not klines_data:
                 return
@@ -285,6 +326,7 @@ class Main:
         try:
             self.symbols = CronIntegration.get_symbols()
             if self.symbols:
+                await self.init_klines_cache(session)
                 self.price_stream = BinanceHotPriceStream(self.symbols)
                 self.stream_task = asyncio.create_task(self.price_stream.run(self.on_tick))
                 log(f"🚀 Запущен HotPriceStream для {len(self.symbols)} пар.", level="INFO")

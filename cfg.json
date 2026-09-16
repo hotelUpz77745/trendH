@@ -1,4 +1,6 @@
 {
+    "auto_start": true,
+    "klines_history_size": 300,
     "INDICATORS_REFRESH_INTERVAL_SEC": 60,
     "DIRECTION_MODE": "HEDGE",
     "MAIN_LOOP_DELAY_SEC": 0.1,
