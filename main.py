@@ -458,6 +458,7 @@ class Main:
         if TG_ENABLED and TG_TOKEN:
             try:
                 self.tg_bot = TelegramReceiver(self)
+                self.notifier.tg_bot = self.tg_bot
                 self.tg_task = asyncio.create_task(self.tg_bot.start())
                 log(" TelegramReceiver успешно запущен параллельно с ядром.", level="INFO")
             except Exception as e:
