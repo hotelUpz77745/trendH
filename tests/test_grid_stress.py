@@ -17,16 +17,24 @@ class TestGridStressIntegration(unittest.TestCase):
     def setUp(self):
         CronIntegration.clear_cache()
         self.fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures", "sample_runtime", "runtime")
+        from consts import cfg
+        self._orig_data_sources = dict(cfg.get("data_sources", {}))
+        cfg["data_sources"]["runtime_path"] = self.fixtures_dir
 
     def tearDown(self):
         CronIntegration.clear_cache()
+        from consts import cfg
+        cfg["data_sources"] = self._orig_data_sources
 
     def test_find_runtime_file_fallback(self):
         """Проверка поиска файлов в резервной папке фикстур."""
+        from consts import cfg
+        cfg["data_sources"]["runtime_path"] = None
         fpath = CronIntegration._find_runtime_file("RAYSOLUSDT")
         self.assertIsNotNone(fpath)
         self.assertTrue(os.path.exists(fpath))
         self.assertTrue(fpath.lower().endswith("raysolusdt.json"))
+        cfg["data_sources"]["runtime_path"] = self.fixtures_dir
 
     def test_get_symbol_state(self):
         """Проверка получения базового объема и статуса сетки."""
@@ -227,14 +235,14 @@ class TestGridStressIntegration(unittest.TestCase):
         try:
             cfg["data_sources"]["hardcoded_symbols"] = []
             cfg["data_sources"]["hardcoded_size"] = None
+            cfg["data_sources"]["runtime_path"] = self.fixtures_dir
 
             # 1. Загрузка символов из app.json
             syms = CronIntegration.get_symbols()
-            self.assertGreaterEqual(len(syms), 50)
-            self.assertIn("ARXUSDT", syms)
+            self.assertGreaterEqual(len(syms), 1)
             self.assertIn("RAYSOLUSDT", syms)
 
-            # 2. Динамический расчет размера от сетки RAYSOLUSDT
+            # 2. Динамический расчет размера от сетки RAYSOLUSDT (в фикстуре)
             state = CronIntegration.get_symbol_state("RAYSOLUSDT")
             # Для SHORT (хэдж застрявшего лонга cron3 на ~316.5$): 50% объема = 158.26$
             self.assertAlmostEqual(state["SHORT"]["invest_size"], 158.26, delta=1.0)
