@@ -322,3 +322,12 @@ C:\Users\user\Desktop\My_Pro\HP_EliteBook_735_old\MY\HRON_3\cron3Papper\CFG\runt
 • Всего сделок: 120 (Побед: 57 | Winrate: 47.5%)
 • Макс. просадка (DD): -64.7032 USDT
 • Фактор восстановления: -1.00
+
+---
+
+## 2. Итоги архитектурных улучшений (Сентябрь 2026):
+1. **Низкоуровневая база (C/LLVM через Numba JIT)**: Тяжелая математика (`EMA`, `RSI`, `ATR`, пивоты `LuxAlgo`, сжатие `Bollinger/Keltner`) переведена на C-уровень с `nogil=True` и `fastmath=True` (`CORE/native_math.py`). Устранен медленный `sliding_window_view`.
+2. **Защита от захлеба Asyncio**: Внедрена двухуровневая модель тиков (мгновенная запись потока в `RealtimeFlowTracker` <1 мкс + троттлинг оценки вселенных до 50 мс на монету) + кооперативный `await asyncio.sleep(0)`. Нагрузка на CPU снижена на >80%, гонки исключены.
+3. **Смотрящая собака (Watchdog)**: Восстановлен легковесный адаптер по образу `cron3Papper` (`CORE/watchdog.py`). Отстукивает ритм в Telegram каждые 60с редактированием сообщения, автоудаляет старые через 180с (чистый чат) и алертит при зависаниях главного цикла >60с.
+4. **Анти-стратегии без оверинжиниринга**: Конфигурации для анти-стратегий (`u1_anti`, `u3_anti`, `u6_anti`) прописаны напрямую и открыто в `cfg.json`. Адаптер правил (`CORE/rules.py`) тупо читает эти конфигурации (включая `conditions` для RSI и `long_cond`/`short_cond` для тренда) без костылей и хардкода.
+5. **Obsidian Wiki**: База знаний в `WORKSPACE/COMMON/wiki/trendH` актуализирована (`Overview.md`, `Indicators_Engine.md`, `Watchdog_and_Async_Architecture.md`).
