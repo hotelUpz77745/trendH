@@ -30,7 +30,10 @@ def generate_equity_curve(universe_id: str = "default") -> str:
     plot_file = IMAGES_DIR / f"equity_curve{suffix}.png"
 
     if not csv_file.exists():
-        return ""
+        if universe_id in ("all", "default") and (ANALYTICS_DIR / "trades_ledger.txt").exists():
+            csv_file = ANALYTICS_DIR / "trades_ledger.txt"
+        else:
+            return ""
         
     start_balance = 0.0
     if json_file.exists():

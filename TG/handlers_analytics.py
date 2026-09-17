@@ -36,21 +36,14 @@ def _get_universe_list(bot_core) -> list:
     return []
 
 
-def _get_default_universe_id(bot_core) -> str:
-    """Возвращает ID текущей топ-1 стратегии или первой активной (вместо фиктивного u1)."""
-    if bot_core and hasattr(bot_core, "universe_manager") and bot_core.universe_manager:
-        board = bot_core.universe_manager.get_leaderboard(bot_core.current_prices)
-        if board:
-            return board[0]["uid"]
-        all_univs = bot_core.universe_manager.get_all_universes()
-        if all_univs:
-            return all_univs[0].universe_id
-    return "u15"
+def _get_default_universe_id(bot_core=None) -> str:
+    """Возвращает 'all' для показа суммарного портфеля всех стратегий по умолчанию."""
+    return "all"
 
 
-def _get_analytics_data(universe_id: str = "u15") -> dict:
-    """Безопасное чтение файла аналитики вселенной с перерасчетом метрик."""
-    suffix = f"_{universe_id}" if universe_id and universe_id != "default" else ""
+def _get_analytics_data(universe_id: str = "all") -> dict:
+    """Безопасное чтение файла аналитики вселенной или портфеля с перерасчетом метрик."""
+    suffix = f"_{universe_id}" if universe_id and universe_id not in ("default", "all") else ("_all" if universe_id == "all" else "")
     file_path = ANALYTICS_DIR / f"analytics{suffix}.json"
     if not file_path.exists():
         file_path = ANALYTICS_DIR / "analytics.json"
@@ -65,45 +58,55 @@ def _get_analytics_data(universe_id: str = "u15") -> dict:
         return {}
 
 
-def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u15") -> str:
-    """Форматирует сводку аналитики выбранной вселенной с нереализованным PnL и просадкой."""
-    univ = getattr(bot_core, "universe_manager", None).get_universe(universe_id) if hasattr(bot_core, "universe_manager") else None
-    title = f"🌐 <b>Вселенная: {univ.name if univ else universe_id.upper()}</b>\n"
-    desc = f"<i>{univ.description}</i>\n\n" if univ and univ.description else "\n"
-    if not data:
-        return f"{title}{desc}📊 <b>Аналитика пока не содержит данных по сделкам.</b>"
-
+def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "all") -> str:
+    """Форматирует сводку аналитики выбранной вселенной или суммарного портфеля со всеми метриками."""
     cur_prices = getattr(bot_core, "current_prices", {})
-    if univ and hasattr(univ, "update_live_metrics"):
-        m = univ.update_live_metrics(cur_prices)
-        start_bal = float(data.get("start_balance_usdt", m.get("start_balance", 1000.0)))
-        realized_pnl = float(data.get("realized_pnl_usdt", m["realized_pnl"]))
-        unrealized_pnl = m["unrealized_pnl"]
-        active_count = m["active_count"]
-        live_net = realized_pnl + unrealized_pnl
-        live_bal = start_bal + live_net
-        max_dd = m["max_dd"]
-        curr_dd = m["current_dd"]
+    mgr = getattr(bot_core, "universe_manager", None)
+    is_all = (universe_id in ("all", "total", "portfolio"))
+
+    if is_all and mgr and hasattr(mgr, "get_portfolio_metrics"):
+        m = mgr.get_portfolio_metrics(cur_prices)
+        u_cnt = m.get("active_universes", len(mgr.universes))
+        title = f"🌐 <b>Портфель: ВСЕ СТРАТЕГИИ ({u_cnt} шт.)</b>\n"
+        desc = "<i>Сводная аналитика и аккумулированное эквити по всем активным стратегиям</i>\n\n"
+        start_bal, realized_pnl, unrealized_pnl = m["start_balance"], m["realized_pnl"], m["unrealized_pnl"]
+        active_count, live_net, live_bal = m["active_count"], m["live_net_profit"], m["live_equity"]
+        max_dd, curr_dd = m["max_dd"], m["current_dd"]
+        total_trades, winning_trades, winrate = m["total_trades"], m["winning_trades"], m["winrate_pct"]
     else:
-        start_bal = float(data.get("start_balance_usdt", 0.0)) or 1000.0
-        realized_pnl = float(data.get("realized_pnl_usdt", 0.0))
-        unrealized_pnl, active_count = float(data.get("unrealized_pnl_usdt", 0.0)), 0
-        if univ and hasattr(univ, "state"):
-            for sym, sides in getattr(univ.state, "positions", {}).items():
-                for side, pos in sides.items():
-                    if pos.is_active and pos.open_price > 0:
-                        active_count += 1
-                        cp = cur_prices.get(sym) or pos.open_price
-                        ratio = (cp - pos.open_price if side == "LONG" else pos.open_price - cp) / pos.open_price
-                        unrealized_pnl += ratio * pos.size
-        live_net = realized_pnl + unrealized_pnl
-        live_bal = start_bal + live_net
-        max_dd = float(data.get("max_drawdown_usdt", 0.0))
-        curr_dd = float(data.get("current_drawdown_usdt", 0.0))
+        univ = mgr.get_universe(universe_id) if mgr else None
+        title = f"🌐 <b>Вселенная: {univ.name if univ else universe_id.upper()}</b>\n"
+        desc = f"<i>{univ.description}</i>\n\n" if univ and univ.description else "\n"
+        if not data and not univ:
+            return f"{title}{desc}📊 <b>Аналитика пока не содержит данных по сделкам.</b>"
+
+        if univ and hasattr(univ, "update_live_metrics"):
+            m = univ.update_live_metrics(cur_prices)
+            start_bal = float(data.get("start_balance_usdt", m.get("start_balance", 1000.0)))
+            realized_pnl = float(data.get("realized_pnl_usdt", m["realized_pnl"]))
+            unrealized_pnl, active_count = m["unrealized_pnl"], m["active_count"]
+            live_net, live_bal = realized_pnl + unrealized_pnl, start_bal + (realized_pnl + unrealized_pnl)
+            max_dd, curr_dd = m["max_dd"], m["current_dd"]
+        else:
+            start_bal = float(data.get("start_balance_usdt", 0.0)) or 1000.0
+            realized_pnl = float(data.get("realized_pnl_usdt", 0.0))
+            unrealized_pnl, active_count = float(data.get("unrealized_pnl_usdt", 0.0)), 0
+            if univ and hasattr(univ, "state"):
+                for sym, sides in getattr(univ.state, "positions", {}).items():
+                    for side, pos in sides.items():
+                        if pos.is_active and pos.open_price > 0:
+                            active_count += 1
+                            cp = cur_prices.get(sym) or pos.open_price
+                            unrealized_pnl += ((cp - pos.open_price if side == "LONG" else pos.open_price - cp) / pos.open_price) * pos.size
+            live_net, live_bal = realized_pnl + unrealized_pnl, start_bal + (realized_pnl + unrealized_pnl)
+            max_dd, curr_dd = float(data.get("max_drawdown_usdt", 0.0)), float(data.get("current_drawdown_usdt", 0.0))
+        total_trades, winning_trades = int(data.get("total_trades", 0)), int(data.get("winning_trades", 0))
+        winrate = float(data.get("winrate_pct", 0.0))
 
     roi = round((live_net / start_bal) * 100, 2) if start_bal > 0 else 0.0
     dd = -abs(max_dd) if max_dd > 0 else 0.0
     c_dd = -abs(curr_dd) if curr_dd > 0 else 0.0
+    rec = round(live_net / max_dd, 2) if max_dd > 0 else 0.0
     p_s, r_s, u_s = ("+" if live_net >= 0 else ""), ("+" if roi >= 0 else ""), ("+" if unrealized_pnl >= 0 else "")
 
     return (
@@ -113,9 +116,9 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u15") 
         f"• Чистый профит: <b>{p_s}{live_net:.4f} USDT</b> ({r_s}{roi:.2f}%)\n"
         f"• Реализованный PnL: <code>{realized_pnl:.4f} USDT</code>\n"
         f"• Нереализованный PnL: <code>{u_s}{unrealized_pnl:.4f} USDT</code> ({active_count} поз.)\n"
-        f"• Всего сделок: <b>{data.get('total_trades', 0)}</b> (Побед: {data.get('winning_trades', 0)} | WR: {data.get('winrate_pct', 0.0):.1f}%)\n"
+        f"• Всего сделок: <b>{total_trades}</b> (Побед: {winning_trades} | WR: {winrate:.1f}%)\n"
         f"• Макс. просадка (DD): <code>{dd:.4f} USDT</code> (тек: {c_dd:.4f}$)\n"
-        f"• Фактор восстановления: <code>{data.get('recovery_factor', 0.0):.2f}</code>\n"
+        f"• Фактор восстановления: <code>{rec:.2f}</code>\n"
     )
 
 
@@ -148,19 +151,26 @@ def _format_leaderboard_text(bot_core) -> str:
     return "\n".join(_format_leaderboard_lines(bot_core))
 
 
-def _do_reset_analytics(uid: str) -> None:
-    """Выполняет фактический сброс файлов аналитики и журнала сделок для вселенной."""
+def _do_reset_analytics(uid: str, bot_core=None) -> None:
+    """Выполняет фактический сброс файлов аналитики и журнала сделок для вселенной или всех вселенных."""
     now_ms = int(time.time() * 1000)
-    data = {
-        "start_balance_usdt": 1000.0, "first_trade_ts": now_ms, "cur_balance_usdt": 1000.0,
-        "total_trades": 0, "winning_trades": 0, "winrate_pct": 0.0, "realized_pnl_usdt": 0.0,
-        "net_profit_usdt": 0.0, "unrealized_pnl_usdt": 0.0, "per_coin": {}
-    }
-    AnalyticsMathEngine.calculate(data, universe_id=uid)
-    suffix = f"_{uid}" if uid and uid != "default" else ""
-    (ANALYTICS_DIR / f"analytics{suffix}.json").write_text(json.dumps(data, indent=4), encoding="utf-8")
-    with open(ANALYTICS_DIR / f"trades_ledger{suffix}.txt", mode="w", newline="", encoding="utf-8") as f:
-        csv.writer(f, delimiter=';').writerow(["Symbol", "Side", "Open Time", "Close Time", "PnL", "Balance"])
+    targets = []
+    if uid == "all" and bot_core and hasattr(bot_core, "universe_manager"):
+        targets = [u.universe_id for u in bot_core.universe_manager.get_all_universes()] + ["all", "default"]
+    else:
+        targets = [uid]
+
+    for target_uid in set(targets):
+        data = {
+            "start_balance_usdt": 1000.0, "first_trade_ts": now_ms, "cur_balance_usdt": 1000.0,
+            "total_trades": 0, "winning_trades": 0, "winrate_pct": 0.0, "realized_pnl_usdt": 0.0,
+            "net_profit_usdt": 0.0, "unrealized_pnl_usdt": 0.0, "per_coin": {}
+        }
+        AnalyticsMathEngine.calculate(data, universe_id=target_uid)
+        suffix = f"_{target_uid}" if target_uid and target_uid != "default" else ""
+        (ANALYTICS_DIR / f"analytics{suffix}.json").write_text(json.dumps(data, indent=4), encoding="utf-8")
+        with open(ANALYTICS_DIR / f"trades_ledger{suffix}.txt", mode="w", newline="", encoding="utf-8") as f:
+            csv.writer(f, delimiter=';').writerow(["Symbol", "Side", "Open Time", "Close Time", "PnL", "Balance"])
 
 
 async def _send_or_edit_split_messages(callback: CallbackQuery, messages: list, kb: Optional[Any], tag: str):
@@ -223,7 +233,8 @@ def setup_analytics_handlers(router: Router, bot_core):
     @router.callback_query(F.data.startswith("analytics_univ_"))
     async def on_switch_universe(callback: CallbackQuery):
         uid = callback.data.replace("analytics_univ_", "")
-        await callback.answer(f"Вселенная {uid.upper()}")
+        disp_name = "Все стратегии (Портфель)" if uid == "all" else f"Вселенная {uid.upper()}"
+        await callback.answer(disp_name)
         data = _get_analytics_data(uid)
         text = _format_analytics_text(data, bot_core=bot_core, universe_id=uid)
         await callback.message.edit_text(text, reply_markup=TGKeyboards.analytics_menu(uid), parse_mode="HTML")
@@ -403,18 +414,20 @@ def setup_analytics_handlers(router: Router, bot_core):
         await callback.answer("Сброс выполняется...")
         uid = callback.data.split(":")[1] if ":" in callback.data else _get_default_universe_id(bot_core)
         await state.clear()
-        _do_reset_analytics(uid)
+        _do_reset_analytics(uid, bot_core=bot_core)
+        disp_uid = "ВСЕ СТРАТЕГИИ" if uid == "all" else uid.upper()
         text = _format_analytics_text(_get_analytics_data(uid), bot_core=bot_core, universe_id=uid)
-        await callback.message.edit_text(f"✅ <b>Аналитика и журнал сделок для [{uid.upper()}] успешно сброшены.</b>\n\n" + text, reply_markup=TGKeyboards.analytics_menu(uid), parse_mode="HTML")
+        await callback.message.edit_text(f"✅ <b>Аналитика и журнал сделок для [{disp_uid}] успешно сброшены.</b>\n\n" + text, reply_markup=TGKeyboards.analytics_menu(uid), parse_mode="HTML")
 
     @router.callback_query(F.data.startswith("reset_analytics_confirm"))
     async def on_reset_confirm_legacy(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         uid = callback.data.replace("reset_analytics_confirm_", "").replace("reset_analytics_confirm:", "") or _get_default_universe_id(bot_core)
         await state.clear()
-        _do_reset_analytics(uid)
+        _do_reset_analytics(uid, bot_core=bot_core)
+        disp_uid = "ВСЕ СТРАТЕГИИ" if uid == "all" else uid.upper()
         text = _format_analytics_text(_get_analytics_data(uid), bot_core=bot_core, universe_id=uid)
-        await callback.message.edit_text(f"✅ <b>Аналитика для [{uid.upper()}] успешно сброшена.</b>\n\n" + text, reply_markup=TGKeyboards.analytics_menu(uid), parse_mode="HTML")
+        await callback.message.edit_text(f"✅ <b>Аналитика для [{disp_uid}] успешно сброшена.</b>\n\n" + text, reply_markup=TGKeyboards.analytics_menu(uid), parse_mode="HTML")
 
     @router.message(AnalyticsStates.waiting_for_reset_confirm)
     async def on_reset_text_confirm(message: Message, state: FSMContext):
@@ -423,8 +436,9 @@ def setup_analytics_handlers(router: Router, bot_core):
         uid = data.get("reset_target_uid", _get_default_universe_id(bot_core))
         await state.clear()
         paused = getattr(bot_core, "is_paused", True)
-        if text in ["СБРОС", "RESET", f"СБРОС {uid.upper()}", f"RESET {uid.upper()}"]:
-            _do_reset_analytics(uid)
-            await message.answer(f"✅ <b>Аналитика и журнал сделок для [{uid.upper()}] успешно сброшены.</b>", reply_markup=TGKeyboards.main_menu(paused), parse_mode="HTML")
+        disp_uid = "ВСЕ СТРАТЕГИИ" if uid == "all" else uid.upper()
+        if text in ["СБРОС", "RESET", f"СБРОС {disp_uid}", f"RESET {disp_uid}", "СБРОС ALL", "RESET ALL"]:
+            _do_reset_analytics(uid, bot_core=bot_core)
+            await message.answer(f"✅ <b>Аналитика и журнал сделок для [{disp_uid}] успешно сброшены.</b>", reply_markup=TGKeyboards.main_menu(paused), parse_mode="HTML")
         else:
-            await message.answer(f"🛡 Сброс аналитики для [{uid.upper()}] <b>отменен</b>.", reply_markup=TGKeyboards.main_menu(paused), parse_mode="HTML")
+            await message.answer(f"🛡 Сброс аналитики для [{disp_uid}] <b>отменен</b>.", reply_markup=TGKeyboards.main_menu(paused), parse_mode="HTML")

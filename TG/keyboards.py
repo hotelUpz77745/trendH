@@ -49,14 +49,15 @@ class TGKeyboards:
         ])
 
     @staticmethod
-    def analytics_menu(selected_uid: str = "u15", universes: Optional[List[Any]] = None) -> InlineKeyboardMarkup:
+    def analytics_menu(selected_uid: str = "all", universes: Optional[List[Any]] = None) -> InlineKeyboardMarkup:
         """
-        Меню аналитики торговой активности для выбранной стратегии.
+        Меню аналитики торговой активности для выбранной стратегии или суммарного портфеля.
         Включает кнопку быстрого выбора стратегии и действия по выбранной стратегии.
         """
+        strat_name = "ВСЕ СТРАТЕГИИ" if selected_uid == "all" else selected_uid.upper()
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text=f"🎯 Стратегия: [{selected_uid.upper()}] (Сменить)", callback_data=f"analytics_select_strat:{selected_uid}")
+                InlineKeyboardButton(text=f"🎯 Стратегия: [{strat_name}] (Сменить)", callback_data=f"analytics_select_strat:{selected_uid}")
             ],
             [
                 InlineKeyboardButton(text="🏆 Leaderboard (Все)", callback_data="analytics_leaderboard"),
@@ -74,9 +75,14 @@ class TGKeyboards:
         ])
 
     @staticmethod
-    def strategy_select_menu(universes: List[Any], selected_uid: str = "u15") -> InlineKeyboardMarkup:
+    def strategy_select_menu(universes: List[Any], selected_uid: str = "all") -> InlineKeyboardMarkup:
         """Клавиатура выбора стратегии из списка, упорядоченного по результативности."""
         buttons = []
+        is_all = (selected_uid == "all")
+        all_prefix = "🔘 " if is_all else ""
+        buttons.append([
+            InlineKeyboardButton(text=f"{all_prefix}🌐 ВСЕ СТРАТЕГИИ (ПОРТФЕЛЬ)", callback_data="analytics_univ_all")
+        ])
         row = []
         for idx, u in enumerate(universes, 1):
             uid = u["uid"] if isinstance(u, dict) else (getattr(u, "universe_id", None) or getattr(u, "uid", str(u)))

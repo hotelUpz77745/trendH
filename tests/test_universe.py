@@ -305,6 +305,19 @@ class TestUniverseManager(unittest.TestCase):
         self.assertIn("• Чистый профит: <b>+10.0000 USDT</b>", text)
         self.assertIn("• Нереализованный PnL: <code>+10.0000 USDT</code>", text)
 
+    def test_portfolio_summary_metrics(self):
+        from TG.handlers_analytics import _format_analytics_text
+        u1, u2 = self.mgr.get_universe("u1"), self.mgr.get_universe("u2")
+        u1.state.open_position("BTCUSDT", "LONG", price=50000.0, size=100.0)
+        u2.state.open_position("ETHUSDT", "SHORT", price=3000.0, size=50.0)
+        bot_core = type("MockBotCore", (), {"universe_manager": self.mgr, "current_prices": {"BTCUSDT": 55000.0, "ETHUSDT": 2700.0}})()
+        port = self.mgr.get_portfolio_metrics(bot_core.current_prices)
+        self.assertGreaterEqual(port["start_balance"], 2000.0)
+        self.assertAlmostEqual(port["unrealized_pnl"], 15.0, places=2)
+        text = _format_analytics_text({}, bot_core=bot_core, universe_id="all")
+        self.assertIn("Портфель: ВСЕ СТРАТЕГИИ", text)
+        self.assertIn("Нереализованный PnL: <code>+15.0000 USDT</code> (2 поз.)", text)
+
     def test_u15_anti_breakout_taker_flow_mirroring(self):
         from consts import load_config
         cfg_data = load_config()

@@ -13,7 +13,7 @@ from CORE.models import PositionState
 from CORE.rules import EntrySignalEngine, ExitSignalEngine
 from ANALYTICS.analytics import AnalyticsManager
 from ANALYTICS.metrics import AnalyticsMathEngine
-from consts import DATA_DIR, ANALYTICS_CFG
+from consts import DATA_DIR, ANALYTICS_DIR, ANALYTICS_CFG
 
 
 class UniverseState:
@@ -42,21 +42,13 @@ class UniverseState:
 
             for sym, sides in data.items():
                 if sym not in self.positions:
-                    self.positions[sym] = {
-                        "LONG": PositionState(symbol=sym, side="LONG"),
-                        "SHORT": PositionState(symbol=sym, side="SHORT")
-                    }
+                    self.positions[sym] = {"LONG": PositionState(symbol=sym, side="LONG"), "SHORT": PositionState(symbol=sym, side="SHORT")}
                 for side, pos_dict in sides.items():
                     if pos_dict.get("is_active"):
                         pos = self.positions[sym][side]
-                        pos.is_active = True
-                        pos.open_price = float(pos_dict.get("open_price", 0.0))
-                        pos.size = float(pos_dict.get("size", 0.0))
+                        pos.is_active, pos.open_price, pos.size = True, float(pos_dict.get("open_price", 0.0)), float(pos_dict.get("size", 0.0))
             active_cnt = sum(1 for sym, s in self.positions.items() for side, pos in s.items() if pos.is_active)
-            if active_cnt > 0:
-                log(f"[{self.universe_id}] Восстановлено {active_cnt} активных позиций из {path.name}", level="INFO")
-            else:
-                log(f"[{self.universe_id}] Загружен стейт из {path.name} (0 активных позиций)", level="DEBUG")
+            log(f"[{self.universe_id}] Загружен стейт из {path.name} ({active_cnt} активных)", level="INFO" if active_cnt > 0 else "DEBUG")
         except Exception as e:
             log(f"[{self.universe_id}] Ошибка загрузки стейта: {e}", level="ERROR")
 
@@ -78,12 +70,8 @@ class UniverseState:
 
     def open_position(self, symbol: str, side: str, price: float, size: float):
         if symbol not in self.positions:
-            self.positions[symbol] = {
-                "LONG": PositionState(symbol=symbol, side="LONG"),
-                "SHORT": PositionState(symbol=symbol, side="SHORT")
-            }
-        now_ms = int(time.time() * 1000)
-        self.positions[symbol][side].set_active(price, size, now_ms)
+            self.positions[symbol] = {"LONG": PositionState(symbol=symbol, side="LONG"), "SHORT": PositionState(symbol=symbol, side="SHORT")}
+        self.positions[symbol][side].set_active(price, size, int(time.time() * 1000))
         self.save_state()
 
     def close_position(self, symbol: str, side: str):
@@ -93,31 +81,15 @@ class UniverseState:
 
 
 class StrategyUniverse:
-    """
-    Автономная торговая вселенная (стратегия).
-    Объединяет собственные правила входа, выхода, стейт и аналитику.
-    """
+    """Автономная торговая вселенная (стратегия) с изолированным стейтом и аналитикой."""
 
     def __init__(
-        self,
-        universe_id: str,
-        name: str,
-        description: str,
-        enter_rules: Dict[str, Any],
-        exit_rules: Dict[str, Any],
-        get_slippage_ratio_fn: Callable[[str], float],
-        is_active: bool = True,
-        backup_manager=None,
-        inactive_grid_mode: Optional[str] = None
+        self, universe_id: str, name: str, description: str, enter_rules: Dict[str, Any], exit_rules: Dict[str, Any],
+        get_slippage_ratio_fn: Callable[[str], float], is_active: bool = True, backup_manager=None, inactive_grid_mode: Optional[str] = None
     ):
-        self.universe_id = universe_id
-        self.name = name
-        self.description = description
-        self.is_active = is_active
-        self.enter_rules = enter_rules
-        self.exit_rules = exit_rules
+        self.universe_id, self.name, self.description, self.is_active = universe_id, name, description, is_active
+        self.enter_rules, self.exit_rules = enter_rules, exit_rules
         self.inactive_grid_mode = str(inactive_grid_mode or "TAKE_LEVEL_0").strip().upper()
-
         self.entry_engine = EntrySignalEngine(enter_rules)
         self.exit_engine = ExitSignalEngine(exit_rules, ANALYTICS_CFG, get_slippage_ratio_fn)
         self.state = UniverseState(universe_id=universe_id, backup_manager=backup_manager)
@@ -128,16 +100,7 @@ class StrategyUniverse:
         return self.entry_engine.check_signal(side, indicators)
 
     def check_exit(self, side: str, symbol: str, open_price: float, current_price: float, indicators: Dict[str, Any], open_time_ms: Optional[int] = None) -> bool:
-        trend = indicators.get("trend", "UNSTABLE")
-        return self.exit_engine.check_signal(
-            side=side,
-            symbol=symbol,
-            trend=trend,
-            open_price=open_price,
-            current_price=current_price,
-            indicators=indicators,
-            open_time_ms=open_time_ms
-        )
+        return self.exit_engine.check_signal(side, symbol, indicators.get("trend", "UNSTABLE"), open_price, current_price, indicators, open_time_ms)
 
     def process_tick(
         self,
@@ -278,47 +241,25 @@ class UniverseManager:
     """
 
     def __init__(
-        self,
-        universes_cfg: Dict[str, Any],
-        default_enter_rules: Dict[str, Any],
-        default_exit_rules: Dict[str, Any],
-        get_slippage_ratio_fn: Callable[[str], float],
-        backup_manager=None
+        self, universes_cfg: Dict[str, Any], default_enter_rules: Dict[str, Any], default_exit_rules: Dict[str, Any],
+        get_slippage_ratio_fn: Callable[[str], float], backup_manager=None
     ):
         self.universes: Dict[str, StrategyUniverse] = {}
         self.backup_manager = backup_manager
-
         if universes_cfg:
             for uid, udata in universes_cfg.items():
-                if not udata.get("is_active", True):
-                    continue
-                name = udata.get("name", uid)
-                desc = udata.get("description", "")
-                enter_rules = udata.get("enter_rules", default_enter_rules)
-                exit_rules = udata.get("exit_rules", default_exit_rules)
-                inactive_grid_mode = udata.get("inactive_grid_mode")
-                self.universes[uid] = StrategyUniverse(
-                    universe_id=uid,
-                    name=name,
-                    description=desc,
-                    enter_rules=enter_rules,
-                    exit_rules=exit_rules,
-                    get_slippage_ratio_fn=get_slippage_ratio_fn,
-                    is_active=True,
-                    backup_manager=backup_manager,
-                    inactive_grid_mode=inactive_grid_mode
-                )
+                if udata.get("is_active", True):
+                    self.universes[uid] = StrategyUniverse(
+                        universe_id=uid, name=udata.get("name", uid), description=udata.get("description", ""),
+                        enter_rules=udata.get("enter_rules", default_enter_rules), exit_rules=udata.get("exit_rules", default_exit_rules),
+                        get_slippage_ratio_fn=get_slippage_ratio_fn, is_active=True, backup_manager=backup_manager,
+                        inactive_grid_mode=udata.get("inactive_grid_mode")
+                    )
         else:
-            # Одиночная вселенная по умолчанию
             self.universes["default"] = StrategyUniverse(
-                universe_id="default",
-                name="Default Strategy",
-                description="Единая стратегия по умолчанию",
-                enter_rules=default_enter_rules,
-                exit_rules=default_exit_rules,
-                get_slippage_ratio_fn=get_slippage_ratio_fn,
-                is_active=True,
-                backup_manager=backup_manager
+                universe_id="default", name="Default Strategy", description="Единая стратегия по умолчанию",
+                enter_rules=default_enter_rules, exit_rules=default_exit_rules,
+                get_slippage_ratio_fn=get_slippage_ratio_fn, is_active=True, backup_manager=backup_manager
             )
 
     def get_combined_enter_rules(self) -> Dict[str, Any]:
@@ -392,16 +333,77 @@ class UniverseManager:
                 )
 
     def close_all_positions(self, current_prices: Dict[str, float], get_slippage_ratio_fn: Callable[[str], float]) -> int:
-        total_closed = 0
-        for universe in self.universes.values():
-            total_closed += universe.close_all_positions(current_prices, get_slippage_ratio_fn)
-        return total_closed
+        return sum(u.close_all_positions(current_prices, get_slippage_ratio_fn) for u in self.universes.values())
 
     def update_all_live_metrics(self, current_prices: Dict[str, float]) -> None:
-        """Обновляет живые метрики и аккумулирует просадку для всех активных вселенных."""
+        """Обновляет живые метрики и аккумулирует просадку для всех активных вселенных и портфеля."""
         for univ in self.universes.values():
             if univ.is_active:
                 univ.update_live_metrics(current_prices)
+        self.get_portfolio_metrics(current_prices)
+
+    def get_portfolio_metrics(self, current_prices: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+        """Рассчитывает суммарные (портфельные) метрики по всем активным вселенным."""
+        current_prices = current_prices or {}
+        tot_start, tot_realized, tot_unrealized = 0.0, 0.0, 0.0
+        tot_active, tot_trades, tot_wins = 0, 0, 0
+        merged_coins: Dict[str, Any] = {}
+
+        for univ in self.universes.values():
+            if not univ.is_active:
+                continue
+            m = univ.update_live_metrics(current_prices)
+            an = univ.analytics._read_data() if hasattr(univ.analytics, "_read_data") else {}
+            tot_start += m.get("start_balance", 1000.0)
+            tot_realized += m["realized_pnl"]
+            tot_unrealized += m["unrealized_pnl"]
+            tot_active += m["active_count"]
+            tot_trades += int(an.get("total_trades", 0))
+            tot_wins += int(an.get("winning_trades", 0))
+            for coin, cdata in an.get("per_coin", {}).items():
+                mc = merged_coins.setdefault(coin, {"realized_pnl_usdt": 0.0, "trades": 0, "win_count": 0, "loss_count": 0})
+                mc["realized_pnl_usdt"] = round(mc["realized_pnl_usdt"] + float(cdata.get("realized_pnl_usdt", 0.0)), 4)
+                mc["trades"] += int(cdata.get("trades", 0))
+                mc["win_count"] += int(cdata.get("win_count", 0))
+                mc["loss_count"] += int(cdata.get("loss_count", 0))
+
+        tot_net = tot_realized + tot_unrealized
+        tot_equity = tot_start + tot_net
+        winrate = round((tot_wins / tot_trades) * 100.0, 2) if tot_trades > 0 else 0.0
+
+        all_file = ANALYTICS_DIR / "analytics_all.json"
+        port_data = {}
+        if all_file.exists():
+            try:
+                port_data = json.loads(all_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        prev_peak = float(port_data.get("peak_balance_usdt", tot_start))
+        peak_equity = max(prev_peak, tot_start, tot_equity)
+        current_dd = max(0.0, peak_equity - tot_equity)
+        prev_max_dd = float(port_data.get("max_drawdown_usdt", 0.0))
+        max_dd = max(prev_max_dd, current_dd)
+
+        port_data.update({
+            "universe_id": "all", "start_balance_usdt": round(tot_start, 2), "cur_balance_usdt": round(tot_start + tot_realized, 4),
+            "realized_pnl_usdt": round(tot_realized, 4), "unrealized_pnl_usdt": round(tot_unrealized, 4), "net_profit_usdt": round(tot_net, 4),
+            "peak_balance_usdt": round(peak_equity, 4), "current_drawdown_usdt": round(current_dd, 4), "max_drawdown_usdt": round(max_dd, 4),
+            "total_trades": tot_trades, "winning_trades": tot_wins, "winrate_pct": winrate, "per_coin": merged_coins
+        })
+        try:
+            all_file.write_text(json.dumps(port_data, indent=4), encoding="utf-8")
+            (ANALYTICS_DIR / "analytics.json").write_text(json.dumps(port_data, indent=4), encoding="utf-8")
+        except Exception:
+            pass
+
+        return {
+            "start_balance": tot_start, "realized_pnl": tot_realized, "unrealized_pnl": tot_unrealized,
+            "live_net_profit": tot_net, "live_equity": tot_equity, "peak_equity": peak_equity,
+            "current_dd": current_dd, "max_dd": max_dd, "active_count": tot_active,
+            "total_trades": tot_trades, "winning_trades": tot_wins, "winrate_pct": winrate,
+            "active_universes": len([u for u in self.universes.values() if u.is_active])
+        }
 
     def get_leaderboard(self, current_prices: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
         """
@@ -420,18 +422,10 @@ class UniverseManager:
             rec_factor = round(m["live_net_profit"] / max_dd, 2) if max_dd > 0 else 0.0
 
             leaderboard.append({
-                "uid": uid,
-                "name": univ.name,
-                "description": univ.description,
-                "net_profit": m["live_net_profit"],
-                "realized_pnl": m["realized_pnl"],
-                "unrealized_pnl": m["unrealized_pnl"],
-                "total_trades": total_trades,
-                "winrate": winrate,
-                "max_dd": max_dd,
-                "current_dd": m["current_dd"],
-                "recovery_factor": rec_factor,
-                "active_count": m["active_count"],
+                "uid": uid, "name": univ.name, "description": univ.description,
+                "net_profit": m["live_net_profit"], "realized_pnl": m["realized_pnl"], "unrealized_pnl": m["unrealized_pnl"],
+                "total_trades": total_trades, "winrate": winrate, "max_dd": max_dd,
+                "current_dd": m["current_dd"], "recovery_factor": rec_factor, "active_count": m["active_count"],
             })
 
         leaderboard.sort(key=lambda x: x["net_profit"], reverse=True)
