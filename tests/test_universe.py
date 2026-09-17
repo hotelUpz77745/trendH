@@ -378,7 +378,7 @@ class TestUniverseManager(unittest.TestCase):
         self.assertEqual(u3_anti.exit_rules["take_profit_ratio"]["value"], 0.02)
         self.assertEqual(u3_anti.exit_rules["stop_loss_ratio"]["value"], 0.04)
 
-    def test_leaderboard_pagination_and_safe_medals(self):
+    def test_leaderboard_solid_list_and_safe_medals(self):
         from TG.handlers_analytics import _format_leaderboard_text
         from TG.keyboards import TGKeyboards
 
@@ -386,8 +386,8 @@ class TestUniverseManager(unittest.TestCase):
             def get_leaderboard(self, current_prices=None):
                 return [
                     {
-                        "uid": f"u{i}",
-                        "name": f"Universe {i}",
+                        "uid": f"u{i}_skip" if i % 2 == 0 else f"u{i}",
+                        "name": f"Strategy {i} (Standard)",
                         "net_profit": 100.0 - i,
                         "winrate": 50.0,
                         "total_trades": 10,
@@ -395,7 +395,7 @@ class TestUniverseManager(unittest.TestCase):
                         "active_count": 1,
                         "unrealized_pnl": 0.5,
                     }
-                    for i in range(1, 35)  # 34 items (> 23 medals, 3 pages)
+                    for i in range(1, 31)  # 30 items
                 ]
 
         class MockBotCore:
@@ -403,20 +403,14 @@ class TestUniverseManager(unittest.TestCase):
             current_prices = {}
 
         bot_core = MockBotCore()
-        text_p1, pages = _format_leaderboard_text(bot_core, page=1, page_size=15)
-        self.assertEqual(pages, 3)
-        self.assertIn("Стр. 1/3", text_p1)
-        self.assertIn("🥇 <b>1. Universe 1</b>", text_p1)
-        self.assertIn("15. Universe 15", text_p1)
-        self.assertNotIn("16. Universe 16", text_p1)
-        self.assertLess(len(text_p1), 4000)
+        text = _format_leaderboard_text(bot_core)
+        self.assertIn("Таблица лидеров всех стратегий (30 шт.)", text)
+        self.assertIn("🥇 <b>U1</b>", text)
+        self.assertIn("⚡<b>[SKIP]</b>", text)
+        self.assertIn("30. <b>U30_SKIP</b>", text)
+        self.assertLess(len(text), 4000)
 
-        text_p2, _ = _format_leaderboard_text(bot_core, page=2, page_size=15)
-        self.assertIn("Стр. 2/3", text_p2)
-        self.assertIn("16. Universe 16", text_p2)
-        self.assertIn("▫️ <b>16.", text_p2)
-
-        kb = TGKeyboards.leaderboard_menu(page=1, total_pages=pages)
+        kb = TGKeyboards.leaderboard_menu()
         self.assertIsNotNone(kb.inline_keyboard)
 
 

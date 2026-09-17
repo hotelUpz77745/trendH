@@ -119,51 +119,48 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u1") -
     )
 
 
-def _format_leaderboard_text(bot_core, page: int = 1, page_size: int = 15) -> tuple[str, int]:
-    """Форматирует сравнительную таблицу всех параллельных вселенных с пагинацией."""
+def _format_leaderboard_text(bot_core) -> str:
+    """Форматирует сплошную сравнительную таблицу всех параллельных вселенных."""
     if not bot_core or not hasattr(bot_core, "universe_manager"):
-        return ("🏆 <b>Менеджер вселенных не инициализирован.</b>", 1)
+        return "🏆 <b>Менеджер вселенных не инициализирован.</b>"
 
     board = bot_core.universe_manager.get_leaderboard(bot_core.current_prices)
     if not board:
-        return ("🏆 <b>Нет активных вселенных.</b>", 1)
+        return "🏆 <b>Нет активных вселенных.</b>"
 
     total_items = len(board)
-    total_pages = max(1, (total_items + page_size - 1) // page_size)
-    page = max(1, min(page, total_pages))
-
-    start_idx = (page - 1) * page_size
-    end_idx = min(start_idx + page_size, total_items)
-    page_items = board[start_idx:end_idx]
-
-    page_info = f" (Стр. {page}/{total_pages})" if total_pages > 1 else ""
     lines = [
-        f"<b>🏆 Таблица лидеров параллельных вселенных{page_info}:</b>",
-        f"<i>Сравнение эффективности всех запущенных стратегий ({total_items} шт.)</i>\n"
+        f"<b>🏆 Таблица лидеров всех стратегий ({total_items} шт.):</b>\n"
     ]
+    cur_len = len(lines[0])
 
-    for offset, item in enumerate(page_items):
-        idx = start_idx + offset + 1
-        if idx == 1:
-            medal = "🥇"
-        elif idx == 2:
-            medal = "🥈"
-        elif idx == 3:
-            medal = "🥉"
-        else:
-            medal = "▫️"
+    for idx, item in enumerate(board, 1):
+        medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}."))
+        uid = item["uid"]
+        is_skip = uid.endswith("_skip") or "skip" in uid.lower()
+        skip_tag = " ⚡<b>[SKIP]</b>" if is_skip else ""
+
+        # Clean short name (up to 20 chars, removing redundant (SKIP))
+        raw_name = item.get("name", uid).split("(")[0].strip().replace(" (SKIP)", "").replace(" (skip)", "")
+        short_name = f" ({raw_name[:20]})" if raw_name else ""
 
         pnl_sign = "+" if item["net_profit"] >= 0 else ""
         u_sign = "+" if item["unrealized_pnl"] >= 0 else ""
         dd_val = -abs(item["max_dd"]) if item["max_dd"] > 0 else 0.0
 
-        lines.append(
-            f"{medal} <b>{idx}. {item['name']}</b> ({item['uid'].upper()}):\n"
-            f"   • Чистый PnL: <b>{pnl_sign}{item['net_profit']:.2f}$</b> | WR: <b>{item['winrate']:.1f}%</b> ({item['total_trades']} сд.)\n"
-            f"   • DD: <code>{dd_val:.2f}$</code> | Открыто: <code>{item['active_count']}</code> ({u_sign}{item['unrealized_pnl']:.2f}$)\n"
+        entry = (
+            f"{medal} <b>{uid.upper()}</b>{skip_tag}{short_name}\n"
+            f"   • PnL: <b>{pnl_sign}{item['net_profit']:.2f}$</b> | WR: {item['winrate']:.0f}% ({item['total_trades']}) | DD: {dd_val:.2f}$ | Откр: {item['active_count']} ({u_sign}{item['unrealized_pnl']:.2f}$)"
         )
 
-    return ("\n".join(lines), total_pages)
+        if cur_len + len(entry) + 40 > 4000:
+            lines.append(f"\n<i>... и еще {total_items - idx + 1} стратегий</i>")
+            break
+
+        lines.append(entry)
+        cur_len += len(entry) + 1
+
+    return "\n".join(lines)
 
 
 def setup_analytics_handlers(router: Router, bot_core):
@@ -198,19 +195,11 @@ def setup_analytics_handlers(router: Router, bot_core):
     @router.callback_query(F.data.startswith("analytics_leaderboard"))
     async def on_analytics_leaderboard(callback: CallbackQuery):
         await callback.answer()
-        page = 1
-        data_str = callback.data or ""
-        if "_p" in data_str:
-            try:
-                page = int(data_str.split("_p")[-1])
-            except (ValueError, IndexError):
-                page = 1
-
-        text, total_pages = _format_leaderboard_text(bot_core, page=page, page_size=15)
+        text = _format_leaderboard_text(bot_core)
         try:
             await callback.message.edit_text(
                 text,
-                reply_markup=TGKeyboards.leaderboard_menu(page=page, total_pages=total_pages),
+                reply_markup=TGKeyboards.leaderboard_menu(),
                 parse_mode="HTML"
             )
         except TelegramBadRequest as e:
