@@ -57,12 +57,13 @@ class TGKeyboards:
         univ_rows = []
         if universes:
             row = []
-            for idx, u in enumerate(universes, 1):
-                uid = u.universe_id if hasattr(u, "universe_id") else (u.get("universe_id", f"u{idx}") if isinstance(u, dict) else f"u{idx}")
+            for u in universes:
+                uid = u.universe_id if hasattr(u, "universe_id") else (u.get("universe_id", "") if isinstance(u, dict) else str(u))
                 prefix = "🔘 " if uid == selected_uid else ""
-                short_label = f"{prefix}У{idx}"
+                tag = uid.replace("u", "У").replace("_", "-")
+                short_label = f"{prefix}{tag}"
                 row.append(InlineKeyboardButton(text=short_label, callback_data=f"analytics_univ_{uid}"))
-                if len(row) == 5:
+                if len(row) == 4:
                     univ_rows.append(row)
                     row = []
             if row:

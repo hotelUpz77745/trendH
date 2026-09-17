@@ -1234,6 +1234,310 @@
                     "value": 0.02
                 }
             }
+        },
+        "u13": {
+            "name": "Squeeze Tight Scalp (Taker 65% + 1.8 ATR)",
+            "description": "Быстрый скальп: жесткий перевес маркета Taker Buy >=65% + короткий трейлинг 1.8 ATR + Time-Stop 15 мин",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": false },
+                "volatility_squeeze": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "bb_length": 20,
+                    "bb_mult": 2.0,
+                    "kc_mult": 1.5,
+                    "lookback_squeeze": 3,
+                    "long_cond": "SQUEEZE_LONG",
+                    "short_cond": "SQUEEZE_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.65,
+                    "max_buy_ratio": 0.35,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 10,
+                    "atr_mult": 1.8
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 900.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.03
+                },
+                "stop_loss_ratio": {
+                    "value": 0.015
+                }
+            }
+        },
+        "u14": {
+            "name": "Squeeze Fat Tails Run (Chandelier 3.2 ATR)",
+            "description": "Трендовый раннер: широкое удержание по волатильности 3.2 ATR без ранней фиксации, забор длинных хвостов прибыли",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": false },
+                "volatility_squeeze": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "bb_length": 20,
+                    "bb_mult": 2.0,
+                    "kc_mult": 1.5,
+                    "lookback_squeeze": 3,
+                    "long_cond": "SQUEEZE_LONG",
+                    "short_cond": "SQUEEZE_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.58,
+                    "max_buy_ratio": 0.42,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 20,
+                    "atr_mult": 3.2
+                },
+                "time_stop": {
+                    "is_active": false
+                },
+                "take_profit_ratio": {
+                    "value": 0.10
+                },
+                "stop_loss_ratio": {
+                    "value": 0.03
+                }
+            }
+        },
+        "u15": {
+            "name": "Breakout LuxAlgo + Taker Flow",
+            "description": "Пробой уровней LuxAlgo с фильтром агрессии маркета (Taker Buy >=60%) для отсечения ложных выносов стопов",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_LONG",
+                    "short_cond": "BREAKOUT_SHORT"
+                },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": false },
+                "volatility_squeeze": { "is_active": false },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.60,
+                    "max_buy_ratio": 0.40,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.2
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1200.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.045
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            }
+        },
+        "u16": {
+            "name": "Squeeze + Flow + Volume Spike",
+            "description": "Тройное сито: Сжатие волатильности + Taker Buy >=58% + всплеск объема 1m (V > 2.0x Vavg)",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "r",
+                    "period": 14,
+                    "a": { "slice_factor": 1.1 },
+                    "r": { "slice_factor": 2.0 },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                },
+                "volatility_squeeze": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "bb_length": 20,
+                    "bb_mult": 2.0,
+                    "kc_mult": 1.5,
+                    "lookback_squeeze": 3,
+                    "long_cond": "SQUEEZE_LONG",
+                    "short_cond": "SQUEEZE_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.58,
+                    "max_buy_ratio": 0.42,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.4
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1500.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.05
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            }
+        },
+        "u17": {
+            "name": "Fade Fake Squeeze (Contrarian)",
+            "description": "Контртренд: вход против ложного разжатия волатильности, идущего вразрез со старшим трендом 1h",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": false },
+                "volatility_squeeze": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "bb_length": 20,
+                    "bb_mult": 2.0,
+                    "kc_mult": 1.5,
+                    "lookback_squeeze": 3,
+                    "long_cond": "SQUEEZE_SHORT",
+                    "short_cond": "SQUEEZE_LONG"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.45,
+                    "max_buy_ratio": 0.55,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": false
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1200.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.025
+                },
+                "stop_loss_ratio": {
+                    "value": 0.035
+                }
+            }
         }
     },
     "watchdog": {
