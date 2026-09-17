@@ -1461,6 +1461,80 @@
                 }
             }
         },
+        "u15_anti": {
+            "name": "Анти-Breakout LuxAlgo + Taker Flow (TP 2%, SL 4.5%)",
+            "description": "Инверсная стратегия пробоя LuxAlgo: вход против выносов при агрессивном маркет-потоке",
+            "is_active": true,
+            "enter_rules": {
+                "trend": {
+                    "is_active": false
+                },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "DOWN",
+                    "short_cond": "UP"
+                },
+                "rsi": {
+                    "is_active": false
+                },
+                "rsi_waterline50": {
+                    "is_active": false
+                },
+                "sr_levels": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "ema_cross": {
+                    "is_active": false
+                },
+                "vol_filter": {
+                    "is_active": false
+                },
+                "volatility_squeeze": {
+                    "is_active": false
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.60,
+                    "max_buy_ratio": 0.40,
+                    "long_cond": "TAKER_SELL_DOMINANT",
+                    "short_cond": "TAKER_BUY_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.2
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1200.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.02
+                },
+                "stop_loss_ratio": {
+                    "value": 0.045
+                }
+            }
+        },
         "u16": {
             "name": "Squeeze + Flow + Volume Spike",
             "description": "Тройное сито: Сжатие волатильности + Taker Buy >=58% + всплеск объема 1m (V > 2.0x Vavg)",

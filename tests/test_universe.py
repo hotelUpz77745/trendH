@@ -305,6 +305,46 @@ class TestUniverseManager(unittest.TestCase):
         self.assertIn("• Чистый профит: <b>+10.0000 USDT</b>", text)
         self.assertIn("• Нереализованный PnL: <code>+10.0000 USDT</code>", text)
 
+    def test_u15_anti_breakout_taker_flow_mirroring(self):
+        from consts import load_config
+        cfg_data = load_config()
+        u_cfg = cfg_data.get("universes", {})
+        self.assertIn("u15", u_cfg)
+        self.assertIn("u15_anti", u_cfg)
+
+        mgr = UniverseManager(
+            universes_cfg={"u15": u_cfg["u15"], "u15_anti": u_cfg["u15_anti"]},
+            default_enter_rules={},
+            default_exit_rules={},
+            get_slippage_ratio_fn=lambda s: 0.001
+        )
+        u15 = mgr.get_universe("u15")
+        u15_anti = mgr.get_universe("u15_anti")
+
+        # Market case: HTF UP, LuxAlgo Breakout LONG, Taker Buy Dominant (u15 enters LONG)
+        ind_long = {
+            "trend_htf": "UP",
+            "sr_levels": ["BREAKOUT_LONG"],
+            "taker_flow": ["TAKER_BUY_DOMINANT"]
+        }
+        self.assertTrue(u15.check_entry("LONG", ind_long))
+        self.assertFalse(u15.check_entry("SHORT", ind_long))
+        # In u15_anti: Must NOT enter LONG, must enter SHORT!
+        self.assertFalse(u15_anti.check_entry("LONG", ind_long))
+        self.assertTrue(u15_anti.check_entry("SHORT", ind_long))
+
+        # Market case: HTF DOWN, LuxAlgo Breakout SHORT, Taker Sell Dominant (u15 enters SHORT)
+        ind_short = {
+            "trend_htf": "DOWN",
+            "sr_levels": ["BREAKOUT_SHORT"],
+            "taker_flow": ["TAKER_SELL_DOMINANT"]
+        }
+        self.assertFalse(u15.check_entry("LONG", ind_short))
+        self.assertTrue(u15.check_entry("SHORT", ind_short))
+        # In u15_anti: Must enter LONG, must NOT enter SHORT!
+        self.assertTrue(u15_anti.check_entry("LONG", ind_short))
+        self.assertFalse(u15_anti.check_entry("SHORT", ind_short))
+
 
 if __name__ == "__main__":
     unittest.main()
