@@ -328,29 +328,28 @@ class Main:
         log("Запущен auto_closing_daemon.", level="INFO")
         while True:
             try:
-                analytics_data = self.utils.read_json_file(self.utils.get_analytics_path()) if hasattr(self.utils, "get_analytics_path") else self.utils.read_json_file(ANALYTICS_DIR / "analytics.json")
+                path = self.utils.get_analytics_path() if hasattr(self.utils, "get_analytics_path") else ANALYTICS_DIR / "analytics.json"
+                analytics_data = self.utils.read_json_file(path)
                 if analytics_data:
-                    net_profit = float(analytics_data.get("net_profit_usdt", 0.0))
-                    
-                    neg_cfg = AUTO_CLOSING_CFG.get("negative", {})
-                    neg_thresh = neg_cfg.get("threshold")
-                    if neg_thresh is not None and net_profit <= float(neg_thresh):
-                        log(f"AUTO-CLOSING (Negative): {net_profit} <= {neg_thresh}", level="WARNING")
+                    pnl = float(analytics_data.get("net_profit_usdt", 0.0))
+                    neg = AUTO_CLOSING_CFG.get("negative", {}).get("threshold")
+                    pos = AUTO_CLOSING_CFG.get("positive", {}).get("threshold")
+                    if (neg is not None and pnl <= float(neg)) or (pos is not None and pnl >= float(pos)):
+                        log(f"AUTO-CLOSING triggered: PnL={pnl}", level="WARNING")
                         asyncio.create_task(self.close_all_positions())
-                        msg = f"ВНИМАНИЕ! AUTO-CLOSING\nДостигнут лимит убытка ({neg_thresh} USDT). Все позиции закрываются!"
-                        asyncio.create_task(self.notifier.send_alert(msg) if not hasattr(self.notifier, "tg_bot") else self.notifier.tg_bot.send_message_to_all(msg))
-                        
-                    pos_cfg = AUTO_CLOSING_CFG.get("positive", {})
-                    pos_thresh = pos_cfg.get("threshold")
-                    if pos_thresh is not None and net_profit >= float(pos_thresh):
-                        log(f"AUTO-CLOSING (Positive): {net_profit} >= {pos_thresh}", level="WARNING")
-                        asyncio.create_task(self.close_all_positions())
-                        msg = f"ОТЛИЧНО! AUTO-CLOSING\nДостигнут лимит профита ({pos_thresh} USDT). Все позиции закрываются!"
-                        asyncio.create_task(self.notifier.send_alert(msg) if not hasattr(self.notifier, "tg_bot") else self.notifier.tg_bot.send_message_to_all(msg))
             except Exception as e:
                 log(f"Error in auto_closing_daemon: {e}", level="ERROR")
-            
             await asyncio.sleep(5)
+
+    async def equity_tracking_daemon(self):
+        """Периодически в моменте пересчитывает эквити и аккумулирует просадку."""
+        while True:
+            try:
+                if not self.is_paused and self.current_prices and hasattr(self, "universe_manager"):
+                    self.universe_manager.update_all_live_metrics(self.current_prices)
+            except Exception as e:
+                log(f"Error in equity_tracking_daemon: {e}", level="ERROR", throttle_sec=60)
+            await asyncio.sleep(2)
 
     async def run(self):
         await self.network.initialize_session()
@@ -384,6 +383,7 @@ class Main:
                 
             self.indicators_task = asyncio.create_task(self.indicators_daemon())
             self.volumes_task = asyncio.create_task(self.volumes_daemon())
+            self.equity_task = asyncio.create_task(self.equity_tracking_daemon())
             self.auto_closing_task = asyncio.create_task(self.auto_closing_daemon())
             
             self.watchdog_task = asyncio.create_task(self.watchdog.start())

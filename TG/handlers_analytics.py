@@ -59,39 +59,51 @@ def _get_analytics_data(universe_id: str = "u15") -> dict:
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        AnalyticsMathEngine.calculate(data)
+        AnalyticsMathEngine.calculate(data, universe_id=universe_id)
         return data
     except Exception:
         return {}
 
 
 def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u15") -> str:
-    """Форматирует сводку аналитики выбранной вселенной с нереализованным PnL."""
+    """Форматирует сводку аналитики выбранной вселенной с нереализованным PnL и просадкой."""
     univ = getattr(bot_core, "universe_manager", None).get_universe(universe_id) if hasattr(bot_core, "universe_manager") else None
     title = f"🌐 <b>Вселенная: {univ.name if univ else universe_id.upper()}</b>\n"
     desc = f"<i>{univ.description}</i>\n\n" if univ and univ.description else "\n"
     if not data:
         return f"{title}{desc}📊 <b>Аналитика пока не содержит данных по сделкам.</b>"
 
-    start_bal = float(data.get("start_balance_usdt", 0.0)) or 1000.0
-    realized_pnl = float(data.get("realized_pnl_usdt", 0.0))
-    unrealized_pnl, active_count = 0.0, 0
-    if univ and hasattr(univ, "state"):
-        cur_prices = getattr(bot_core, "current_prices", {})
-        for sym, sides in getattr(univ.state, "positions", {}).items():
-            for side, pos in sides.items():
-                if pos.is_active and pos.open_price > 0:
-                    active_count += 1
-                    cp = cur_prices.get(sym, pos.open_price)
-                    ratio = (cp - pos.open_price if side == "LONG" else pos.open_price - cp) / pos.open_price
-                    unrealized_pnl += ratio * pos.size
+    cur_prices = getattr(bot_core, "current_prices", {})
+    if univ and hasattr(univ, "update_live_metrics"):
+        m = univ.update_live_metrics(cur_prices)
+        start_bal = float(data.get("start_balance_usdt", m.get("start_balance", 1000.0)))
+        realized_pnl = float(data.get("realized_pnl_usdt", m["realized_pnl"]))
+        unrealized_pnl = m["unrealized_pnl"]
+        active_count = m["active_count"]
+        live_net = realized_pnl + unrealized_pnl
+        live_bal = start_bal + live_net
+        max_dd = m["max_dd"]
+        curr_dd = m["current_dd"]
     else:
-        unrealized_pnl = float(data.get("unrealized_pnl_usdt", 0.0))
+        start_bal = float(data.get("start_balance_usdt", 0.0)) or 1000.0
+        realized_pnl = float(data.get("realized_pnl_usdt", 0.0))
+        unrealized_pnl, active_count = float(data.get("unrealized_pnl_usdt", 0.0)), 0
+        if univ and hasattr(univ, "state"):
+            for sym, sides in getattr(univ.state, "positions", {}).items():
+                for side, pos in sides.items():
+                    if pos.is_active and pos.open_price > 0:
+                        active_count += 1
+                        cp = cur_prices.get(sym) or pos.open_price
+                        ratio = (cp - pos.open_price if side == "LONG" else pos.open_price - cp) / pos.open_price
+                        unrealized_pnl += ratio * pos.size
+        live_net = realized_pnl + unrealized_pnl
+        live_bal = start_bal + live_net
+        max_dd = float(data.get("max_drawdown_usdt", 0.0))
+        curr_dd = float(data.get("current_drawdown_usdt", 0.0))
 
-    live_net = realized_pnl + unrealized_pnl
-    live_bal = start_bal + live_net
     roi = round((live_net / start_bal) * 100, 2) if start_bal > 0 else 0.0
-    dd = -abs(data.get("max_drawdown_usdt", 0.0))
+    dd = -abs(max_dd) if max_dd > 0 else 0.0
+    c_dd = -abs(curr_dd) if curr_dd > 0 else 0.0
     p_s, r_s, u_s = ("+" if live_net >= 0 else ""), ("+" if roi >= 0 else ""), ("+" if unrealized_pnl >= 0 else "")
 
     return (
@@ -102,7 +114,7 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u15") 
         f"• Реализованный PnL: <code>{realized_pnl:.4f} USDT</code>\n"
         f"• Нереализованный PnL: <code>{u_s}{unrealized_pnl:.4f} USDT</code> ({active_count} поз.)\n"
         f"• Всего сделок: <b>{data.get('total_trades', 0)}</b> (Побед: {data.get('winning_trades', 0)} | WR: {data.get('winrate_pct', 0.0):.1f}%)\n"
-        f"• Макс. просадка (DD): <code>{dd:.4f} USDT</code>\n"
+        f"• Макс. просадка (DD): <code>{dd:.4f} USDT</code> (тек: {c_dd:.4f}$)\n"
         f"• Фактор восстановления: <code>{data.get('recovery_factor', 0.0):.2f}</code>\n"
     )
 
@@ -144,7 +156,7 @@ def _do_reset_analytics(uid: str) -> None:
         "total_trades": 0, "winning_trades": 0, "winrate_pct": 0.0, "realized_pnl_usdt": 0.0,
         "net_profit_usdt": 0.0, "unrealized_pnl_usdt": 0.0, "per_coin": {}
     }
-    AnalyticsMathEngine.calculate(data)
+    AnalyticsMathEngine.calculate(data, universe_id=uid)
     suffix = f"_{uid}" if uid and uid != "default" else ""
     (ANALYTICS_DIR / f"analytics{suffix}.json").write_text(json.dumps(data, indent=4), encoding="utf-8")
     with open(ANALYTICS_DIR / f"trades_ledger{suffix}.txt", mode="w", newline="", encoding="utf-8") as f:

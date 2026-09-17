@@ -61,15 +61,9 @@ class UniverseState:
             log(f"[{self.universe_id}] Ошибка загрузки стейта: {e}", level="ERROR")
 
     def save_state(self):
-        path = self.get_state_path()
         try:
-            data = {}
-            for sym, sides in self.positions.items():
-                data[sym] = {
-                    "LONG": sides["LONG"].__dict__,
-                    "SHORT": sides["SHORT"].__dict__
-                }
-            with open(path, "w", encoding="utf-8") as f:
+            data = {sym: {"LONG": s["LONG"].__dict__, "SHORT": s["SHORT"].__dict__} for sym, s in self.positions.items()}
+            with open(self.get_state_path(), "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
             if self.backup_manager:
                 self.backup_manager.mark_changed()
@@ -200,59 +194,78 @@ class StrategyUniverse:
                 rsi_val = indicators.get("rsi_value")
                 rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
                 htf_str = f", HTF: {indicators.get('trend_htf')}" if "trend_htf" in indicators else ""
-                sr_states = indicators.get("sr_levels", [])
-                sr_str = f", SR: {','.join(sr_states)}" if sr_states else ""
-                ec_states = indicators.get("ema_cross", [])
-                ec_str = f", EMACross: {','.join(ec_states)}" if ec_states else ""
-                vol_states = indicators.get("vol_filter", [])
-                vol_str = f", VolF: {','.join(vol_states)}" if vol_states else ""
-
                 grid_str = ""
                 stress_info = indicators.get("grid_stress")
                 if stress_info and isinstance(stress_info, dict):
                     st_side = "SHORT" if side == "LONG" else "LONG"
                     s_data = stress_info.get(st_side, {})
                     if s_data.get("in_position"):
-                        grid_str = (
-                            f", Cron3[{st_side}]: vol={s_data.get('volume_ratio', 0.0):.1%}, "
-                            f"lvl={s_data.get('max_level', -1)}/5, avg={s_data.get('avg_entry_price', 0.0):.4f}, "
-                            f"dd={s_data.get('drawdown_pct', 0.0):+.2f}%, status={stress_info.get('status')}"
-                        )
+                        grid_str = f", Cron3[{st_side}]: vol={s_data.get('volume_ratio', 0.0):.1%}, dd={s_data.get('drawdown_pct', 0.0):+.2f}%"
 
-                log(
-                    f"[SIGNAL ENTRY] [{self.universe_id}][{symbol}][{side}] Trend: {indicators.get('trend')}{htf_str}, RSI: {rsi_str}{sr_str}{ec_str}{vol_str}{grid_str}",
-                    level="INFO"
-                )
+                log(f"[SIGNAL ENTRY] [{self.universe_id}][{symbol}][{side}] Trend: {indicators.get('trend')}{htf_str}, RSI: {rsi_str}{grid_str}", level="INFO")
                 if eff_invest_size > 0:
                     log(f"[POSITION OPEN] [{self.universe_id}][{symbol}][{side}] Цена: {current_price}, Размер: {eff_invest_size}${grid_str}", level="INFO")
                     self.state.open_position(symbol, side, current_price, eff_invest_size)
                 else:
-                    log(f"[SIGNAL SKIPPED] [{self.universe_id}][{symbol}][{side}] Пропуск входа: размер позиции 0 (сетка cron3 не активна)", level="INFO", throttle_sec=30)
+                    log(f"[SIGNAL SKIPPED] [{self.universe_id}][{symbol}][{side}] Пропуск входа: размер 0", level="INFO", throttle_sec=30)
+
+    def update_live_metrics(self, current_prices: Dict[str, float]) -> Dict[str, Any]:
+        """
+        В моменте рассчитывает нереализованный PnL, живое эквити и аккумулирует просадку.
+        Учитывает как реализованный, так и нереализованный PnL.
+        """
+        an_data = self.analytics._read_data()
+        start_bal = float(an_data.get("start_balance_usdt", 1000.0))
+        realized_pnl = float(an_data.get("realized_pnl_usdt", an_data.get("net_profit_usdt", 0.0)))
+
+        active_count = 0
+        unrealized_pnl = 0.0
+        for sym, sides in self.state.positions.items():
+            for side, pos in sides.items():
+                if pos.is_active and pos.open_price > 0:
+                    active_count += 1
+                    cur_p = current_prices.get(sym) or pos.open_price
+                    ratio = (cur_p - pos.open_price if side == "LONG" else pos.open_price - cur_p) / pos.open_price
+                    unrealized_pnl += ratio * pos.size
+
+        live_net_profit = realized_pnl + unrealized_pnl
+        live_equity = start_bal + live_net_profit
+
+        prev_peak = float(an_data.get("peak_balance_usdt", start_bal))
+        peak_equity = max(prev_peak, start_bal, live_equity)
+        current_dd = max(0.0, peak_equity - live_equity)
+        prev_max_dd = float(an_data.get("max_drawdown_usdt", 0.0))
+        max_dd = max(prev_max_dd, current_dd)
+
+        prev_u = float(an_data.get("unrealized_pnl_usdt", 0.0))
+        prev_cdd = float(an_data.get("current_drawdown_usdt", 0.0))
+        if max_dd > prev_max_dd or peak_equity > prev_peak or abs(unrealized_pnl - prev_u) > 0.01 or abs(current_dd - prev_cdd) > 0.01:
+            an_data["universe_id"] = self.universe_id
+            an_data["unrealized_pnl_usdt"] = round(unrealized_pnl, 4)
+            an_data["peak_balance_usdt"] = round(peak_equity, 4)
+            an_data["max_drawdown_usdt"] = round(max_dd, 4)
+            an_data["current_drawdown_usdt"] = round(current_dd, 4)
+            self.analytics._write_data(an_data)
+
+        return {
+            "realized_pnl": realized_pnl, "unrealized_pnl": unrealized_pnl,
+            "live_net_profit": live_net_profit, "live_equity": live_equity,
+            "peak_equity": peak_equity, "current_dd": current_dd,
+            "max_dd": max_dd, "active_count": active_count, "start_balance": start_bal
+        }
 
     def close_all_positions(self, current_prices: Dict[str, float], get_slippage_ratio_fn: Callable[[str], float]) -> int:
         """Экстренное закрытие всех позиций вселенной."""
         closed_count = 0
+        fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
         for symbol, sides in list(self.state.positions.items()):
             for side, pos in list(sides.items()):
-                if not pos.is_active:
+                cur_p = current_prices.get(symbol)
+                if not pos.is_active or not cur_p:
                     continue
-                current_price = current_prices.get(symbol)
-                if not current_price:
-                    continue
-
-                fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
-                slippage_ratio = get_slippage_ratio_fn(symbol) * 2
-                fee_slip_ratio = fee_ratio + slippage_ratio
-
-                if side == "LONG":
-                    pnl_ratio = (current_price - pos.open_price) / pos.open_price
-                else:
-                    pnl_ratio = (pos.open_price - current_price) / pos.open_price
-
-                pnl_usd = pnl_ratio * pos.size
-                comm_usd = -(fee_slip_ratio * pos.size)
-
-                self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd, open_time_ms=pos.open_time)
+                slip = fee_ratio + get_slippage_ratio_fn(symbol) * 2
+                ratio = (cur_p - pos.open_price if side == "LONG" else pos.open_price - cur_p) / pos.open_price
+                self.analytics.record_virtual_trade(symbol, side, ratio * pos.size, -(slip * pos.size), open_time_ms=pos.open_time)
                 self.state.close_position(symbol, side)
                 closed_count += 1
         return closed_count
@@ -384,53 +397,42 @@ class UniverseManager:
             total_closed += universe.close_all_positions(current_prices, get_slippage_ratio_fn)
         return total_closed
 
+    def update_all_live_metrics(self, current_prices: Dict[str, float]) -> None:
+        """Обновляет живые метрики и аккумулирует просадку для всех активных вселенных."""
+        for univ in self.universes.values():
+            if univ.is_active:
+                univ.update_live_metrics(current_prices)
+
     def get_leaderboard(self, current_prices: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
         """
         Формирует сравнительную таблицу лидеров (Leaderboard) по всем запущенным вселенным.
+        В моменте рассчитывает нереализованный PnL, живое эквити и аккумулирует просадку.
         """
         leaderboard = []
         current_prices = current_prices or {}
 
         for uid, univ in self.universes.items():
+            m = univ.update_live_metrics(current_prices)
             an_data = univ.analytics._read_data() if hasattr(univ.analytics, "_read_data") else {}
-            if an_data:
-                AnalyticsMathEngine.calculate(an_data)
-
-            realized_pnl = float(an_data.get("realized_pnl_usdt", an_data.get("net_profit_usdt", 0.0)))
             total_trades = an_data.get("total_trades", 0)
             winrate = an_data.get("winrate_pct", 0.0)
-            max_dd = an_data.get("max_drawdown_usdt", 0.0)
-            recovery_factor = an_data.get("recovery_factor", 0.0)
+            max_dd = m["max_dd"]
+            rec_factor = round(m["live_net_profit"] / max_dd, 2) if max_dd > 0 else 0.0
 
-            # Подсчет активных позиций и нереализованного PnL
-            active_count = 0
-            unrealized_pnl = 0.0
-            for sym, sides in univ.state.positions.items():
-                for side, pos in sides.items():
-                    if pos.is_active and pos.open_price > 0:
-                        active_count += 1
-                        cur_p = current_prices.get(sym, pos.open_price)
-                        if side == "LONG":
-                            ratio = (cur_p - pos.open_price) / pos.open_price
-                        else:
-                            ratio = (pos.open_price - cur_p) / pos.open_price
-                        unrealized_pnl += ratio * pos.size
-
-            live_net_profit = realized_pnl + unrealized_pnl
             leaderboard.append({
                 "uid": uid,
                 "name": univ.name,
                 "description": univ.description,
-                "net_profit": live_net_profit,
-                "realized_pnl": realized_pnl,
+                "net_profit": m["live_net_profit"],
+                "realized_pnl": m["realized_pnl"],
+                "unrealized_pnl": m["unrealized_pnl"],
                 "total_trades": total_trades,
                 "winrate": winrate,
                 "max_dd": max_dd,
-                "recovery_factor": recovery_factor,
-                "active_count": active_count,
-                "unrealized_pnl": unrealized_pnl
+                "current_dd": m["current_dd"],
+                "recovery_factor": rec_factor,
+                "active_count": m["active_count"],
             })
 
-        # Сортировка по чистому профиту (Net Profit)
         leaderboard.sort(key=lambda x: x["net_profit"], reverse=True)
         return leaderboard

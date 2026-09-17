@@ -69,7 +69,7 @@ class AnalyticsManager:
     def _write_data(self, data: Dict[str, Any], mark_backup: bool = True):
         """Атомарно перезаписывает файл аналитики с перерасчетом математики."""
         try:
-            AnalyticsMathEngine.calculate(data)
+            AnalyticsMathEngine.calculate(data, universe_id=self.universe_id)
             temp_file = self.log_file.with_suffix('.tmp')
             temp_file.write_text(json.dumps(data, indent=4), encoding="utf-8")
             os.replace(temp_file, self.log_file)
@@ -155,7 +155,7 @@ class AnalyticsManager:
     def get_summary(self) -> Dict[str, Any]:
         """Возвращает краткую математическую сводку по сделкам вселенной."""
         data = self._read_data()
-        AnalyticsMathEngine.calculate(data)
+        AnalyticsMathEngine.calculate(data, universe_id=self.universe_id)
         return {
             "universe_id": self.universe_id,
             "net_profit_usdt": data.get("net_profit_usdt", 0.0),

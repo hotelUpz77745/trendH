@@ -5,6 +5,7 @@
 
 import time
 import json
+from typing import Optional
 from cron_integration import CronIntegration
 
 class AnalyticsMathEngine:
@@ -14,7 +15,7 @@ class AnalyticsMathEngine:
     """
 
     @staticmethod
-    def calculate(data: dict) -> None:
+    def calculate(data: dict, universe_id: Optional[str] = None) -> None:
         """
         Основной метод расчета метрик. Мутирует переданный словарь data, 
         добавляя или обновляя расчетные поля.
@@ -24,7 +25,7 @@ class AnalyticsMathEngine:
         if "per_coin" not in data:
             return
             
-        AnalyticsMathEngine._calculate_global_metrics(data)
+        AnalyticsMathEngine._calculate_global_metrics(data, universe_id=universe_id)
         AnalyticsMathEngine._calculate_per_coin_metrics(data)
 
     @staticmethod
@@ -57,9 +58,11 @@ class AnalyticsMathEngine:
         }
 
     @staticmethod
-    def _calculate_global_metrics(data: dict) -> None:
+    def _calculate_global_metrics(data: dict, universe_id: Optional[str] = None) -> None:
         """
         Рассчитывает глобальные балансы, ROI, Winrate, Drawdowns и фактор восстановления.
+        В моменте учитывает как реализованный, так и нереализованный PnL (живое эквити).
+        Аккумулирует максимальную историческую просадку (Max Drawdown).
         """
         initial = float(data.get("start_balance_usdt", 0.0))
         if initial <= 0.0:
@@ -70,24 +73,30 @@ class AnalyticsMathEngine:
         net_profit = float(data.get("net_profit_usdt", 0.0))
         bot_cur_balance = round(initial + net_profit, 4)
         data["cur_balance_usdt"] = bot_cur_balance
-        if initial > 0:
-            data["roi_pct"] = round(((bot_cur_balance - initial) / initial) * 100, 2)
-        else:
-            data["roi_pct"] = 0.0
+        data["roi_pct"] = round(((bot_cur_balance - initial) / initial) * 100, 2) if initial > 0 else 0.0
 
         total_trades = int(data.get("total_trades", 0))
         winning_trades = int(data.get("winning_trades", 0))
-        if total_trades > 0:
-            data["winrate_pct"] = round((winning_trades / total_trades) * 100.0, 2)
-        else:
-            data["winrate_pct"] = 0.0
+        data["winrate_pct"] = round((winning_trades / total_trades) * 100.0, 2) if total_trades > 0 else 0.0
 
-        # Чтение истории балансов из trades_ledger.txt для точного расчета просадки
+        # Учитываем нереализованный PnL (живое эквити в моменте)
+        unrealized = float(data.get("unrealized_pnl_usdt", 0.0))
+        live_equity = bot_cur_balance + unrealized
+
+        prev_peak = float(data.get("peak_balance_usdt", initial))
+        prev_max_dd = float(data.get("max_drawdown_usdt", 0.0))
+
+        peak = max(initial, bot_cur_balance, live_equity, prev_peak)
+        min_bal = min(initial, bot_cur_balance, live_equity, float(data.get("min_balance_usdt", initial)))
+        max_dd = prev_max_dd
+
+        # Чтение истории балансов из trades_ledger{suffix}.txt
         from consts import ANALYTICS_DIR
-        ledger_file = ANALYTICS_DIR / "trades_ledger.txt"
-        peak = max(initial, bot_cur_balance)
-        min_bal = min(initial, bot_cur_balance)
-        max_dd = 0.0
+        uid = universe_id or data.get("universe_id", "")
+        suffix = f"_{uid}" if uid and uid != "default" else ""
+        ledger_file = ANALYTICS_DIR / f"trades_ledger{suffix}.txt"
+        if not ledger_file.exists():
+            ledger_file = ANALYTICS_DIR / "trades_ledger.txt"
 
         if ledger_file.exists():
             try:
@@ -99,8 +108,7 @@ class AnalyticsMathEngine:
                     for row in reader:
                         if row and len(row) >= 6:
                             try:
-                                bal = float(row[5])
-                                balances.append(bal)
+                                balances.append(float(row[5]))
                             except ValueError:
                                 pass
                 if balances:
@@ -112,22 +120,21 @@ class AnalyticsMathEngine:
                         dd = cur_peak - b
                         if dd > max_dd:
                             max_dd = dd
-                    peak = cur_peak
-                    min_bal = min(all_bals)
+                    peak = max(peak, cur_peak)
+                    min_bal = min(min_bal, min(all_bals))
             except Exception:
                 pass
 
-        if max_dd == 0.0 and (peak - bot_cur_balance) > 0:
-            max_dd = peak - bot_cur_balance
+        # Текущая просадка от пика в моменте
+        current_dd = max(0.0, peak - live_equity)
+        # Аккумулируем максимальную историческую просадку
+        max_dd = max(max_dd, current_dd)
 
         data["peak_balance_usdt"] = round(peak, 4)
         data["min_balance_usdt"] = round(min_bal, 4)
+        data["current_drawdown_usdt"] = round(current_dd, 4)
         data["max_drawdown_usdt"] = round(max_dd, 4)
-
-        if max_dd > 0:
-            data["recovery_factor"] = round(net_profit / max_dd, 2)
-        else:
-            data["recovery_factor"] = 0.0
+        data["recovery_factor"] = round(net_profit / max_dd, 2) if max_dd > 0 else 0.0
 
     @staticmethod
     def _calculate_per_coin_metrics(data: dict) -> None:
