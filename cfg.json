@@ -95,7 +95,7 @@
         "warning": true,
         "error": true,
         "max_log_lines": 50000,
-        "log_to_console": true,
+        "log_to_console": false,
         "log_to_file": true,
         "TIME_ZONE": "UTC"
     },
@@ -1249,7 +1249,9 @@
             "description": "Быстрый скальп: жесткий перевес маркета Taker Buy >=65% + короткий трейлинг 1.8 ATR + Time-Stop 15 мин",
             "is_active": true,
             "enter_rules": {
-                "trend": { "is_active": false },
+                "trend": {
+                    "is_active": false
+                },
                 "trend_htf": {
                     "is_active": true,
                     "timeframe": "1h",
@@ -1261,11 +1263,21 @@
                     "long_cond": "UP",
                     "short_cond": "DOWN"
                 },
-                "rsi": { "is_active": false },
-                "rsi_waterline50": { "is_active": false },
-                "sr_levels": { "is_active": false },
-                "ema_cross": { "is_active": false },
-                "vol_filter": { "is_active": false },
+                "rsi": {
+                    "is_active": false
+                },
+                "rsi_waterline50": {
+                    "is_active": false
+                },
+                "sr_levels": {
+                    "is_active": false
+                },
+                "ema_cross": {
+                    "is_active": false
+                },
+                "vol_filter": {
+                    "is_active": false
+                },
                 "volatility_squeeze": {
                     "is_active": true,
                     "timeframe": "5m",
@@ -1308,7 +1320,9 @@
             "description": "Трендовый раннер: широкое удержание по волатильности 3.2 ATR без ранней фиксации, забор длинных хвостов прибыли",
             "is_active": true,
             "enter_rules": {
-                "trend": { "is_active": false },
+                "trend": {
+                    "is_active": false
+                },
                 "trend_htf": {
                     "is_active": true,
                     "timeframe": "1h",
@@ -1320,11 +1334,21 @@
                     "long_cond": "UP",
                     "short_cond": "DOWN"
                 },
-                "rsi": { "is_active": false },
-                "rsi_waterline50": { "is_active": false },
-                "sr_levels": { "is_active": false },
-                "ema_cross": { "is_active": false },
-                "vol_filter": { "is_active": false },
+                "rsi": {
+                    "is_active": false
+                },
+                "rsi_waterline50": {
+                    "is_active": false
+                },
+                "sr_levels": {
+                    "is_active": false
+                },
+                "ema_cross": {
+                    "is_active": false
+                },
+                "vol_filter": {
+                    "is_active": false
+                },
                 "volatility_squeeze": {
                     "is_active": true,
                     "timeframe": "5m",
@@ -1366,7 +1390,9 @@
             "description": "Пробой уровней LuxAlgo с фильтром агрессии маркета (Taker Buy >=60%) для отсечения ложных выносов стопов",
             "is_active": true,
             "enter_rules": {
-                "trend": { "is_active": false },
+                "trend": {
+                    "is_active": false
+                },
                 "trend_htf": {
                     "is_active": true,
                     "timeframe": "1h",
@@ -1378,8 +1404,12 @@
                     "long_cond": "UP",
                     "short_cond": "DOWN"
                 },
-                "rsi": { "is_active": false },
-                "rsi_waterline50": { "is_active": false },
+                "rsi": {
+                    "is_active": false
+                },
+                "rsi_waterline50": {
+                    "is_active": false
+                },
                 "sr_levels": {
                     "is_active": true,
                     "timeframe": "5m",
@@ -1393,9 +1423,15 @@
                     "long_cond": "BREAKOUT_LONG",
                     "short_cond": "BREAKOUT_SHORT"
                 },
-                "ema_cross": { "is_active": false },
-                "vol_filter": { "is_active": false },
-                "volatility_squeeze": { "is_active": false },
+                "ema_cross": {
+                    "is_active": false
+                },
+                "vol_filter": {
+                    "is_active": false
+                },
+                "volatility_squeeze": {
+                    "is_active": false
+                },
                 "taker_flow": {
                     "is_active": true,
                     "timeframe": "5m",
@@ -1428,7 +1464,9 @@
             "description": "Тройное сито: Сжатие волатильности + Taker Buy >=58% + всплеск объема 1m (V > 2.0x Vavg)",
             "is_active": true,
             "enter_rules": {
-                "trend": { "is_active": false },
+                "trend": {
+                    "is_active": false
+                },
                 "trend_htf": {
                     "is_active": true,
                     "timeframe": "1h",
@@ -1440,17 +1478,29 @@
                     "long_cond": "UP",
                     "short_cond": "DOWN"
                 },
-                "rsi": { "is_active": false },
-                "rsi_waterline50": { "is_active": false },
-                "sr_levels": { "is_active": false },
-                "ema_cross": { "is_active": false },
+                "rsi": {
+                    "is_active": false
+                },
+                "rsi_waterline50": {
+                    "is_active": false
+                },
+                "sr_levels": {
+                    "is_active": false
+                },
+                "ema_cross": {
+                    "is_active": false
+                },
                 "vol_filter": {
                     "is_active": true,
                     "timeframe": "1m",
                     "mode": "r",
                     "period": 14,
-                    "a": { "slice_factor": 1.1 },
-                    "r": { "slice_factor": 2.0 },
+                    "a": {
+                        "slice_factor": 1.1
+                    },
+                    "r": {
+                        "slice_factor": 2.0
+                    },
                     "long_cond": "VOLF_PASSED",
                     "short_cond": "VOLF_PASSED"
                 },
@@ -1496,7 +1546,9 @@
             "description": "Контртренд: вход против ложного разжатия волатильности, идущего вразрез со старшим трендом 1h",
             "is_active": true,
             "enter_rules": {
-                "trend": { "is_active": false },
+                "trend": {
+                    "is_active": false
+                },
                 "trend_htf": {
                     "is_active": true,
                     "timeframe": "1h",
@@ -1508,11 +1560,21 @@
                     "long_cond": "UP",
                     "short_cond": "DOWN"
                 },
-                "rsi": { "is_active": false },
-                "rsi_waterline50": { "is_active": false },
-                "sr_levels": { "is_active": false },
-                "ema_cross": { "is_active": false },
-                "vol_filter": { "is_active": false },
+                "rsi": {
+                    "is_active": false
+                },
+                "rsi_waterline50": {
+                    "is_active": false
+                },
+                "sr_levels": {
+                    "is_active": false
+                },
+                "ema_cross": {
+                    "is_active": false
+                },
+                "vol_filter": {
+                    "is_active": false
+                },
                 "volatility_squeeze": {
                     "is_active": true,
                     "timeframe": "5m",
@@ -1553,7 +1615,9 @@
             "description": "Субсекундный Order Flow: агрессия маркета Taker Buy >=62% в 60s окне + выход из сжатия волатильности + Chandelier 2.0 ATR",
             "is_active": true,
             "enter_rules": {
-                "trend": { "is_active": false },
+                "trend": {
+                    "is_active": false
+                },
                 "trend_htf": {
                     "is_active": true,
                     "timeframe": "1h",
@@ -1565,11 +1629,21 @@
                     "long_cond": "UP",
                     "short_cond": "DOWN"
                 },
-                "rsi": { "is_active": false },
-                "rsi_waterline50": { "is_active": false },
-                "sr_levels": { "is_active": false },
-                "ema_cross": { "is_active": false },
-                "vol_filter": { "is_active": false },
+                "rsi": {
+                    "is_active": false
+                },
+                "rsi_waterline50": {
+                    "is_active": false
+                },
+                "sr_levels": {
+                    "is_active": false
+                },
+                "ema_cross": {
+                    "is_active": false
+                },
+                "vol_filter": {
+                    "is_active": false
+                },
                 "volatility_squeeze": {
                     "is_active": true,
                     "timeframe": "5m",
@@ -1617,7 +1691,9 @@
             "description": "Полная физика рынка: Взрыв сжатия волатильности + Live Taker Buy >=60% + Опережение BTC >=1.5% + Chandelier 2.5 ATR",
             "is_active": true,
             "enter_rules": {
-                "trend": { "is_active": false },
+                "trend": {
+                    "is_active": false
+                },
                 "trend_htf": {
                     "is_active": true,
                     "timeframe": "1h",
@@ -1629,11 +1705,21 @@
                     "long_cond": "UP",
                     "short_cond": "DOWN"
                 },
-                "rsi": { "is_active": false },
-                "rsi_waterline50": { "is_active": false },
-                "sr_levels": { "is_active": false },
-                "ema_cross": { "is_active": false },
-                "vol_filter": { "is_active": false },
+                "rsi": {
+                    "is_active": false
+                },
+                "rsi_waterline50": {
+                    "is_active": false
+                },
+                "sr_levels": {
+                    "is_active": false
+                },
+                "ema_cross": {
+                    "is_active": false
+                },
+                "vol_filter": {
+                    "is_active": false
+                },
                 "volatility_squeeze": {
                     "is_active": true,
                     "timeframe": "5m",
