@@ -37,27 +37,14 @@ class IndicatorsMath:
         avg_gain = sum(gains[:length]) / length
         avg_loss = sum(losses[:length]) / length
 
-        rsi_list = []
-        if avg_loss == 0 and avg_gain == 0:
-            rsi_list.append(50.0)
-        elif avg_loss == 0:
-            rsi_list.append(100.0)
-        else:
-            rs = avg_gain / avg_loss
-            rsi_list.append(100.0 - (100.0 / (1.0 + rs)))
+        def _to_rsi(g: float, l: float) -> float:
+            return 50.0 if (l == 0 and g == 0) else (100.0 if l == 0 else 100.0 - (100.0 / (1.0 + g / l)))
 
+        rsi_list = [_to_rsi(avg_gain, avg_loss)]
         for i in range(length, len(gains)):
             avg_gain = (avg_gain * (length - 1) + gains[i]) / length
             avg_loss = (avg_loss * (length - 1) + losses[i]) / length
-
-            if avg_loss == 0 and avg_gain == 0:
-                rsi_list.append(50.0)
-            elif avg_loss == 0:
-                rsi_list.append(100.0)
-            else:
-                rs = avg_gain / avg_loss
-                rsi_list.append(100.0 - (100.0 / (1.0 + rs)))
-
+            rsi_list.append(_to_rsi(avg_gain, avg_loss))
         return rsi_list
 
     @staticmethod
@@ -280,16 +267,10 @@ class VolumeFilterCalculator:
         passed = False
         if self.mode == "a":
             past_max = max(ref_values)
-            if past_max > 0 and last_vol > (past_max * self.slice_factor):
-                passed = True
-            elif past_max == 0 and last_vol > 0:
-                passed = True
+            passed = (last_vol > past_max * self.slice_factor) if past_max > 0 else (last_vol > 0)
         elif self.mode == "r":
             past_avg = sum(ref_values) / len(ref_values)
-            if past_avg > 0 and last_vol > (past_avg * self.slice_factor):
-                passed = True
-            elif past_avg == 0 and last_vol > 0:
-                passed = True
+            passed = (last_vol > past_avg * self.slice_factor) if past_avg > 0 else (last_vol > 0)
 
         if passed:
             return [self.long_cond]
@@ -328,19 +309,13 @@ class IndicatorsEngine:
         vol_cfg = enter_rules.get("vol_filter")
         self.vol_filter_calc = VolumeFilterCalculator(vol_cfg) if vol_cfg else None
 
+        from CORE.squeeze_flow import TakerFlowCalculator, VolatilitySqueezeCalculator, RelativeStrengthCalculator
         tf_cfg = enter_rules.get("taker_flow")
-        if tf_cfg and tf_cfg.get("is_active"):
-            from CORE.squeeze_flow import TakerFlowCalculator
-            self.taker_flow_calc = TakerFlowCalculator(tf_cfg)
-        else:
-            self.taker_flow_calc = None
-
+        self.taker_flow_calc = TakerFlowCalculator(tf_cfg) if tf_cfg and tf_cfg.get("is_active") else None
         sq_cfg = enter_rules.get("volatility_squeeze")
-        if sq_cfg and sq_cfg.get("is_active"):
-            from CORE.squeeze_flow import VolatilitySqueezeCalculator
-            self.squeeze_calc = VolatilitySqueezeCalculator(sq_cfg)
-        else:
-            self.squeeze_calc = None
+        self.squeeze_calc = VolatilitySqueezeCalculator(sq_cfg) if sq_cfg and sq_cfg.get("is_active") else None
+        rs_cfg = enter_rules.get("relative_strength")
+        self.relative_strength_calc = RelativeStrengthCalculator(rs_cfg) if rs_cfg and rs_cfg.get("is_active") else None
 
     def get_required_timeframes(self) -> Set[str]:
         """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
@@ -362,9 +337,17 @@ class IndicatorsEngine:
             tfs.add(self.taker_flow_calc.timeframe)
         if self.squeeze_calc and self.squeeze_calc.is_active:
             tfs.add(self.squeeze_calc.timeframe)
+        if self.relative_strength_calc and self.relative_strength_calc.is_active:
+            tfs.add("5m")
         return tfs if tfs else {"5m"}
 
-    def calculate(self, klines_by_tf: Dict[str, Any], current_price: Optional[float] = None) -> Dict[str, Any]:
+    def calculate(
+        self,
+        klines_by_tf: Dict[str, Any],
+        current_price: Optional[float] = None,
+        btc_closes: Optional[List[float]] = None,
+        realtime_flow: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Вычисляет показатели индикаторов по переданному словарю {таймфрейм: список_свечей_или_closes}.
         Возвращает: {"trend": str, "trend_htf": str, "rsi": list[str], "rsi_value": float | None,
@@ -434,7 +417,7 @@ class IndicatorsEngine:
 
         if self.taker_flow_calc and self.taker_flow_calc.is_active:
             candles_tf = klines_by_tf.get(self.taker_flow_calc.timeframe, [])
-            result["taker_flow"] = self.taker_flow_calc.calculate(candles_tf)
+            result["taker_flow"] = self.taker_flow_calc.calculate(candles_tf, realtime_flow=realtime_flow)
         else:
             result["taker_flow"] = []
 
@@ -444,6 +427,11 @@ class IndicatorsEngine:
         else:
             result["volatility_squeeze"] = []
 
-        result["candles_5m"] = klines_by_tf.get("5m", [])
+        if self.relative_strength_calc and self.relative_strength_calc.is_active:
+            coin_closes = closes_by_tf.get("5m", [])
+            result["relative_strength"] = self.relative_strength_calc.calculate(coin_closes, btc_closes or [])
+        else:
+            result["relative_strength"] = []
 
+        result["candles_5m"] = klines_by_tf.get("5m", [])
         return result

@@ -208,6 +208,10 @@ class EntrySignalEngine:
             from CORE.squeeze_flow import EntryVolatilitySqueezeRule
             self.rules.append(EntryVolatilitySqueezeRule(enter_rules_cfg["volatility_squeeze"]))
 
+        if "relative_strength" in enter_rules_cfg:
+            from CORE.squeeze_flow import EntryRelativeStrengthRule
+            self.rules.append(EntryRelativeStrengthRule(enter_rules_cfg["relative_strength"]))
+
     def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
         """
         Проверяет все правила входа.

@@ -20,6 +20,7 @@ from TG.tg_receiver import TelegramReceiver
 from CORE.indicators import IndicatorsEngine
 from CORE.watchdog import LoopWatchdog
 from CORE.backup import RuntimeBackupManager
+from CORE.squeeze_flow import RealtimeFlowTracker
 from consts import AUTO_CLOSING_CFG
 
 if TYPE_CHECKING:
@@ -49,6 +50,8 @@ class Main:
         self.binance_client = BinanceAdapter()
         self.network = NetworkServices()
         self.symbols = []
+        self.btc_symbol = "BTCUSDT"
+        self.flow_tracker = RealtimeFlowTracker()
         self.symbol_indicators = {}  # symbol -> {"rsi": float, "trend": str}
         self.symbol_volume_24h = {}
         self.current_prices = {}  # symbol -> float
@@ -128,7 +131,8 @@ class Main:
         log(" Pre-fetching klines history for all symbols...", level="INFO")
         history_size = cfg.get("klines_history_size", 300)
         tfs = self.indicators_engine.get_required_timeframes()
-        
+        all_syms = list(set(self.symbols + [self.btc_symbol]))
+
         async def _fetch(sym):
             if sym not in self.klines_cache:
                 self.klines_cache[sym] = {}
@@ -146,14 +150,19 @@ class Main:
                                 "low": float(k[3]),
                                 "close": float(k[4]),
                                 "volume": float(k[5]),
+                                "taker_buy_volume": float(k[9]) if len(k) > 9 else 0.0,
                             }
                 await asyncio.sleep(0.01)
 
-        tasks = [_fetch(sym) for sym in self.symbols]
+        tasks = [_fetch(sym) for sym in all_syms]
         await asyncio.gather(*tasks)
-        log(f" Klines history loaded for {len(self.symbols)} symbols.", level="INFO")
-        
-        # Рассчитываем стартовые индикаторы для всех символов сразу
+        log(f" Klines history loaded for {len(all_syms)} symbols.", level="INFO")
+
+        # Стартовый расчет индикаторов
+        btc_dict = self.klines_cache.get(self.btc_symbol, {}).get("5m", {})
+        btc_ts = sorted(btc_dict.keys())
+        btc_closes = [btc_dict[t]["close"] for t in btc_ts[-history_size:]] if btc_ts else []
+
         for sym in self.symbols:
             if sym in self.klines_cache:
                 klines_data = {}
@@ -162,26 +171,28 @@ class Main:
                     if sorted_ts:
                         klines_data[tf] = [ts_dict[ts] for ts in sorted_ts[-history_size:]]
                 if klines_data:
+                    flow = self.flow_tracker.get_flow(sym)
                     self.symbol_indicators[sym] = self.indicators_engine.calculate(
-                        klines_data, current_price=self.current_prices.get(sym)
+                        klines_data, current_price=self.current_prices.get(sym),
+                        btc_closes=btc_closes, realtime_flow=flow
                     )
 
     async def update_indicators(self, session, symbol: str):
         try:
             tfs = self.indicators_engine.get_required_timeframes()
             history_size = cfg.get("klines_history_size", 300)
-            
+
             if symbol not in self.klines_cache:
                 self.klines_cache[symbol] = {}
-                
+
             klines_data = {}
             for tf in tfs:
                 if tf not in self.klines_cache[symbol]:
                     self.klines_cache[symbol][tf] = {}
-                    
+
                 async with self.api_semaphore:
                     klines = await self.binance_client.get_klines(session, symbol, interval=tf, limit=5)
-                    
+
                 if klines:
                     for k in klines:
                         self.klines_cache[symbol][tf][int(k[0])] = {
@@ -193,19 +204,25 @@ class Main:
                             "volume": float(k[5]),
                             "taker_buy_volume": float(k[9]) if len(k) > 9 else 0.0,
                         }
-                        
+
                 sorted_ts = sorted(self.klines_cache[symbol][tf].keys())
                 for ts in sorted_ts[:-history_size]:
                     del self.klines_cache[symbol][tf][ts]
-                    
+
                 if sorted_ts:
                     klines_data[tf] = [self.klines_cache[symbol][tf][ts] for ts in sorted_ts[-history_size:]]
 
             if not klines_data:
                 return
 
+            btc_dict = self.klines_cache.get(self.btc_symbol, {}).get("5m", {})
+            btc_ts = sorted(btc_dict.keys())
+            btc_closes = [btc_dict[t]["close"] for t in btc_ts[-history_size:]] if btc_ts else []
+            flow = self.flow_tracker.get_flow(symbol)
+
             self.symbol_indicators[symbol] = self.indicators_engine.calculate(
-                klines_data, current_price=self.current_prices.get(symbol)
+                klines_data, current_price=self.current_prices.get(symbol),
+                btc_closes=btc_closes, realtime_flow=flow
             )
         except Exception as e:
             log(f"[{symbol}] Error updating indicators: {e}", level="ERROR")
@@ -228,9 +245,18 @@ class Main:
         current_price = tick.price
         self.current_prices[symbol] = current_price
 
+        self.flow_tracker.add_trade(symbol, current_price, tick.qty, tick.is_buyer_maker, tick.event_time_ms)
+        if symbol == self.btc_symbol and symbol not in self.symbols:
+            await asyncio.sleep(0)
+            return
+
         indicators = self.symbol_indicators.get(symbol)
         if not indicators:
             return
+
+        flow = self.flow_tracker.get_flow(symbol)
+        if flow.get("signals") is not None and flow.get("total_vol", 0.0) > 0:
+            indicators["taker_flow"] = flow["signals"]
 
         cron_state = CronIntegration.get_symbol_state(symbol)
         allow_long = self.direction_mode in ("LONG", "HEDGE", "MONO")
@@ -264,39 +290,10 @@ class Main:
         while True:
             try:
                 if self.symbols and not self.is_paused:
-                    tasks = [self.update_indicators(self.network.session, sym) for sym in self.symbols]
+                    all_syms = list(set(self.symbols + [self.btc_symbol]))
+                    tasks = [self.update_indicators(self.network.session, sym) for sym in all_syms]
                     if tasks:
                         await asyncio.gather(*tasks)
-
-                    # # Логирование показателей тренда и RSI по всем отслеживаемым парам
-                    # signal_summary = {"LONG": [], "SHORT": [], "NONE": 0}
-                    # for sym in self.symbols:
-                    #     ind = self.symbol_indicators.get(sym)
-                    #     if not ind:
-                    #         continue
-                    #     trend = ind.get("trend", "UNSTABLE")
-                    #     rsi_val = ind.get("rsi_value")
-                    #     rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
-                    #     rsi_states = ind.get("rsi", [])
-                    #     
-                    #     has_long = self.check_entry(sym, "LONG")
-                    #     has_short = self.check_entry(sym, "SHORT")
-                    #     
-                    #     if has_long:
-                    #         sig_label = "🟢 [LONG]"
-                    #         signal_summary["LONG"].append(sym)
-                    #     elif has_short:
-                    #         sig_label = "🔴 [SHORT]"
-                    #         signal_summary["SHORT"].append(sym)
-                    #     else:
-                    #         sig_label = "⚪ [-]"
-                    #         signal_summary["NONE"] += 1
-                    #         
-                    #     log(f"📊 [IND] {sym:<12} | Trend: {trend:<8} | RSI: {rsi_str:>5} ({','.join(rsi_states)}) | Sig: {sig_label}", level="INFO")
-                    #     
-                    # longs_str = ", ".join(signal_summary["LONG"]) if signal_summary["LONG"] else "нет"
-                    # shorts_str = ", ".join(signal_summary["SHORT"]) if signal_summary["SHORT"] else "нет"
-                    # log(f"📊 [IND SUMMARY] Обновлено {len(self.symbols)} пар. Сигналы входа: LONG [{len(signal_summary['LONG'])}]: {longs_str} | SHORT [{len(signal_summary['SHORT'])}]: {shorts_str} | Без сигнала: {signal_summary['NONE']}", level="INFO")
             except Exception as ex:
                 log(f"Error in indicators_daemon: {ex}", level="ERROR")
                 traceback.print_exc()
@@ -371,9 +368,10 @@ class Main:
             self.symbols = CronIntegration.get_symbols()
             if self.symbols:
                 await self.init_klines_cache(session)
-                self.price_stream = BinanceHotPriceStream(self.symbols)
+                stream_syms = list(set(self.symbols + [self.btc_symbol]))
+                self.price_stream = BinanceHotPriceStream(stream_syms)
                 self.stream_task = asyncio.create_task(self.price_stream.run(self.on_tick))
-                log(f"Запущен HotPriceStream для {len(self.symbols)} пар.", level="INFO")
+                log(f"Запущен HotPriceStream для {len(stream_syms)} пар (включая {self.btc_symbol}).", level="INFO")
                 
             self.indicators_task = asyncio.create_task(self.indicators_daemon())
             self.volumes_task = asyncio.create_task(self.volumes_daemon())

@@ -4,28 +4,108 @@
 # ============================================================
 
 from typing import Dict, List, Any, Optional
+from collections import deque
+import time
 import numpy as np
+
+
+class RealtimeFlowTracker:
+    """
+    Высокоскоростной трекер потока ордеров (Live Order Flow / Tick-by-Tick CVD).
+    Агрегирует реальные рыночные сделки из WebSocket-стрима @trade без задержек свечей.
+    """
+
+    def __init__(self, max_retention_sec: float = 300.0):
+        self.max_retention_sec = max_retention_sec
+        self.trades: Dict[str, deque] = {}
+
+    def add_trade(self, symbol: str, price: float, qty: float, is_buyer_maker: bool, event_time_ms: int = 0) -> None:
+        now_ms = event_time_ms if event_time_ms > 0 else int(time.time() * 1000)
+        if symbol not in self.trades:
+            self.trades[symbol] = deque()
+        quote_vol = price * qty
+        is_taker_buy = not is_buyer_maker
+        self.trades[symbol].append((now_ms, quote_vol, is_taker_buy))
+        cutoff = now_ms - int(self.max_retention_sec * 1000)
+        q = self.trades[symbol]
+        while q and q[0][0] < cutoff:
+            q.popleft()
+
+    def get_flow(
+        self,
+        symbol: str,
+        window_sec: float = 60.0,
+        min_buy_ratio: float = 0.58,
+        max_buy_ratio: float = 0.42
+    ) -> Dict[str, Any]:
+        now_ms = int(time.time() * 1000)
+        cutoff = now_ms - int(window_sec * 1000)
+        q = self.trades.get(symbol)
+        if not q:
+            return {"taker_buy_ratio": 0.5, "delta": 0.0, "total_vol": 0.0, "signals": []}
+
+        buy_vol = 0.0
+        sell_vol = 0.0
+        for ts, vol, is_buy in q:
+            if ts >= cutoff:
+                if is_buy:
+                    buy_vol += vol
+                else:
+                    sell_vol += vol
+
+        total_vol = buy_vol + sell_vol
+        if total_vol <= 0:
+            return {"taker_buy_ratio": 0.5, "delta": 0.0, "total_vol": 0.0, "signals": []}
+
+        ratio = buy_vol / total_vol
+        signals = []
+        if ratio >= min_buy_ratio:
+            signals.append("TAKER_BUY_DOMINANT")
+        elif ratio <= max_buy_ratio:
+            signals.append("TAKER_SELL_DOMINANT")
+
+        return {
+            "taker_buy_vol": buy_vol,
+            "taker_sell_vol": sell_vol,
+            "total_vol": total_vol,
+            "taker_buy_ratio": ratio,
+            "delta": buy_vol - sell_vol,
+            "signals": signals,
+        }
 
 
 class TakerFlowCalculator:
     """
     Калькулятор потока рыночных покупок/продаж (Order Flow / Taker Volume).
     Анализирует долю покупок по рынку (Market Taker Orders) в общем объеме.
+    Поддерживает:
+      - mode='realtime': моментальный расчет из live тиков (sub-second)
+      - mode='candle': расчет по закрытой свече
+      - mode='auto': использует realtime при наличии тиков, иначе свечи
     """
 
     def __init__(self, cfg: Dict[str, Any]):
         self.is_active: bool = bool(cfg.get("is_active", False))
         self.timeframe: str = str(cfg.get("timeframe", "5m"))
+        self.mode: str = str(cfg.get("mode", "auto"))
+        self.window_sec: float = float(cfg.get("window_sec", 60.0))
         self.min_buy_ratio: float = float(cfg.get("min_buy_ratio", 0.58))
         self.max_buy_ratio: float = float(cfg.get("max_buy_ratio", 0.42))
 
-    def calculate(self, candles: Any) -> List[str]:
-        """
-        Вычисляет состояние рыночного потока:
-        - TAKER_BUY_DOMINANT: доминирование покупок по рынку (>= min_buy_ratio)
-        - TAKER_SELL_DOMINANT: доминирование продаж по рынку (<= max_buy_ratio)
-        """
-        if not self.is_active or not candles:
+    def calculate(self, candles: Any, realtime_flow: Optional[Dict[str, Any]] = None) -> List[str]:
+        if not self.is_active:
+            return ["UNSTABLE"]
+
+        # 1. Приоритет реального времени (WS tick-by-tick)
+        if self.mode in ("auto", "realtime") and realtime_flow:
+            sig = realtime_flow.get("signals")
+            if sig is not None and len(sig) > 0:
+                return sig
+            if realtime_flow.get("total_vol", 0.0) > 0:
+                return []
+
+        # 2. Фолбэк на свечи (Binance klines field 9: taker_buy_volume)
+        if not candles:
             return ["UNSTABLE"]
 
         last_c = candles[-1] if isinstance(candles, list) else None
@@ -278,3 +358,26 @@ class ExitChandelierRule(BaseRule):
             return False
         candles = candles or kwargs.get("candles")
         return self.calc.should_exit(side, candles, current_price)
+
+
+class EntryRelativeStrengthRule(BaseRule):
+    """Правило входа по относительной силе к бенчмарку BTC (Relative Strength)."""
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.cfg = cfg
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.long_cond: str = str(cfg.get("long_cond", "RS_STRONG"))
+        self.short_cond: str = str(cfg.get("short_cond", "RS_WEAK"))
+
+    def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
+        if not self.is_active:
+            return True
+        indicators = indicators or kwargs.get("indicators", {})
+        signals = indicators.get("relative_strength", kwargs.get("relative_strength", []))
+        if not signals or "UNSTABLE" in signals:
+            return False
+        if side == "LONG":
+            return self.long_cond in signals
+        elif side == "SHORT":
+            return self.short_cond in signals
+        return False

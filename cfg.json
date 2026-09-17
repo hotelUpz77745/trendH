@@ -197,6 +197,15 @@
             "long_cond": "VOLF_PASSED",
             "short_cond": "VOLF_PASSED",
             "_comment_vol_filter": "Фильтр всплеска объема (mode 'a': last_vol > max * slice_factor, 'r': last_vol > avg * slice_factor)"
+        },
+        "relative_strength": {
+            "is_active": false,
+            "benchmark_symbol": "BTCUSDT",
+            "lookback_candles": 12,
+            "min_outperformance": 0.015,
+            "long_cond": "RS_STRONG",
+            "short_cond": "RS_WEAK",
+            "_comment_relative_strength": "Фильтр относительной силы к BTC (spread = return(coin) - return(BTC) >= min_outperformance)"
         }
     },
     "exit_rules": {
@@ -1536,6 +1545,139 @@
                 },
                 "stop_loss_ratio": {
                     "value": 0.035
+                }
+            }
+        },
+        "u18": {
+            "name": "Live CVD Microstructure Scalp",
+            "description": "Субсекундный Order Flow: агрессия маркета Taker Buy >=62% в 60s окне + выход из сжатия волатильности + Chandelier 2.0 ATR",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": false },
+                "volatility_squeeze": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "bb_length": 20,
+                    "bb_mult": 2.0,
+                    "kc_mult": 1.5,
+                    "lookback_squeeze": 3,
+                    "long_cond": "SQUEEZE_LONG",
+                    "short_cond": "SQUEEZE_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "mode": "realtime",
+                    "window_sec": 60,
+                    "min_buy_ratio": 0.62,
+                    "max_buy_ratio": 0.38,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                },
+                "relative_strength": {
+                    "is_active": false
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 12,
+                    "atr_mult": 2.0
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 900.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.04
+                },
+                "stop_loss_ratio": {
+                    "value": 0.018
+                }
+            }
+        },
+        "u19": {
+            "name": "Master Market Physics (Squeeze + Live CVD + BTC RS)",
+            "description": "Полная физика рынка: Взрыв сжатия волатильности + Live Taker Buy >=60% + Опережение BTC >=1.5% + Chandelier 2.5 ATR",
+            "is_active": true,
+            "enter_rules": {
+                "trend": { "is_active": false },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "rsi": { "is_active": false },
+                "rsi_waterline50": { "is_active": false },
+                "sr_levels": { "is_active": false },
+                "ema_cross": { "is_active": false },
+                "vol_filter": { "is_active": false },
+                "volatility_squeeze": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "bb_length": 20,
+                    "bb_mult": 2.0,
+                    "kc_mult": 1.5,
+                    "lookback_squeeze": 3,
+                    "long_cond": "SQUEEZE_LONG",
+                    "short_cond": "SQUEEZE_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "mode": "realtime",
+                    "window_sec": 60,
+                    "min_buy_ratio": 0.60,
+                    "max_buy_ratio": 0.40,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                },
+                "relative_strength": {
+                    "is_active": true,
+                    "benchmark_symbol": "BTCUSDT",
+                    "lookback_candles": 12,
+                    "min_outperformance": 0.015,
+                    "long_cond": "RS_STRONG",
+                    "short_cond": "RS_WEAK"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.5
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1800.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.06
+                },
+                "stop_loss_ratio": {
+                    "value": 0.025
                 }
             }
         }

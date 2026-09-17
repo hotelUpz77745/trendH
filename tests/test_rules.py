@@ -308,6 +308,26 @@ class TestExitRules(unittest.TestCase):
         # If price is at 105 -> hold
         self.assertFalse(rule.check("LONG", current_price=105.0, candles=candles))
 
+    def test_realtime_flow_tracker(self):
+        from CORE.squeeze_flow import RealtimeFlowTracker
+        tracker = RealtimeFlowTracker(max_retention_sec=60.0)
+        # Add aggressive taker buys (is_buyer_maker=False)
+        tracker.add_trade("TESTUSDT", price=100.0, qty=10.0, is_buyer_maker=False)
+        tracker.add_trade("TESTUSDT", price=100.0, qty=10.0, is_buyer_maker=False)
+        tracker.add_trade("TESTUSDT", price=100.0, qty=5.0, is_buyer_maker=True)
+        # Total = 2500 USDT, Buy = 2000 USDT -> ratio = 0.8
+        flow = tracker.get_flow("TESTUSDT", window_sec=60.0)
+        self.assertAlmostEqual(flow["taker_buy_ratio"], 0.8)
+        self.assertIn("TAKER_BUY_DOMINANT", flow["signals"])
+
+    def test_relative_strength_rule(self):
+        from CORE.squeeze_flow import EntryRelativeStrengthRule
+        cfg = {"is_active": True}
+        rule = EntryRelativeStrengthRule(cfg)
+        self.assertTrue(rule.check("LONG", indicators={"relative_strength": ["RS_STRONG"]}))
+        self.assertFalse(rule.check("LONG", indicators={"relative_strength": ["RS_WEAK"]}))
+        self.assertTrue(rule.check("SHORT", indicators={"relative_strength": ["RS_WEAK"]}))
+
     def test_exit_signal_engine_priority(self):
         exit_rules = {
             "trend_reversal": {"is_active": True, "long_exit_trends": ["FLAT"], "short_exit_trends": ["FLAT"]},

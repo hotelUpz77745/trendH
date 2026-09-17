@@ -22,19 +22,13 @@ from typing import Awaitable, Callable, Dict, Iterable, List, Optional
 import aiohttp
 
 
-# @dataclass(frozen=True)
-# class HotPriceTick:
-#     symbol: str
-#     price: float
-#     qty: float
-#     event_time_ms: int
-#     trade_time_ms: int
-
 @dataclass(frozen=True)
 class HotPriceTick:
     symbol: str
     price: float
-    event_time_ms: int
+    qty: float = 0.0
+    is_buyer_maker: bool = False
+    event_time_ms: int = 0
 
 class BinanceHotPriceStream:
     """HOT price stream (trade ticks) for many symbols.
@@ -142,7 +136,9 @@ class BinanceHotPriceStream:
         return HotPriceTick(
             symbol=str(sym),
             price=price,
-            event_time_ms=self._to_int(data.get("E"), int(time.time() * 1000)),
+            qty=self._to_float(data.get("q"), 0.0),
+            is_buyer_maker=bool(data.get("m", False)),
+            event_time_ms=self._to_int(data.get("E") or data.get("T"), int(time.time() * 1000)),
         )
 
     def _should_emit(self, sym: str, now_ms: int) -> bool:
