@@ -325,11 +325,347 @@ C:\Users\user\Desktop\My_Pro\HP_EliteBook_735_old\MY\HRON_3\cron3Papper\CFG\runt
 
 --- -->
 
-## 2. Итоги архитектурных улучшений (Сентябрь 2026):
+<!-- ## 2. Итоги архитектурных улучшений (Сентябрь 2026):
 1. **Низкоуровневая база (C/LLVM через Numba JIT)**: Тяжелая математика (`EMA`, `RSI`, `ATR`, пивоты `LuxAlgo`, сжатие `Bollinger/Keltner`) переведена на C-уровень с `nogil=True` и `fastmath=True` (`CORE/native_math.py`). Устранен медленный `sliding_window_view`.
 2. **Защита от захлеба Asyncio**: Внедрена двухуровневая модель тиков (мгновенная запись потока в `RealtimeFlowTracker` <1 мкс + троттлинг оценки вселенных до 50 мс на монету) + кооперативный `await asyncio.sleep(0)`. Нагрузка на CPU снижена на >80%, гонки исключены.
 3. **Смотрящая собака (Watchdog)**: Восстановлен легковесный адаптер по образу `cron3Papper` (`CORE/watchdog.py`). Отстукивает ритм в Telegram каждые 60с редактированием сообщения, автоудаляет старые через 180с (чистый чат) и алертит при зависаниях главного цикла >60с.
 4. **Анти-стратегии без оверинжиниринга**: Конфигурации для анти-стратегий (`u1_anti`, `u3_anti`, `u6_anti`) прописаны напрямую и открыто в `cfg.json`. Адаптер правил (`CORE/rules.py`) тупо читает эти конфигурации (включая `conditions` для RSI и `long_cond`/`short_cond` для тренда) без костылей и хардкода.
 5. **Obsidian Wiki**: База знаний в `WORKSPACE/COMMON/wiki/trendH` актуализирована (`Overview.md`, `Indicators_Engine.md`, `Watchdog_and_Async_Architecture.md`).
 6. **Интеллектуальный антиспамер логов (LogAntiSpammer)**: Внедрен в `c_log.py` (`UnifiedLogger`). Автоматически подавляет циклический спам однотипных ошибок и ворнингов с подсчетом подавленных повторов (`[Повторено N раз за X.Xs]`), никогда не глушит критические события (`[SIGNAL ENTRY]`, `[SIGNAL EXIT]`, `[POSITION OPEN]`, `[CLOSE ALL]`, `[WATCHDOG]`), устранены все неконтролируемые `traceback.print_exc()`.
-7. **Живой расчет Текущего баланса (Equity) и стартового депозита**: Устранена рассинхронизация, когда `Текущий баланс` и `Чистый профит` в Telegram не учитывали открытые сделки. Теперь `live_cur_bal = start_bal + realized_pnl + unrealized_pnl`, а `live_net_profit = realized_pnl + unrealized_pnl`. В `cfg.json` и `ANALYTICS` внедрен параметр `default_start_balance` (1000 USDT), устранивший нулевой баланс виртуальных вселенных.
+7. **Живой расчет Текущего баланса (Equity) и стартового депозита**: Устранена рассинхронизация, когда `Текущий баланс` и `Чистый профит` в Telegram не учитывали открытые сделки. Теперь `live_cur_bal = start_bal + realized_pnl + unrealized_pnl`, а `live_net_profit = realized_pnl + unrealized_pnl`. В `cfg.json` и `ANALYTICS` внедрен параметр `default_start_balance` (1000 USDT), устранивший нулевой баланс виртуальных вселенных. -->
+
+
+
+Новое:
+Мой вопрос:
+    Привет. Конфиг посмотрел. Сетка: 6 уровней, суммарный объем 100, уровни -5/-8/-13/-21/-34%, TP 0.6-2.5% (fallback 1-4%). Логика trendH: если LONG-сетка набрала много лонга и цена продолжает падать — trendH шортит; если SHORT-сетка набрала много шорта и цена продолжает расти — trendH лонгует. Иначе говоря, direction = opposite(grid_stressed_side). Это и есть забор безоткатного движения.
+
+Ответ от Дип Сик:
+
+    Привет. Конфиг посмотрел: сетка 6 уровней, суммарный объём ровно **100** (12.96+14.26+15.68+17.25+18.98+20.87), уровни усреднения **-5 / -8 / -13 / -21 / -34%**, TP от **0.6% до 2.5%** (fallback 1–4%). Это классическая мартингейл-сетка, которая хорошо живёт в пиле, но плохо — в безоткатном тренде.
+
+    Ключевая идея trendH:  
+    **Если LONG-сетка набрала много лонга и цена продолжает падать — trendH шортит. Если SHORT-сетка набрала много шорта и цена продолжает расти — trendH лонгует.**  
+    То есть направление trendH = **против “застрявшей” стороны сетки**, но **по направлению импульса**. Так второй аккаунт забирает то движение, которое ломает сеточника.
+
+    Ниже 3 оптимальных решения — от простого к сложному.
+
+    ---
+
+    ## Решение 1. Inventory-Stress Momentum Overlay (рекомендую как базу)
+
+    **Суть:** trendH получает от сеточника состояние инвентаря по каждому символу/стороне и входит в импульс только тогда, когда сетка уже набрала объём и продолжает терпеть убыток.
+
+    ### Связка с сеточником
+    Нужен shared-state слой: Redis/Postgres/файл/API. Сеточник пишет:
+    - symbol;
+    - side: LONG/SHORT;
+    - filled_levels;
+    - accumulated_volume;
+    - grid_volume_ratio = accumulated_volume / 100;
+    - weighted_avg_price;
+    - unrealized_pnl;
+    - last_tp_time;
+    - time_in_drawdown.
+
+    ### Условия входа
+    Для LONG-сетки, которая попала в даунтренд:
+    - grid_volume_ratio >= 0.5–0.6 (заполнены уровни 0–3);
+    - цена ниже weighted_avg_price и ниже уровня 2–3;
+    - трендовый фильтр:
+    - EMA50 < EMA200;
+    - ADX(14) > 25 и растёт;
+    - ATR(14) > ATR(50) * 1.2;
+    - Efficiency Ratio > 0.35;
+    - объём > 1.5× среднего;
+    - цена закрылась ниже последнего swing low.
+    - funding не в экстремально отрицательной зоне (чтобы не попасть в short-squeeze).
+
+    Для SHORT-сетки — зеркально.
+
+    ### Добавления
+    - первый вход: 30–40% от целевого размера при ratio >= 0.5;
+    - второй: +30% при ratio >= 0.7 и пробое следующего уровня;
+    - третий: +30% при ratio >= 0.85–1.0 и продолжении тренда.
+
+    ### Выход
+    - 20–25% на +15–20%;
+    - 20–25% на +30–40%;
+    - 20–25% на +50–70%;
+    - остаток 25–30% вести трейлингом: Chandelier Exit (3×ATR) или EMA50.
+    - Полный выход, если:
+    - сеточник начал закрывать позицию по TP;
+    - ADX < 20;
+    - цена вернулась выше/ниже EMA50;
+    - прошло N баров без прогресса.
+
+    **Плюсы:** просто, прозрачно, легко бэктестить.  
+    **Минусы:** можно опоздать на 10–20% движения. Лечится ранним входом на уровне 2–3 и пирамидингом.
+
+    ---
+
+    ## Решение 2. Breakout of Grid Extreme + Pyramiding (агрессивное, для +30–100%)
+
+    **Суть:** не входить “на среднем” движении, а ждать, когда цена пробивает **крайний уровень сетки** — уровень 4 или 5. Это точка максимального стресса сеточника. Если пробой подтверждается объёмом, trendH заходит в импульс и ведёт его до истощения.
+
+    ### Логика для LONG-сетки
+    - цена пробивает -21% (уровень 4) или -34% (уровень 5) и закрывается ниже;
+    - breakout-свеча: объём > 2× среднего, ATR > 1.5× среднего;
+    - OI растёт, funding не экстремально отрицательный;
+    - trendH открывает SHORT.
+
+    ### Пирамидинг
+    - 30% на пробое уровня 4;
+    - 30% на пробое уровня 5;
+    - 40% на ретесте уровня 5 снизу, если цена не вернулась в диапазон.
+
+    ### Выход
+    - трейлинг 2.5–3×ATR от экстремума;
+    - частичная фиксация на расширениях Фибоначчи: -1.272, -1.618, -2.0 от последнего swing;
+    - остаток вести до:
+    - смены режима (ADX падает, ATR сжимается, цена за EMA50);
+    - начала закрытия сетки по TP;
+    - возврата выше уровня 4.
+
+    **Плюсы:** ловит именно безоткатные хвосты, может дать +30–100%.  
+    **Минусы:** вход поздний, возможны резкие откаты. Обязателен жёсткий стоп за структурой или 1.5–2×ATR.
+
+    ---
+
+    ## Решение 3. Regime-Switching Ensemble / ML-фильтр (самое устойчивое)
+
+    **Суть:** trendH не просто следует за ценой, а классифицирует режим рынка: range / trend-up / trend-down / exhaustion. Торгует только в trend-режиме, а инвентарь сетки использует как размер позиции и как риск-фильтр.
+
+    ### Фичи
+    - рыночные: ADX, ATR ratio, EMA slope, Efficiency Ratio, Bollinger width, volume delta, funding, OI, order book imbalance;
+    - сеточные: grid_volume_ratio, расстояние до ликвидации, время в просадке, unrealized PnL, количество заполненных уровней.
+
+    ### Вход
+    - P(trend-down) > 0.7 и LONG grid_volume_ratio > 0.6 → SHORT;
+    - P(trend-up) > 0.7 и SHORT grid_volume_ratio > 0.6 → LONG;
+    - P(range) > 0.5 → торговля запрещена.
+
+    ### Выход
+    - P(trend) < 0.4;
+    - P(exhaustion) > 0.6;
+    - трейлинг-стоп;
+    - сетка начала закрывать позицию.
+
+    **Плюсы:** адаптируется к рынку, меньше ложных входов в боковике.  
+    **Минусы:** сложно, нужны данные, бэктест, риск переобучения. Начинать только после Решения 1.
+
+    ---
+
+    ## Общая инфраструктура и риск
+
+    1. **Второй аккаунт** — отдельные API-ключи, только торговля, без вывода, IP whitelist.
+    2. **Изолированная маржа** для trendH. Плечо не 10×, а 2–5×. Иначе импульсный бот сам станет источником ликвидации.
+    3. **Размер позиции trendH**:
+    - риск на сделку 0.5–1% от equity trendH;
+    - стоп = 1.5–2.5×ATR;
+    - notional = risk / stop%;
+    - cap: не более 30–50% от notional сетки, чтобы не перехеджировать.
+    4. **Фильтр боковика**:
+    - ADX > 25;
+    - ER > 0.35;
+    - ATR expansion;
+    - объём > 1.5×;
+    - пробой с закрытием, а не просто касание.
+    5. **Выход из диспозиции**:
+    - как только сеточник закрыл 50% инвентаря — закрыть 50% trendH;
+    - закрыл 100% — закрыть trendH полностью;
+    - либо трейлинг до смены режима.
+    6. **Бэктест**:
+    - исторические данные 1m/tick;
+    - симулировать заполнение сетки;
+    - учесть комиссии, funding, slippage;
+    - отдельно проверить 2021 bull, 2022 bear, 2023 range, 2024–2025.
+
+    ---
+
+    ## Что выбрать
+
+    - **Старт:** Решение 1 — Inventory-Stress Momentum Overlay. Оно прямо использует объёмы сеточника и даёт понятную логику.
+    - **Усиление:** добавить Решение 2 для пробоев крайних уровней и пирамидинга.
+    - **Долгосрок:** Решение 3, когда накопится статистика и появится инфраструктура для фичей.
+
+    Если хочешь, могу расписать конкретные формулы для `stress_score`, `trend_score` и псевдокод входа/выхода под твой конфиг.
+
+Редис и базы не нужны. Все будет в джейсоне в соседнм проекте. Путь -- уже прописан в конфигах --
+        "symbols_path": "C:\\Users\\user\\Desktop\\My_Pro\\HP_EliteBook_735_old\\MY\\HRON_3\\cron3Papper\\CFG\\app.json",
+
+        Пример файла app.json (поле symbols):
+
+            {
+        "app": {
+            "time_zone": "UTC",
+            "precision": 18,
+            "spec_ttl_sec": 900,
+            "time_slack_sec": 0.15,
+            "req_timeout_sec": 10.0,
+            "avoid_check_runtime_cfg": false,
+            "api_rate_limit_sec": 0.2,
+            "rest_failsafe_sec": 1.0,
+            "income_pagination_delay_sec": 1.5,
+            "post_close_sync_debounce_sec": 10.0,
+            "bg_unrealized_poll_freq_sec": 10.0,
+            "auto_start": true
+        },
+        "signal": {
+            "timeframe": "5m",
+            "smart_grace": {
+                "start_period_sec": 90,
+                "eval_window_sec": 300,
+                "increments_card": {
+                    "<2": 0,
+                    ">=2": 120,
+                    ">4": 150
+                }
+            }
+        },
+        "logging": {
+            "debug": false,
+            "info": true,
+            "warning": true,
+            "error": true,
+            "max_log_lines": 10000,
+            "log_to_console": false,
+            "log_to_file": true
+        },
+        "symbols": [
+        "ARXUSDT",
+        "LAUSDT",
+        "GIGGLEUSDT",
+        "ROBOUSDT",
+        "SOPHUSDT",
+        "FLOCKUSDT",
+        "ESPUSDT",
+        "BOMEUSDT",
+        "NAORISUSDT",
+        "PUMPUSDT",
+        "RIVERUSDT",
+        "SIRENUSDT",
+        "CHIPUSDT",
+        "ARBUSDT",
+        "ZAMAUSDT",
+        "ENAUSDT",
+        "PIEVERSEUSDT",
+        "TRUMPUSDT",
+        "CATIUSDT",
+        "MOVRUSDT",
+        "LITUSDT",
+        "1000CATUSDT",
+        "TUSDT",
+        "CROSSUSDT",
+        "ACUUSDT",
+        "PEOPLEUSDT",
+        "VVVUSDT",
+        "VELODROMEUSDT",
+        "1000BONKUSDT",
+        "ZROUSDT",
+        "GRASSUSDT",
+        "ZECUSDT",
+        "JTOUSDT",
+        "GPSUSDT",
+        "SAFEUSDT",
+        "DOODUSDT",
+        "ZORAUSDT",
+        "FORMUSDT",
+        "WLDUSDT",
+        "KITEUSDT",
+        "ZKCUSDT",
+        "SOLVUSDT",
+        "0GUSDT",
+        "XPLUSDT",
+        "GUSDT",
+        "ETHFIUSDT",
+        "UNIUSDT",
+        "FARTCOINUSDT",
+        "SPXUSDT",
+        "DASHUSDT",
+        "NEIROUSDT",
+        "STXUSDT",
+        "EIGENUSDT",
+        "SCRUSDT",
+        "FFUSDT",
+        "SYRUPUSDT",
+        "PLAYUSDT",
+        "PYTHUSDT",
+        "LDOUSDT",
+        "DOGSUSDT",
+        "RAYSOLUSDT",
+        "MIRAUSDT",
+        "AIAUSDT",
+        "TRBUSDT",
+        "1000PEPEUSDT",
+        "AEROUSDT",
+        "MEGAUSDT",
+        "JUPUSDT",
+        "CFGUSDT",
+        "ADAUSDT",
+        "PENGUUSDT",
+        "XVGUSDT",
+        "IOSTUSDT",
+        "AAVEUSDT"
+    ],
+        "telegram": {
+            "enabled": true,
+            "allowed_users": [
+                610822492
+            ]
+        },
+        "super_grid": {
+            "enabled": true,
+            "_comment_timeframe": "Valid values: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M",
+            "timeframe": "1w",
+            "window": 12,
+            "multiplier": 2.0,
+            "min_volatility_pct": 15.0,
+            "max_volatility_pct": null,
+            "update_interval_hours": 24
+        },
+        "volatility_scanner": {
+            "timeframe": "1w",
+            "window": 12,
+            "min_volatility_pct": 25.0,
+            "max_volatility_pct": 40.0,
+            "strict_window": true,
+            "min_dayly_vol_usdt": 3000000
+        },
+        "watchdog": {
+            "timeout_sec": 60,
+            "check_interval_sec": 1,
+            "heartbeat_interval_sec": 60,
+            "heartbeat_autodelete_sec": 180
+        },
+        "backup": {
+            "enabled": true,
+            "debounce_sec": 10,
+            "max_interval_sec": 300
+        },
+        "notifications": {
+            "enabled": true,
+            "negative_threshold": -20.0,
+            "positive_threshold": 20.0
+        },
+        "auto_closing": {
+            "negative": {
+                "threshold": null,
+                "threshold_increment": null
+            },
+            "positive": {
+                "threshold": 20,
+                "threshold_increment": 20
+            }
+        },
+        "stop_bot_rirk_system": {
+            "enabled": false,
+            "roi_critical_level_pct": -41
+        }
+    }
+
+
+
+        "runtime_path": "C:\\Users\\user\\Desktop\\My_Pro\\HP_EliteBook_735_old\\MY\\HRON_3\\cron3Papper\\CFG\\runtime",
+
+        Пример runtime/ смотри в артефакте текущего проекта -- artefacts/runtime.tar.gz
