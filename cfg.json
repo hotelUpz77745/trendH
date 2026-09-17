@@ -332,8 +332,8 @@
                     "timeframe": "5m",
                     "window": 14,
                     "conditions": {
-                        "ENTER_LONG": "30 <= x < 50",
-                        "ENTER_SHORT": "50 < x <= 70"
+                        "ENTER_LONG": "40 <= x < 50",
+                        "ENTER_SHORT": "50 < x <= 60"
                     }
                 },
                 "rsi_waterline50": {

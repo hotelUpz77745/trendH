@@ -228,6 +228,59 @@ class TestUniverseManager(unittest.TestCase):
         self.assertIsNone(u1.state.get_position("BTCUSDT", "LONG"))
         self.assertIsNone(u2.state.get_position("ETHUSDT", "SHORT"))
 
+    def test_anti_trend_rsi_strategy(self):
+        u1_cfg = {
+            "name": "Normal Trend RSI",
+            "is_active": True,
+            "enter_rules": {
+                "trend": {"is_active": True, "long_cond": "UP", "short_cond": "DOWN"},
+                "trend_htf": {"is_active": True, "long_cond": "UP", "short_cond": "DOWN"},
+                "rsi": {
+                    "is_active": True,
+                    "conditions": {"ENTER_LONG": "50 < x <= 60", "ENTER_SHORT": "40 <= x < 50"}
+                }
+            },
+            "exit_rules": {}
+        }
+        u1_anti_cfg = {
+            "name": "Anti Trend RSI",
+            "is_active": True,
+            "enter_rules": {
+                "trend": {"is_active": True, "long_cond": "DOWN", "short_cond": "UP"},
+                "trend_htf": {"is_active": True, "long_cond": "DOWN", "short_cond": "UP"},
+                "rsi": {
+                    "is_active": True,
+                    "conditions": {"ENTER_LONG": "40 <= x < 50", "ENTER_SHORT": "50 < x <= 60"}
+                }
+            },
+            "exit_rules": {}
+        }
+        mgr = UniverseManager(
+            universes_cfg={"u1": u1_cfg, "u1_anti": u1_anti_cfg},
+            default_enter_rules={},
+            default_exit_rules={},
+            get_slippage_ratio_fn=lambda s: 0.001
+        )
+        u1 = mgr.get_universe("u1")
+        u1_anti = mgr.get_universe("u1_anti")
+
+        # Market case 1: UP trend, HTF UP, RSI 55 (Classic LONG)
+        ind_up = {"trend": "UP", "trend_htf": "UP", "rsi_value": 55.0}
+        self.assertTrue(u1.check_entry("LONG", ind_up))
+        self.assertFalse(u1.check_entry("SHORT", ind_up))
+        # In u1_anti: Should enter SHORT!
+        self.assertFalse(u1_anti.check_entry("LONG", ind_up))
+        self.assertTrue(u1_anti.check_entry("SHORT", ind_up))
+
+        # Market case 2: DOWN trend, HTF DOWN, RSI 45 (Classic SHORT)
+        ind_down = {"trend": "DOWN", "trend_htf": "DOWN", "rsi_value": 45.0}
+        self.assertFalse(u1.check_entry("LONG", ind_down))
+        self.assertTrue(u1.check_entry("SHORT", ind_down))
+        # In u1_anti: Should enter LONG!
+        self.assertTrue(u1_anti.check_entry("LONG", ind_down))
+        self.assertFalse(u1_anti.check_entry("SHORT", ind_down))
+
+
 
 if __name__ == "__main__":
     unittest.main()

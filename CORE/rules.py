@@ -59,14 +59,25 @@ class EntryRSIRule(BaseRule):
     def __init__(self, cfg: Dict[str, Any]):
         self.cfg = cfg
         self.is_active: bool = bool(cfg.get("is_active", False))
+        self.conditions: Dict[str, str] = cfg.get("conditions", {})
+        self.long_cond: str = str(cfg.get("long_cond", "ENTER_LONG"))
+        self.short_cond: str = str(cfg.get("short_cond", "ENTER_SHORT"))
 
     def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
             return True
-        rsi = (indicators or kwargs.get("indicators", {})).get("rsi", kwargs.get("rsi", []))
+        indicators = indicators or kwargs.get("indicators", {})
+        rsi_val = indicators.get("rsi_value", kwargs.get("rsi_value"))
+        if self.conditions and rsi_val is not None:
+            from utils import eval_condition
+            cond_key = self.long_cond if side == "LONG" else self.short_cond
+            expr = self.conditions.get(cond_key)
+            return eval_condition(expr, rsi_val) if expr else False
+        rsi = indicators.get("rsi", kwargs.get("rsi", []))
         if not rsi or "UNSTABLE" in rsi:
             return False
-        return ("ENTER_LONG" in rsi) if side == "LONG" else (("ENTER_SHORT" in rsi) if side == "SHORT" else False)
+        target_cond = self.long_cond if side == "LONG" else self.short_cond
+        return target_cond in rsi
 
 
 class EntryRSIWaterlineRule(BaseRule):
@@ -176,38 +187,27 @@ class EntrySignalEngine:
 
         if "trend" in enter_rules_cfg:
             self.rules.append(EntryTrendRule(enter_rules_cfg["trend"], indicator_key="trend"))
-
         if "trend_htf" in enter_rules_cfg:
             self.rules.append(EntryTrendRule(enter_rules_cfg["trend_htf"], indicator_key="trend_htf"))
-
-        # Регистрация дополнительных индикаторов тренда при наличии
         for key, val in enter_rules_cfg.items():
             if key.startswith("trend") and key not in ("trend", "trend_htf") and isinstance(val, dict):
                 self.rules.append(EntryTrendRule(val, indicator_key=key))
-
         if "rsi" in enter_rules_cfg:
             self.rules.append(EntryRSIRule(enter_rules_cfg["rsi"]))
-
         if "rsi_waterline50" in enter_rules_cfg:
             self.rules.append(EntryRSIWaterlineRule(enter_rules_cfg["rsi_waterline50"]))
-
         if "sr_levels" in enter_rules_cfg:
             self.rules.append(EntrySRLevelsRule(enter_rules_cfg["sr_levels"]))
-
         if "ema_cross" in enter_rules_cfg:
             self.rules.append(EntryEMACrossRule(enter_rules_cfg["ema_cross"]))
-
         if "vol_filter" in enter_rules_cfg:
             self.rules.append(EntryVolumeFilterRule(enter_rules_cfg["vol_filter"]))
-
         if "taker_flow" in enter_rules_cfg:
             from CORE.squeeze_flow import EntryTakerFlowRule
             self.rules.append(EntryTakerFlowRule(enter_rules_cfg["taker_flow"]))
-
         if "volatility_squeeze" in enter_rules_cfg:
             from CORE.squeeze_flow import EntryVolatilitySqueezeRule
             self.rules.append(EntryVolatilitySqueezeRule(enter_rules_cfg["volatility_squeeze"]))
-
         if "relative_strength" in enter_rules_cfg:
             from CORE.squeeze_flow import EntryRelativeStrengthRule
             self.rules.append(EntryRelativeStrengthRule(enter_rules_cfg["relative_strength"]))

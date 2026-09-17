@@ -48,6 +48,21 @@ class TestEntryRules(unittest.TestCase):
         self.assertFalse(rule.check("LONG", indicators={"rsi": ["ENTER_SHORT"]}))
         self.assertFalse(rule.check("LONG", indicators={"rsi": ["UNSTABLE"]}))
 
+        # Custom conditions directly from config (e.g. anti-strategy)
+        anti_cfg = {
+            "is_active": True,
+            "conditions": {
+                "ENTER_LONG": "40 <= x < 50",
+                "ENTER_SHORT": "50 < x <= 60"
+            }
+        }
+        anti_rule = EntryRSIRule(anti_cfg)
+        self.assertTrue(anti_rule.check("SHORT", indicators={"rsi_value": 55.0}))
+        self.assertFalse(anti_rule.check("LONG", indicators={"rsi_value": 55.0}))
+        self.assertTrue(anti_rule.check("LONG", indicators={"rsi_value": 45.0}))
+        self.assertFalse(anti_rule.check("SHORT", indicators={"rsi_value": 45.0}))
+
+
     def test_entry_rsi_waterline_rule(self):
         cfg = {"is_active": True, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN"}
         rule = EntryRSIWaterlineRule(cfg)
