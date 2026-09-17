@@ -503,7 +503,7 @@
                 }
             }
         },
-        "u31": {
+        "u3_anti": {
             "name": "Реверс Breakout & Volume (TP 2.0%, SL 4.0%)",
             "description": "Реверс ложного пробоя уровней LuxAlgo: вход против движения уровня при объемном выносе",
             "is_active": true,
@@ -795,7 +795,7 @@
                 }
             }
         },
-        "u61": {
+        "u6_anti": {
             "name": "Реверс EMA Acceleration (TP 1.5%, SL 3.0%)",
             "description": "Реверс Боевой кроссовер EMA 9/21 с фильтром дельты + объем + 1h HTF, TP 1.5%, SL 3.0%",
             "is_active": true,

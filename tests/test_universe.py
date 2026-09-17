@@ -192,7 +192,7 @@ class TestUniverseManager(unittest.TestCase):
             },
             "exit_rules": {}
         }
-        u61_cfg = {
+        u6_anti_cfg = {
             "name": "Reverse EMA",
             "is_active": True,
             "enter_rules": {
@@ -201,21 +201,21 @@ class TestUniverseManager(unittest.TestCase):
             "exit_rules": {}
         }
         mgr = UniverseManager(
-            universes_cfg={"u6": u6_cfg, "u61": u61_cfg},
+            universes_cfg={"u6": u6_cfg, "u6_anti": u6_anti_cfg},
             default_enter_rules={},
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001
         )
         indicators = {"ema_cross": ["CROSS_UP"]}
         u6 = mgr.get_universe("u6")
-        u61 = mgr.get_universe("u61")
+        u6_anti = mgr.get_universe("u6_anti")
 
-        # CROSS_UP signal -> u6 should enter LONG, u61 should enter SHORT
+        # CROSS_UP signal -> u6 should enter LONG, u6_anti should enter SHORT
         self.assertTrue(u6.check_entry("LONG", indicators))
         self.assertFalse(u6.check_entry("SHORT", indicators))
 
-        self.assertFalse(u61.check_entry("LONG", indicators))
-        self.assertTrue(u61.check_entry("SHORT", indicators))
+        self.assertFalse(u6_anti.check_entry("LONG", indicators))
+        self.assertTrue(u6_anti.check_entry("SHORT", indicators))
 
     def test_close_all_positions(self):
         u1 = self.mgr.get_universe("u1")
