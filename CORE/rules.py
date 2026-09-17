@@ -63,46 +63,25 @@ class EntryRSIRule(BaseRule):
     def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
             return True
-
-        indicators = indicators or kwargs.get("indicators", {})
-        rsi = indicators.get("rsi", kwargs.get("rsi", []))
-
+        rsi = (indicators or kwargs.get("indicators", {})).get("rsi", kwargs.get("rsi", []))
         if not rsi or "UNSTABLE" in rsi:
             return False
-
-        if side == "LONG":
-            return "ENTER_LONG" in rsi
-        elif side == "SHORT":
-            return "ENTER_SHORT" in rsi
-
-        return False
+        return ("ENTER_LONG" in rsi) if side == "LONG" else (("ENTER_SHORT" in rsi) if side == "SHORT" else False)
 
 
 class EntryRSIWaterlineRule(BaseRule):
     """Правило входа по пересечению ватерлинии RSI (CROSS_UP / CROSS_DOWN)."""
-
     def __init__(self, cfg: Dict[str, Any]):
-        self.cfg = cfg
-        self.is_active: bool = bool(cfg.get("is_active", False))
-        self.long_cond: str = str(cfg.get("long_cond", "CROSS_UP"))
-        self.short_cond: str = str(cfg.get("short_cond", "CROSS_DOWN"))
+        self.cfg, self.is_active = cfg, bool(cfg.get("is_active", False))
+        self.long_cond, self.short_cond = str(cfg.get("long_cond", "CROSS_UP")), str(cfg.get("short_cond", "CROSS_DOWN"))
 
     def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
             return True
-
-        indicators = indicators or kwargs.get("indicators", {})
-        wl_states = indicators.get("rsi_waterline50", kwargs.get("rsi_waterline50", []))
-
-        if not wl_states or "UNSTABLE" in wl_states:
+        wl = (indicators or kwargs.get("indicators", {})).get("rsi_waterline50", kwargs.get("rsi_waterline50", []))
+        if not wl or "UNSTABLE" in wl:
             return False
-
-        if side == "LONG":
-            return self.long_cond in wl_states
-        elif side == "SHORT":
-            return self.short_cond in wl_states
-
-        return False
+        return (self.long_cond in wl) if side == "LONG" else ((self.short_cond in wl) if side == "SHORT" else False)
 
 
 class EntrySRLevelsRule(BaseRule):
@@ -220,6 +199,14 @@ class EntrySignalEngine:
 
         if "vol_filter" in enter_rules_cfg:
             self.rules.append(EntryVolumeFilterRule(enter_rules_cfg["vol_filter"]))
+
+        if "taker_flow" in enter_rules_cfg:
+            from CORE.squeeze_flow import EntryTakerFlowRule
+            self.rules.append(EntryTakerFlowRule(enter_rules_cfg["taker_flow"]))
+
+        if "volatility_squeeze" in enter_rules_cfg:
+            from CORE.squeeze_flow import EntryVolatilitySqueezeRule
+            self.rules.append(EntryVolatilitySqueezeRule(enter_rules_cfg["volatility_squeeze"]))
 
     def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
         """
@@ -412,6 +399,9 @@ class ExitSignalEngine:
             self.rules.append(ExitStopLossRule(exit_rules_cfg["stop_loss_ratio"], analytics_cfg, get_slippage_ratio_fn))
         if "time_stop" in exit_rules_cfg:
             self.rules.append(ExitTimeStopRule(exit_rules_cfg["time_stop"]))
+        if "chandelier_exit" in exit_rules_cfg:
+            from CORE.squeeze_flow import ExitChandelierRule
+            self.rules.append(ExitChandelierRule(exit_rules_cfg["chandelier_exit"]))
 
     def check_signal(
         self,
@@ -438,7 +428,8 @@ class ExitSignalEngine:
                 indicators=indicators,
                 rsi_value=indicators.get("rsi_value"),
                 rsi=indicators.get("rsi", []),
-                open_time_ms=open_time_ms
+                open_time_ms=open_time_ms,
+                candles=indicators.get("candles_5m", indicators.get("candles"))
             ):
                 return True
         return False

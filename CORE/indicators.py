@@ -328,6 +328,20 @@ class IndicatorsEngine:
         vol_cfg = enter_rules.get("vol_filter")
         self.vol_filter_calc = VolumeFilterCalculator(vol_cfg) if vol_cfg else None
 
+        tf_cfg = enter_rules.get("taker_flow")
+        if tf_cfg and tf_cfg.get("is_active"):
+            from CORE.squeeze_flow import TakerFlowCalculator
+            self.taker_flow_calc = TakerFlowCalculator(tf_cfg)
+        else:
+            self.taker_flow_calc = None
+
+        sq_cfg = enter_rules.get("volatility_squeeze")
+        if sq_cfg and sq_cfg.get("is_active"):
+            from CORE.squeeze_flow import VolatilitySqueezeCalculator
+            self.squeeze_calc = VolatilitySqueezeCalculator(sq_cfg)
+        else:
+            self.squeeze_calc = None
+
     def get_required_timeframes(self) -> Set[str]:
         """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
         tfs = set()
@@ -344,6 +358,10 @@ class IndicatorsEngine:
             tfs.add(self.ema_cross_calc.timeframe)
         if self.vol_filter_calc and self.vol_filter_calc.is_active:
             tfs.add(self.vol_filter_calc.timeframe)
+        if self.taker_flow_calc and self.taker_flow_calc.is_active:
+            tfs.add(self.taker_flow_calc.timeframe)
+        if self.squeeze_calc and self.squeeze_calc.is_active:
+            tfs.add(self.squeeze_calc.timeframe)
         return tfs if tfs else {"5m"}
 
     def calculate(self, klines_by_tf: Dict[str, Any], current_price: Optional[float] = None) -> Dict[str, Any]:
@@ -413,5 +431,19 @@ class IndicatorsEngine:
             result["vol_filter"] = self.vol_filter_calc.calculate(candles_vol)
         else:
             result["vol_filter"] = []
+
+        if self.taker_flow_calc and self.taker_flow_calc.is_active:
+            candles_tf = klines_by_tf.get(self.taker_flow_calc.timeframe, [])
+            result["taker_flow"] = self.taker_flow_calc.calculate(candles_tf)
+        else:
+            result["taker_flow"] = []
+
+        if self.squeeze_calc and self.squeeze_calc.is_active:
+            candles_sq = klines_by_tf.get(self.squeeze_calc.timeframe, [])
+            result["volatility_squeeze"] = self.squeeze_calc.calculate(candles_sq)
+        else:
+            result["volatility_squeeze"] = []
+
+        result["candles_5m"] = klines_by_tf.get("5m", [])
 
         return result

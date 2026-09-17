@@ -263,6 +263,51 @@ class TestExitRules(unittest.TestCase):
         # Position opened 2 seconds ago -> hold
         self.assertFalse(rule.check("LONG", open_time_ms=now_ms - 2000))
 
+    def test_taker_flow_rule(self):
+        from CORE.squeeze_flow import EntryTakerFlowRule
+        cfg = {"is_active": True, "min_buy_ratio": 0.58, "max_buy_ratio": 0.42}
+        rule = EntryTakerFlowRule(cfg)
+
+        self.assertTrue(rule.check("LONG", indicators={"taker_flow": ["TAKER_BUY_DOMINANT"]}))
+        self.assertFalse(rule.check("LONG", indicators={"taker_flow": ["TAKER_SELL_DOMINANT"]}))
+        self.assertFalse(rule.check("LONG", indicators={"taker_flow": []}))
+
+        self.assertTrue(rule.check("SHORT", indicators={"taker_flow": ["TAKER_SELL_DOMINANT"]}))
+        self.assertFalse(rule.check("SHORT", indicators={"taker_flow": ["TAKER_BUY_DOMINANT"]}))
+
+    def test_volatility_squeeze_rule(self):
+        from CORE.squeeze_flow import EntryVolatilitySqueezeRule
+        cfg = {"is_active": True}
+        rule = EntryVolatilitySqueezeRule(cfg)
+
+        self.assertTrue(rule.check("LONG", indicators={"volatility_squeeze": ["SQUEEZE_LONG"]}))
+        self.assertFalse(rule.check("LONG", indicators={"volatility_squeeze": ["SQUEEZE_SHORT"]}))
+        self.assertFalse(rule.check("LONG", indicators={"volatility_squeeze": ["SQUEEZE_ON"]}))
+
+        self.assertTrue(rule.check("SHORT", indicators={"volatility_squeeze": ["SQUEEZE_SHORT"]}))
+        self.assertFalse(rule.check("SHORT", indicators={"volatility_squeeze": ["SQUEEZE_LONG"]}))
+
+    def test_chandelier_exit_rule(self):
+        from CORE.squeeze_flow import ExitChandelierRule
+        cfg = {"is_active": True, "length": 5, "atr_mult": 2.0}
+        rule = ExitChandelierRule(cfg)
+
+        # Mock candles: highs around 100-110, lows around 95-100, closes 98-105
+        candles = [
+            {"high": 100.0, "low": 95.0, "close": 98.0},
+            {"high": 102.0, "low": 96.0, "close": 100.0},
+            {"high": 105.0, "low": 98.0, "close": 103.0},
+            {"high": 108.0, "low": 100.0, "close": 105.0},
+            {"high": 110.0, "low": 102.0, "close": 108.0},
+            {"high": 110.0, "low": 101.0, "close": 107.0},
+            {"high": 109.0, "low": 99.0, "close": 101.0},
+        ]
+        # Highest high = 110, ATR = 8.75 -> chandelier stop = 110 - (2 * 8.75) = 92.5.
+        # If current price drops to 90.0 -> triggers chandelier exit
+        self.assertTrue(rule.check("LONG", current_price=90.0, candles=candles))
+        # If price is at 105 -> hold
+        self.assertFalse(rule.check("LONG", current_price=105.0, candles=candles))
+
     def test_exit_signal_engine_priority(self):
         exit_rules = {
             "trend_reversal": {"is_active": True, "long_exit_trends": ["FLAT"], "short_exit_trends": ["FLAT"]},

@@ -191,6 +191,7 @@ class Main:
                             "low": float(k[3]),
                             "close": float(k[4]),
                             "volume": float(k[5]),
+                            "taker_buy_volume": float(k[9]) if len(k) > 9 else 0.0,
                         }
                         
                 sorted_ts = sorted(self.klines_cache[symbol][tf].keys())
