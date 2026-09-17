@@ -217,6 +217,9 @@ class EntrySignalEngine:
             elif base_key == "relative_strength":
                 from CORE.squeeze_flow import EntryRelativeStrengthRule
                 self.rules.append(EntryRelativeStrengthRule(val))
+            elif base_key in ("grid_stress", "grid_inventory_stress"):
+                from cron_integration import EntryGridStressRule
+                self.rules.append(EntryGridStressRule(val))
 
     def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
         """
@@ -394,6 +397,9 @@ class ExitSignalEngine:
             elif base_key == "chandelier_exit":
                 from CORE.squeeze_flow import ExitChandelierRule
                 self.rules.append(ExitChandelierRule(val))
+            elif base_key in ("grid_relief", "grid_tp_exit"):
+                from cron_integration import ExitGridReliefRule
+                self.rules.append(ExitGridReliefRule(val))
 
     def check_signal(
         self,

@@ -268,6 +268,7 @@ class Main:
             indicators["taker_flow"] = flow["signals"]
 
         cron_state = CronIntegration.get_symbol_state(symbol)
+        indicators["grid_stress"] = CronIntegration.get_grid_stress(symbol, current_price)
         allow_long = self.direction_mode in ("LONG", "HEDGE", "MONO")
         allow_short = self.direction_mode in ("SHORT", "HEDGE", "MONO")
 

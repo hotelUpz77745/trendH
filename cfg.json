@@ -274,6 +274,24 @@
             "long_cond": "TAKER_SELL_DOMINANT",
             "short_cond": "TAKER_BUY_DOMINANT",
             "_comment_taker_flow_anti": "Реверс Taker Flow: лонг при доминировании продаж, шорт при покупках"
+        },
+        "grid_stress": {
+            "is_active": false,
+            "min_volume_ratio": 0.5,
+            "min_filled_level": 3,
+            "extreme_only": false,
+            "long_cond": "SHORT_GRID_STRESSED",
+            "short_cond": "LONG_GRID_STRESSED",
+            "_comment_grid_stress": "Вход по стрессу инвентаря сетки cron3Papper (LONG_GRID_STRESSED -> SHORT, SHORT_GRID_STRESSED -> LONG)"
+        },
+        "grid_stress_extreme": {
+            "is_active": false,
+            "min_volume_ratio": 0.7,
+            "min_filled_level": 4,
+            "extreme_only": true,
+            "long_cond": "SHORT_GRID_EXTREME",
+            "short_cond": "LONG_GRID_EXTREME",
+            "_comment_grid_stress_extreme": "Вход на пробое экстремальных уровней сетки (уровень 4 или 5, volume_ratio >= 0.7)"
         }
     },
     "exit_rules": {
@@ -308,6 +326,12 @@
                 "DOWN"
             ],
             "_comment_trend_reversal_anti": "Реверсивный выход по тренду: выход из лонга при FLAT/UP, выход из шорта при FLAT/DOWN"
+        },
+        "grid_relief": {
+            "is_active": false,
+            "exit_on_position_close": true,
+            "max_volume_ratio": 0.2,
+            "_comment_grid_relief": "Выход при закрытии сетки cron3 по TP (in_position=false) или разгрузке объемов ниже max_volume_ratio"
         }
     },
     "universes": {
@@ -982,6 +1006,166 @@
                 },
                 "stop_loss_ratio": {
                     "value": 0.02
+                }
+            }
+        },
+        "u_grid_stress_base": {
+            "name": "Grid Stress Momentum Overlay (TP 15%, SL 3.5%)",
+            "description": "Решение 1: вход против застрявшей сетки cron3 (уровни 0-3+, ratio >= 0.5) + подтверждение 1h трендом, выход по Chandelier (3xATR) или закрытию сетки",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 3,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.2
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 3.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.15
+                },
+                "stop_loss_ratio": {
+                    "value": 0.035
+                }
+            }
+        },
+        "u_grid_stress_aggr": {
+            "name": "Grid Stress Fast Momentum (TP 8%, SL 2.0%)",
+            "description": "Решение 1 (агрессивное): ранний вход при ratio >= 0.4 (уровень 2+) + перевес Taker Flow (>=55%) + трейлинг Chandelier (2xATR)",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.55,
+                    "max_buy_ratio": 0.45,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.2
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 10,
+                    "atr_mult": 2.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.08
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            }
+        },
+        "u_grid_extreme_breakout": {
+            "name": "Grid Extreme Level Breakout (TP 25%, SL 4.0%)",
+            "description": "Решение 2: вход на точке максимального стресса сеточника при пробое уровней 4/5 (ratio >= 0.70) + всплеск объема 1m",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress_extreme": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.7,
+                    "min_filled_level": 4,
+                    "extreme_only": true,
+                    "long_cond": "SHORT_GRID_EXTREME",
+                    "short_cond": "LONG_GRID_EXTREME"
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.1
+                    },
+                    "r": {
+                        "slice_factor": 2.1
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.25
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 3.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.25
+                },
+                "stop_loss_ratio": {
+                    "value": 0.04
+                }
+            }
+        },
+        "u_grid_pure_shadow": {
+            "name": "Pure Grid Shadow Hedge (No TP, SL 5%)",
+            "description": "Чистый математический анти-сеточный хэдж без индикаторов. Вход при ratio >= 0.55, выход строго по разгрузке сетки (grid_relief) или защитный SL 5%",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.55,
+                    "min_filled_level": 3,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "stop_loss_ratio": {
+                    "value": 0.05
                 }
             }
         }
