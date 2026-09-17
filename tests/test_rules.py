@@ -232,6 +232,37 @@ class TestExitRules(unittest.TestCase):
         # Disabled rule must never trigger
         self.assertFalse(rule.check("LONG", symbol="BTCUSDT", open_price=100.0, current_price=50.0))
 
+    def test_exit_rsi_rule(self):
+        from CORE.rules import ExitRSIRule
+        cfg = {"is_active": True, "long_exit_rsi": 70.0, "long_loss_rsi": 48.0, "short_exit_rsi": 30.0, "short_loss_rsi": 52.0}
+        rule = ExitRSIRule(cfg)
+
+        # Overbought exit
+        self.assertTrue(rule.check("LONG", indicators={"rsi_value": 72.0}))
+        # Momentum loss exit
+        self.assertTrue(rule.check("LONG", indicators={"rsi_value": 45.0}))
+        # Normal range
+        self.assertFalse(rule.check("LONG", indicators={"rsi_value": 55.0}))
+
+        # Oversold exit short
+        self.assertTrue(rule.check("SHORT", indicators={"rsi_value": 28.0}))
+        # Loss of short momentum
+        self.assertTrue(rule.check("SHORT", indicators={"rsi_value": 55.0}))
+        # Normal short range
+        self.assertFalse(rule.check("SHORT", indicators={"rsi_value": 45.0}))
+
+    def test_exit_time_stop_rule(self):
+        import time
+        from CORE.rules import ExitTimeStopRule
+        cfg = {"is_active": True, "max_seconds": 10.0}
+        rule = ExitTimeStopRule(cfg)
+
+        now_ms = int(time.time() * 1000)
+        # Position opened 15 seconds ago -> should exit
+        self.assertTrue(rule.check("LONG", open_time_ms=now_ms - 15000))
+        # Position opened 2 seconds ago -> hold
+        self.assertFalse(rule.check("LONG", open_time_ms=now_ms - 2000))
+
     def test_exit_signal_engine_priority(self):
         exit_rules = {
             "trend_reversal": {"is_active": True, "long_exit_trends": ["FLAT"], "short_exit_trends": ["FLAT"]},

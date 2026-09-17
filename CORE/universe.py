@@ -128,7 +128,7 @@ class StrategyUniverse:
     def check_entry(self, side: str, indicators: Dict[str, Any]) -> bool:
         return self.entry_engine.check_signal(side, indicators)
 
-    def check_exit(self, side: str, symbol: str, open_price: float, current_price: float, indicators: Dict[str, Any]) -> bool:
+    def check_exit(self, side: str, symbol: str, open_price: float, current_price: float, indicators: Dict[str, Any], open_time_ms: Optional[int] = None) -> bool:
         trend = indicators.get("trend", "UNSTABLE")
         return self.exit_engine.check_signal(
             side=side,
@@ -136,7 +136,8 @@ class StrategyUniverse:
             trend=trend,
             open_price=open_price,
             current_price=current_price,
-            indicators=indicators
+            indicators=indicators,
+            open_time_ms=open_time_ms
         )
 
     def process_tick(
@@ -152,8 +153,8 @@ class StrategyUniverse:
         """Обрабатывает тик цены для конкретной валютной пары и стороны."""
         pos = self.state.get_position(symbol, side)
         if pos:
-            # Проверка условий выхода (Take Profit, Stop Loss, Trend Reversal)
-            should_exit = self.check_exit(side, symbol, pos.open_price, current_price, indicators)
+            # Проверка условий выхода (Take Profit, Stop Loss, Trend Reversal, Time Stop)
+            should_exit = self.check_exit(side, symbol, pos.open_price, current_price, indicators, open_time_ms=pos.open_time)
             if should_exit:
                 fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
                 slippage_ratio = get_slippage_ratio_fn(symbol) * 2

@@ -250,6 +250,7 @@ class Main:
                 is_paused=self.is_paused,
                 invest_size=invest_size
             )
+        await asyncio.sleep(0)
 
     async def close_all_positions(self):
         """Экстренное закрытие всех виртуальных позиций по рынку во всех вселенных."""

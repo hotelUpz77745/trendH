@@ -1,6 +1,5 @@
 # ============================================================
-# FILE: rules.py
-# ROLE: Strategy Pattern Rules Engine for Entry and Exit Signals
+# FILE: rules.py - Strategy Pattern Rules Engine
 # ============================================================
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Callable, Optional, List
@@ -9,13 +8,8 @@ from c_log import log
 
 class BaseRule(ABC):
     """Базовый абстрактный класс торгового правила."""
-
     @abstractmethod
     def check(self, side: str, **kwargs) -> bool:
-        """
-        Проверяет выполнение условия правила.
-        Возвращает True, если условие выполнено, иначе False.
-        """
         pass
 
 
@@ -379,6 +373,22 @@ class ExitRSIRule(BaseRule):
         return False
 
 
+class ExitTimeStopRule(BaseRule):
+    """Правило выхода по истечению времени удержания сделки (Time-based Stop)."""
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.cfg = cfg
+        self.is_active: bool = bool(cfg.get("is_active", False))
+        self.max_seconds: float = float(cfg.get("max_seconds", 1500.0))
+
+    def check(self, side: str, open_time_ms: Optional[int] = None, **kwargs) -> bool:
+        if not self.is_active or not open_time_ms or open_time_ms <= 0:
+            return False
+        import time
+        now_ms = int(time.time() * 1000)
+        return ((now_ms - open_time_ms) / 1000.0) >= self.max_seconds
+
+
 class ExitSignalEngine:
     """
     Движок сигналов на выход.
@@ -400,6 +410,8 @@ class ExitSignalEngine:
             self.rules.append(ExitTakeProfitRule(exit_rules_cfg["take_profit_ratio"], analytics_cfg, get_slippage_ratio_fn))
         if "stop_loss_ratio" in exit_rules_cfg:
             self.rules.append(ExitStopLossRule(exit_rules_cfg["stop_loss_ratio"], analytics_cfg, get_slippage_ratio_fn))
+        if "time_stop" in exit_rules_cfg:
+            self.rules.append(ExitTimeStopRule(exit_rules_cfg["time_stop"]))
 
     def check_signal(
         self,
@@ -408,7 +420,8 @@ class ExitSignalEngine:
         trend: str,
         open_price: float,
         current_price: float,
-        indicators: Optional[Dict[str, Any]] = None
+        indicators: Optional[Dict[str, Any]] = None,
+        open_time_ms: Optional[int] = None
     ) -> bool:
         """
         Проверяет правила выхода.
@@ -424,7 +437,8 @@ class ExitSignalEngine:
                 current_price=current_price,
                 indicators=indicators,
                 rsi_value=indicators.get("rsi_value"),
-                rsi=indicators.get("rsi", [])
+                rsi=indicators.get("rsi", []),
+                open_time_ms=open_time_ms
             ):
                 return True
         return False
