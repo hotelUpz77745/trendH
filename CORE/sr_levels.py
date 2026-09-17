@@ -277,14 +277,14 @@ class SRLevelsCalculator:
         signals = []
         if self.level_mode == "any":
             if any(price >= get_level_val(r, is_res=True) for r in resistance):
-                signals.append(self.long_cond)
+                signals.append("BREAKOUT_LONG")
             if any(price <= get_level_val(s, is_res=False) for s in support):
-                signals.append(self.short_cond)
+                signals.append("BREAKOUT_SHORT")
         else:
             if active_res is not None and price >= active_res:
-                signals.append(self.long_cond)
+                signals.append("BREAKOUT_LONG")
             if active_sup is not None and price <= active_sup:
-                signals.append(self.short_cond)
+                signals.append("BREAKOUT_SHORT")
 
         return {
             "signals": signals,

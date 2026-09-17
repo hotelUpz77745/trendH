@@ -436,6 +436,80 @@
                 }
             }
         },
+        "u31": {
+            "name": "Реверс Breakout & Volume (TP 2.0%, SL 4.0%)",
+            "description": "Реверс ложного пробоя уровней LuxAlgo: вход против движения уровня при объемном выносе",
+            "is_active": true,
+            "enter_rules": {
+                "trend": {
+                    "is_active": false
+                },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "DOWN",
+                    "short_cond": "UP"
+                },
+                "rsi": {
+                    "is_active": false
+                },
+                "rsi_waterline50": {
+                    "is_active": false
+                },
+                "sr_levels": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "ema_cross": {
+                    "is_active": false
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.1
+                    },
+                    "r": {
+                        "slice_factor": 2.1
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "DOWN"
+                    ],
+                    "short_exit_trends": [
+                        "UP"
+                    ]
+                },
+                "take_profit_ratio": {
+                    "value": 0.02
+                },
+                "stop_loss_ratio": {
+                    "value": 0.04
+                }
+            }
+        },
         "u4": {
             "name": "Breakout & Volume + SL (TP 4%, SL 2%)",
             "description": "Пробой уровней LuxAlgo + всплеск объема 1m + 1h HTF с SL 2.0% и TP 4.0%",
