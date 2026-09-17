@@ -227,7 +227,7 @@ class Main:
                 btc_closes=btc_closes, realtime_flow=flow
             )
         except Exception as e:
-            log(f"[{symbol}] Error updating indicators: {e}", level="ERROR")
+            log(f"[{symbol}] Error updating indicators: {e}", level="ERROR", throttle_sec=60, throttle_key=f"ind_err_{symbol}")
 
     def check_entry(self, symbol: str, side: str) -> bool:
         indicators = self.symbol_indicators.get(symbol)
@@ -303,8 +303,7 @@ class Main:
                     if tasks:
                         await asyncio.gather(*tasks)
             except Exception as ex:
-                log(f"Error in indicators_daemon: {ex}", level="ERROR")
-                traceback.print_exc()
+                log(f"Error in indicators_daemon: {ex}", level="ERROR", throttle_sec=30, exc=ex)
             await asyncio.sleep(INDICATORS_REFRESH_INTERVAL_SEC)
 
     async def volumes_daemon(self):
@@ -317,8 +316,7 @@ class Main:
                     if vol_tasks:
                         await asyncio.gather(*vol_tasks)
             except Exception as ex:
-                log(f"Error in volumes_daemon: {ex}", level="ERROR")
-                traceback.print_exc()
+                log(f"Error in volumes_daemon: {ex}", level="ERROR", throttle_sec=30, exc=ex)
             await asyncio.sleep(INDICATORS_REFRESH_INTERVAL_SEC)
 
     async def auto_closing_daemon(self):
@@ -397,9 +395,7 @@ class Main:
         except asyncio.CancelledError:
             log("Остановка (CancelledError)", level="INFO")
         except Exception as ex:
-            log(f"Сбой выполнения: {ex}", level="ERROR")
-            import traceback
-            traceback.print_exc()
+            log(f"Сбой выполнения: {ex}", level="ERROR", exc=ex)
         finally:
             log("Завершение работы...", level="INFO")
             tasks_to_wait = []

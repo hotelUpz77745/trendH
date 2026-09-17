@@ -52,8 +52,11 @@ class UniverseState:
                         pos.is_active = True
                         pos.open_price = float(pos_dict.get("open_price", 0.0))
                         pos.size = float(pos_dict.get("size", 0.0))
-                        pos.open_time = int(pos_dict.get("open_time", pos_dict.get("open_time_ms", 0)))
-            log(f"[{self.universe_id}] Успешно загружен стейт из {path.name}", level="INFO")
+            active_cnt = sum(1 for sym, s in self.positions.items() for side, pos in s.items() if pos.is_active)
+            if active_cnt > 0:
+                log(f"[{self.universe_id}] Восстановлено {active_cnt} активных позиций из {path.name}", level="INFO")
+            else:
+                log(f"[{self.universe_id}] Загружен стейт из {path.name} (0 активных позиций)", level="DEBUG")
         except Exception as e:
             log(f"[{self.universe_id}] Ошибка загрузки стейта: {e}", level="ERROR")
 

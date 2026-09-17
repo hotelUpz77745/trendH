@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 from pprint import pformat
-from typing import Any, Optional
+from typing import Any, Optional, Dict, Tuple
 
 from consts import (
     LOG_DEBUG,
@@ -111,13 +111,107 @@ class UnlockedRotatingFileHandler(RotatingFileHandler):
 
 
 # ============================================================
+# LOG ANTI-SPAMMER
+# ============================================================
+
+class LogAntiSpammer:
+    """
+    Интеллектуальный антиспамер и дедупликатор логов.
+    - Автоматически подавляет циклический спам одинаковых сообщений и ошибок.
+    - Накапливает счетчик скрытых дубликатов и выводит сводку при возобновлении/окне.
+    - Никогда не глушит уникальные критические сигналы ([SIGNAL], [WATCHDOG]).
+    """
+
+    DEFAULT_THROTTLES: Dict[str, float] = {
+        "ERROR": 5.0,    # Одинаковые ошибки не чаще 1 раза в 5 сек
+        "WARNING": 10.0, # Одинаковые предупреждения не чаще 1 раза в 10 сек
+        "INFO": 3.0,     # Повторяющийся статус не чаще 1 раза в 3 сек
+        "DEBUG": 2.0,
+    }
+
+    CRITICAL_MARKERS = (
+        "[SIGNAL ENTRY]",
+        "[SIGNAL EXIT]",
+        "[POSITION OPEN]",
+        "[CLOSE ALL]",
+        "Close All:",
+        "[WATCHDOG]",
+    )
+
+    def __init__(self):
+        self._records: Dict[str, Dict[str, Any]] = {}
+        self._counter: int = 0
+
+    def process(
+        self,
+        msg: str,
+        level: str = "INFO",
+        throttle_sec: float = 0.0,
+        throttle_key: Optional[str] = None
+    ) -> Tuple[bool, str]:
+        for marker in self.CRITICAL_MARKERS:
+            if marker in msg:
+                return True, msg
+
+        now = time.time()
+        lvl = level.upper()
+
+        effective_sec = throttle_sec if throttle_sec > 0 else self.DEFAULT_THROTTLES.get(lvl, 0.0)
+        if effective_sec <= 0:
+            return True, msg
+
+        if throttle_key is not None:
+            key = f"{lvl}:{throttle_key}"
+        else:
+            first_line = msg.split("\n")[0][:120].strip()
+            key = f"{lvl}:{first_line}"
+
+        rec = self._records.get(key)
+        if rec is None:
+            self._records[key] = {
+                "last_time": now,
+                "count": 0,
+                "first_suppressed": 0.0
+            }
+            self._clean_stale(now)
+            return True, msg
+
+        elapsed = now - rec["last_time"]
+        if elapsed < effective_sec:
+            rec["count"] += 1
+            if rec["first_suppressed"] == 0.0:
+                rec["first_suppressed"] = now
+            return False, msg
+
+        suppressed = rec["count"]
+        suppressed_time = now - rec["first_suppressed"] if rec["first_suppressed"] > 0 else elapsed
+
+        rec["last_time"] = now
+        rec["count"] = 0
+        rec["first_suppressed"] = 0.0
+
+        if suppressed > 0:
+            return True, f"[Повторено {suppressed} раз за {suppressed_time:.1f}с] {msg}"
+
+        return True, msg
+
+    def _clean_stale(self, now: float) -> None:
+        self._counter += 1
+        if self._counter >= 150:
+            self._counter = 0
+            stale = [k for k, v in self._records.items() if now - v["last_time"] > 300.0]
+            for k in stale:
+                del self._records[k]
+
+
+# ============================================================
 # UNIFIED LOGGER
 # ============================================================
 
 class UnifiedLogger:
     """
     Универсальный логгер:
-    - logging + RotatingFileHandler
+    - logging + RotatingFileHandler + LogAntiSpammer
     - decorator для методов
     - совместим с async / sync
     """
@@ -167,38 +261,44 @@ class UnifiedLogger:
             logger,
             extra={"context": context or name},
         )
-        self._last_log_times = {}
+        self.anti_spammer = LogAntiSpammer()
 
-    def _should_throttle(self, msg: str, throttle_sec: int, throttle_key: Optional[str] = None) -> bool:
-        if throttle_sec <= 0:
-            return False
-        current_time = time.time()
-        key = throttle_key if throttle_key is not None else msg
-        last_time = self._last_log_times.get(key, 0)
-        if current_time - last_time < throttle_sec:
-            return True
-        self._last_log_times[key] = current_time
-        return False
+    def debug(self, msg: str, *args, throttle_sec: float = 0, throttle_key: Optional[str] = None, **kwargs):
+        if not LOG_DEBUG:
+            return
+        should_log, final_msg = self.anti_spammer.process(msg, "DEBUG", throttle_sec, throttle_key)
+        if should_log:
+            self._logger.debug(final_msg, *args, **kwargs)
 
-    def debug(self, msg: str, *args, throttle_sec: int = 0, throttle_key: Optional[str] = None, **kwargs):
-        if LOG_DEBUG and not self._should_throttle(msg, throttle_sec, throttle_key):
-            self._logger.debug(msg, *args, **kwargs)
+    def info(self, msg: str, *args, throttle_sec: float = 0, throttle_key: Optional[str] = None, **kwargs):
+        if not LOG_INFO:
+            return
+        should_log, final_msg = self.anti_spammer.process(msg, "INFO", throttle_sec, throttle_key)
+        if should_log:
+            self._logger.info(final_msg, *args, **kwargs)
 
-    def info(self, msg: str, *args, throttle_sec: int = 0, throttle_key: Optional[str] = None, **kwargs):
-        if LOG_INFO and not self._should_throttle(msg, throttle_sec, throttle_key):
-            self._logger.info(msg, *args, **kwargs)
+    def warning(self, msg: str, *args, throttle_sec: float = 0, throttle_key: Optional[str] = None, **kwargs):
+        if not LOG_WARNING:
+            return
+        should_log, final_msg = self.anti_spammer.process(msg, "WARNING", throttle_sec, throttle_key)
+        if should_log:
+            self._logger.warning(final_msg, *args, **kwargs)
 
-    def warning(self, msg: str, *args, throttle_sec: int = 0, throttle_key: Optional[str] = None, **kwargs):
-        if LOG_WARNING and not self._should_throttle(msg, throttle_sec, throttle_key):
-            self._logger.warning(msg, *args, **kwargs)
+    def error(self, msg: str, *args, throttle_sec: float = 0, throttle_key: Optional[str] = None, **kwargs):
+        if not LOG_ERROR:
+            return
+        should_log, final_msg = self.anti_spammer.process(msg, "ERROR", throttle_sec, throttle_key)
+        if should_log:
+            self._logger.error(final_msg, *args, **kwargs)
 
-    def error(self, msg: str, *args, throttle_sec: int = 0, throttle_key: Optional[str] = None, **kwargs):
-        if LOG_ERROR and not self._should_throttle(msg, throttle_sec, throttle_key):
-            self._logger.error(msg, *args, **kwargs)
+    def exception(self, msg: str, *args, throttle_sec: float = 0, throttle_key: Optional[str] = None, exc: Exception = None, **kwargs):
+        if not LOG_ERROR:
+            return
+        should_log, final_msg = self.anti_spammer.process(msg, "ERROR", throttle_sec, throttle_key)
+        if should_log:
+            exc_info = exc if exc is not None else True
+            self._logger.exception(final_msg, *args, exc_info=exc_info, **kwargs)
 
-    def exception(self, msg: str, *args, throttle_sec: int = 0, throttle_key: Optional[str] = None, exc: Exception = None, **kwargs):
-        if LOG_ERROR and not self._should_throttle(msg, throttle_sec, throttle_key):
-            self._logger.exception(msg, *args, **kwargs)
 
     # ======================================================
     # DECORATOR
@@ -280,7 +380,7 @@ class UnifiedLogger:
 # Глобальный экземпляр
 _global_logger = UnifiedLogger("MAIN")
 
-def log(msg: str, level: str = "DEBUG", *args, throttle_sec: int = 0, throttle_key: Optional[str] = None, exc: Exception = None, **kwargs):
+def log(msg: str, level: str = "DEBUG", *args, throttle_sec: float = 0.0, throttle_key: Optional[str] = None, exc: Exception = None, **kwargs):
     lvl = level.upper()
     if lvl == "INFO":
         _global_logger.info(msg, *args, throttle_sec=throttle_sec, throttle_key=throttle_key, **kwargs)
