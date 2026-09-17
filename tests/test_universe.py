@@ -355,17 +355,14 @@ class TestUniverseManager(unittest.TestCase):
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001
         )
-        # u6 vs u6_anti
-        u6 = mgr.get_universe("u6")
-        u6_anti = mgr.get_universe("u6_anti")
-        ind_ec_up = {"trend_htf": "UP", "ema_cross": ["CROSS_UP"], "vol_filter": ["VOLF_PASSED"]}
-        self.assertTrue(u6.check_entry("LONG", ind_ec_up))
-        self.assertTrue(u6_anti.check_entry("SHORT", ind_ec_up))
-        # TP and SL mirrored: u6 TP=0.03, SL=0.015 -> u6_anti TP=0.015, SL=0.03
-        self.assertEqual(u6.exit_rules["take_profit_ratio"]["value"], 0.03)
-        self.assertEqual(u6.exit_rules["stop_loss_ratio"]["value"], 0.015)
-        self.assertEqual(u6_anti.exit_rules["take_profit_ratio"]["value"], 0.015)
-        self.assertEqual(u6_anti.exit_rules["stop_loss_ratio"]["value"], 0.03)
+        self.assertEqual(len(mgr.universes), 12)
+        expected_uids = [
+            "u15", "u15_cons", "u15_aggr", "u15_scalp",
+            "u15_anti", "u15_anti_fade", "u15_anti_tight", "u15_anti_scalp",
+            "u3_anti", "u3_anti_climax", "u3_anti_aggr", "u3_anti_trend"
+        ]
+        for uid in expected_uids:
+            self.assertIsNotNone(mgr.get_universe(uid), f"Universe {uid} not found")
 
         # u15 vs u15_anti: TP=0.045, SL=0.02 -> u15_anti TP=0.02, SL=0.045
         u15 = mgr.get_universe("u15")
@@ -374,6 +371,11 @@ class TestUniverseManager(unittest.TestCase):
         self.assertEqual(u15.exit_rules["stop_loss_ratio"]["value"], 0.02)
         self.assertEqual(u15_anti.exit_rules["take_profit_ratio"]["value"], 0.02)
         self.assertEqual(u15_anti.exit_rules["stop_loss_ratio"]["value"], 0.045)
+
+        # u3_anti: TP=0.02, SL=0.04
+        u3_anti = mgr.get_universe("u3_anti")
+        self.assertEqual(u3_anti.exit_rules["take_profit_ratio"]["value"], 0.02)
+        self.assertEqual(u3_anti.exit_rules["stop_loss_ratio"]["value"], 0.04)
 
 
 if __name__ == "__main__":
