@@ -345,6 +345,36 @@ class TestUniverseManager(unittest.TestCase):
         self.assertTrue(u15_anti.check_entry("LONG", ind_short))
         self.assertFalse(u15_anti.check_entry("SHORT", ind_short))
 
+    def test_all_anti_universes_mirroring(self):
+        from consts import load_config
+        cfg_data = load_config()
+        u_cfg = cfg_data.get("universes", {})
+        mgr = UniverseManager(
+            universes_cfg=u_cfg,
+            default_enter_rules={},
+            default_exit_rules={},
+            get_slippage_ratio_fn=lambda s: 0.001
+        )
+        # u6 vs u6_anti
+        u6 = mgr.get_universe("u6")
+        u6_anti = mgr.get_universe("u6_anti")
+        ind_ec_up = {"trend_htf": "UP", "ema_cross": ["CROSS_UP"], "vol_filter": ["VOLF_PASSED"]}
+        self.assertTrue(u6.check_entry("LONG", ind_ec_up))
+        self.assertTrue(u6_anti.check_entry("SHORT", ind_ec_up))
+        # TP and SL mirrored: u6 TP=0.03, SL=0.015 -> u6_anti TP=0.015, SL=0.03
+        self.assertEqual(u6.exit_rules["take_profit_ratio"]["value"], 0.03)
+        self.assertEqual(u6.exit_rules["stop_loss_ratio"]["value"], 0.015)
+        self.assertEqual(u6_anti.exit_rules["take_profit_ratio"]["value"], 0.015)
+        self.assertEqual(u6_anti.exit_rules["stop_loss_ratio"]["value"], 0.03)
+
+        # u15 vs u15_anti: TP=0.045, SL=0.02 -> u15_anti TP=0.02, SL=0.045
+        u15 = mgr.get_universe("u15")
+        u15_anti = mgr.get_universe("u15_anti")
+        self.assertEqual(u15.exit_rules["take_profit_ratio"]["value"], 0.045)
+        self.assertEqual(u15.exit_rules["stop_loss_ratio"]["value"], 0.02)
+        self.assertEqual(u15_anti.exit_rules["take_profit_ratio"]["value"], 0.02)
+        self.assertEqual(u15_anti.exit_rules["stop_loss_ratio"]["value"], 0.045)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -289,8 +289,21 @@ class UniverseManager:
                         combined[key] = dict(val)
                     else:
                         combined[key]["is_active"] = True
+                    for suffix in ("_anti", "_reverse", "_inv"):
+                        if key.endswith(suffix):
+                            base_key = key[:-len(suffix)]
+                            if base_key not in combined:
+                                combined[base_key] = dict(val)
+                            else:
+                                combined[base_key]["is_active"] = True
+                            break
             for key, val in universe.exit_rules.items():
-                if key == "rsi" and isinstance(val, dict) and val.get("is_active"):
+                base_exit = key
+                for suffix in ("_anti", "_reverse", "_inv"):
+                    if key.endswith(suffix):
+                        base_exit = key[:-len(suffix)]
+                        break
+                if base_exit == "rsi" and isinstance(val, dict) and val.get("is_active"):
                     if "rsi" not in combined:
                         combined["rsi"] = {
                             "is_active": True,

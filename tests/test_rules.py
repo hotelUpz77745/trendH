@@ -360,6 +360,43 @@ class TestExitRules(unittest.TestCase):
         # Holds position when trend is UP and price is within [-3%, +5%]
         self.assertFalse(engine.check_signal("LONG", symbol="BTCUSDT", trend="UP", open_price=100.0, current_price=101.0))
 
+    def test_anti_reverse_suffixed_rules(self):
+        enter_rules = {
+            "trend_htf_anti": {"is_active": True, "long_cond": "DOWN", "short_cond": "UP"},
+            "sr_levels_anti": {"is_active": True, "long_cond": "BREAKOUT_SHORT", "short_cond": "BREAKOUT_LONG"},
+            "taker_flow_anti": {"is_active": True, "long_cond": "TAKER_SELL_DOMINANT", "short_cond": "TAKER_BUY_DOMINANT"}
+        }
+        engine = EntrySignalEngine(enter_rules)
+        # In a falling market (bearish breakdown), anti-strategy enters LONG
+        bearish_ind = {
+            "trend_htf": "DOWN",
+            "sr_levels": ["BREAKOUT_SHORT"],
+            "taker_flow": ["TAKER_SELL_DOMINANT"]
+        }
+        self.assertTrue(engine.check_signal("LONG", bearish_ind))
+        self.assertFalse(engine.check_signal("SHORT", bearish_ind))
+
+        # In a rising market (bullish breakout), anti-strategy enters SHORT
+        bullish_ind = {
+            "trend_htf": "UP",
+            "sr_levels": ["BREAKOUT_LONG"],
+            "taker_flow": ["TAKER_BUY_DOMINANT"]
+        }
+        self.assertFalse(engine.check_signal("LONG", bullish_ind))
+        self.assertTrue(engine.check_signal("SHORT", bullish_ind))
+
+        # Exit engine with trend_reversal_anti
+        exit_rules = {
+            "trend_reversal_anti": {"is_active": True, "long_exit_trends": ["FLAT", "UP"], "short_exit_trends": ["FLAT", "DOWN"]},
+            "take_profit_ratio": {"value": 0.02},
+            "stop_loss_ratio": {"value": 0.04}
+        }
+        exit_engine = ExitSignalEngine(exit_rules, self.analytics_cfg, self.slip_fn)
+        # Exits LONG when trend becomes UP
+        self.assertTrue(exit_engine.check_signal("LONG", symbol="BTCUSDT", trend="UP", open_price=100.0, current_price=100.5))
+        # Holds LONG when trend is still DOWN and PnL is safe
+        self.assertFalse(exit_engine.check_signal("LONG", symbol="BTCUSDT", trend="DOWN", open_price=100.0, current_price=100.5))
+
 
 if __name__ == "__main__":
     unittest.main()

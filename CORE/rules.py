@@ -184,33 +184,39 @@ class EntrySignalEngine:
 
     def __init__(self, enter_rules_cfg: Dict[str, Any]):
         self.rules: List[BaseRule] = []
-
-        if "trend" in enter_rules_cfg:
-            self.rules.append(EntryTrendRule(enter_rules_cfg["trend"], indicator_key="trend"))
-        if "trend_htf" in enter_rules_cfg:
-            self.rules.append(EntryTrendRule(enter_rules_cfg["trend_htf"], indicator_key="trend_htf"))
         for key, val in enter_rules_cfg.items():
-            if key.startswith("trend") and key not in ("trend", "trend_htf") and isinstance(val, dict):
-                self.rules.append(EntryTrendRule(val, indicator_key=key))
-        if "rsi" in enter_rules_cfg:
-            self.rules.append(EntryRSIRule(enter_rules_cfg["rsi"]))
-        if "rsi_waterline50" in enter_rules_cfg:
-            self.rules.append(EntryRSIWaterlineRule(enter_rules_cfg["rsi_waterline50"]))
-        if "sr_levels" in enter_rules_cfg:
-            self.rules.append(EntrySRLevelsRule(enter_rules_cfg["sr_levels"]))
-        if "ema_cross" in enter_rules_cfg:
-            self.rules.append(EntryEMACrossRule(enter_rules_cfg["ema_cross"]))
-        if "vol_filter" in enter_rules_cfg:
-            self.rules.append(EntryVolumeFilterRule(enter_rules_cfg["vol_filter"]))
-        if "taker_flow" in enter_rules_cfg:
-            from CORE.squeeze_flow import EntryTakerFlowRule
-            self.rules.append(EntryTakerFlowRule(enter_rules_cfg["taker_flow"]))
-        if "volatility_squeeze" in enter_rules_cfg:
-            from CORE.squeeze_flow import EntryVolatilitySqueezeRule
-            self.rules.append(EntryVolatilitySqueezeRule(enter_rules_cfg["volatility_squeeze"]))
-        if "relative_strength" in enter_rules_cfg:
-            from CORE.squeeze_flow import EntryRelativeStrengthRule
-            self.rules.append(EntryRelativeStrengthRule(enter_rules_cfg["relative_strength"]))
+            if not isinstance(val, dict):
+                continue
+            base_key = key
+            for suffix in ("_anti", "_reverse", "_inv"):
+                if key.endswith(suffix):
+                    base_key = key[:-len(suffix)]
+                    break
+            if base_key == "trend":
+                self.rules.append(EntryTrendRule(val, indicator_key="trend"))
+            elif base_key == "trend_htf":
+                self.rules.append(EntryTrendRule(val, indicator_key="trend_htf"))
+            elif base_key.startswith("trend"):
+                self.rules.append(EntryTrendRule(val, indicator_key=base_key))
+            elif base_key == "rsi":
+                self.rules.append(EntryRSIRule(val))
+            elif base_key == "rsi_waterline50":
+                self.rules.append(EntryRSIWaterlineRule(val))
+            elif base_key == "sr_levels":
+                self.rules.append(EntrySRLevelsRule(val))
+            elif base_key == "ema_cross":
+                self.rules.append(EntryEMACrossRule(val))
+            elif base_key == "vol_filter":
+                self.rules.append(EntryVolumeFilterRule(val))
+            elif base_key == "taker_flow":
+                from CORE.squeeze_flow import EntryTakerFlowRule
+                self.rules.append(EntryTakerFlowRule(val))
+            elif base_key == "volatility_squeeze":
+                from CORE.squeeze_flow import EntryVolatilitySqueezeRule
+                self.rules.append(EntryVolatilitySqueezeRule(val))
+            elif base_key == "relative_strength":
+                from CORE.squeeze_flow import EntryRelativeStrengthRule
+                self.rules.append(EntryRelativeStrengthRule(val))
 
     def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
         """
@@ -246,75 +252,49 @@ class ExitTrendReversalRule(BaseRule):
 
 
 class ExitTakeProfitRule(BaseRule):
-    """
-    Правило выхода по тейк-профиту с учетом комиссии и проскальзывания.
-    """
-
-    def __init__(
-        self,
-        cfg: Dict[str, Any],
-        analytics_cfg: Dict[str, Any],
-        get_slippage_ratio_fn: Callable[[str], float]
-    ):
-        self.cfg = cfg
-        self.analytics_cfg = analytics_cfg
+    """Правило выхода по тейк-профиту с учетом комиссии и проскальзывания."""
+    def __init__(self, cfg: Dict[str, Any], analytics_cfg: Dict[str, Any], get_slippage_ratio_fn: Callable[[str], float]):
+        self.cfg, self.analytics_cfg = cfg, analytics_cfg
         self.value: Optional[float] = cfg.get("value")
         self.get_slippage_ratio_fn = get_slippage_ratio_fn
 
     def check(self, side: str, symbol: str, open_price: float, current_price: float, **kwargs) -> bool:
         if self.value is None or open_price <= 0 or current_price <= 0:
             return False
-
         fee_ratio = self.analytics_cfg.get("taker_fee_ratio", 0.0) * 2
         slippage_ratio = self.get_slippage_ratio_fn(symbol) * 2
         fee_slip_ratio = fee_ratio + slippage_ratio
-
         if side == "LONG":
             pnl_ratio = (current_price - open_price) / open_price - fee_slip_ratio
         else:
             pnl_ratio = (open_price - current_price) / open_price - fee_slip_ratio
-
         if pnl_ratio >= self.value:
             log(f"[{symbol}][TAKE PROFIT] PnL {pnl_ratio * 100:.2f}% >= {self.value * 100:.2f}%", level="DEBUG")
             return True
-
         return False
 
 
 class ExitStopLossRule(BaseRule):
-    """
-    Правило выхода по стоп-лоссу с учетом комиссии и проскальзывания.
-    """
-
-    def __init__(
-        self,
-        cfg: Dict[str, Any],
-        analytics_cfg: Dict[str, Any],
-        get_slippage_ratio_fn: Callable[[str], float]
-    ):
-        self.cfg = cfg
-        self.analytics_cfg = analytics_cfg
+    """Правило выхода по стоп-лоссу с учетом комиссии и проскальзывания."""
+    def __init__(self, cfg: Dict[str, Any], analytics_cfg: Dict[str, Any], get_slippage_ratio_fn: Callable[[str], float]):
+        self.cfg, self.analytics_cfg = cfg, analytics_cfg
         self.value: Optional[float] = cfg.get("value")
         self.get_slippage_ratio_fn = get_slippage_ratio_fn
 
     def check(self, side: str, symbol: str, open_price: float, current_price: float, **kwargs) -> bool:
         if self.value is None or open_price <= 0 or current_price <= 0:
             return False
-
         fee_ratio = self.analytics_cfg.get("taker_fee_ratio", 0.0) * 2
         slippage_ratio = self.get_slippage_ratio_fn(symbol) * 2
         fee_slip_ratio = fee_ratio + slippage_ratio
-
         if side == "LONG":
             pnl_ratio = (current_price - open_price) / open_price - fee_slip_ratio
         else:
             pnl_ratio = (open_price - current_price) / open_price - fee_slip_ratio
-
         threshold = -abs(self.value)
         if pnl_ratio <= threshold:
             log(f"[{symbol}][STOP LOSS] PnL {pnl_ratio * 100:.2f}% <= {threshold * 100:.2f}%", level="DEBUG")
             return True
-
         return False
 
 
@@ -393,19 +373,27 @@ class ExitSignalEngine:
         get_slippage_ratio_fn: Callable[[str], float]
     ):
         self.rules: List[BaseRule] = []
-        if "trend_reversal" in exit_rules_cfg:
-            self.rules.append(ExitTrendReversalRule(exit_rules_cfg["trend_reversal"]))
-        if "rsi" in exit_rules_cfg:
-            self.rules.append(ExitRSIRule(exit_rules_cfg["rsi"]))
-        if "take_profit_ratio" in exit_rules_cfg:
-            self.rules.append(ExitTakeProfitRule(exit_rules_cfg["take_profit_ratio"], analytics_cfg, get_slippage_ratio_fn))
-        if "stop_loss_ratio" in exit_rules_cfg:
-            self.rules.append(ExitStopLossRule(exit_rules_cfg["stop_loss_ratio"], analytics_cfg, get_slippage_ratio_fn))
-        if "time_stop" in exit_rules_cfg:
-            self.rules.append(ExitTimeStopRule(exit_rules_cfg["time_stop"]))
-        if "chandelier_exit" in exit_rules_cfg:
-            from CORE.squeeze_flow import ExitChandelierRule
-            self.rules.append(ExitChandelierRule(exit_rules_cfg["chandelier_exit"]))
+        for key, val in exit_rules_cfg.items():
+            if not isinstance(val, dict):
+                continue
+            base_key = key
+            for suffix in ("_anti", "_reverse", "_inv"):
+                if key.endswith(suffix):
+                    base_key = key[:-len(suffix)]
+                    break
+            if base_key == "trend_reversal":
+                self.rules.append(ExitTrendReversalRule(val))
+            elif base_key == "rsi":
+                self.rules.append(ExitRSIRule(val))
+            elif base_key == "take_profit_ratio":
+                self.rules.append(ExitTakeProfitRule(val, analytics_cfg, get_slippage_ratio_fn))
+            elif base_key == "stop_loss_ratio":
+                self.rules.append(ExitStopLossRule(val, analytics_cfg, get_slippage_ratio_fn))
+            elif base_key == "time_stop":
+                self.rules.append(ExitTimeStopRule(val))
+            elif base_key == "chandelier_exit":
+                from CORE.squeeze_flow import ExitChandelierRule
+                self.rules.append(ExitChandelierRule(val))
 
     def check_signal(
         self,

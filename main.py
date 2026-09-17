@@ -226,6 +226,7 @@ class Main:
                 klines_data, current_price=self.current_prices.get(symbol),
                 btc_closes=btc_closes, realtime_flow=flow
             )
+            await asyncio.sleep(0)
         except Exception as e:
             log(f"[{symbol}] Error updating indicators: {e}", level="ERROR", throttle_sec=60, throttle_key=f"ind_err_{symbol}")
 
@@ -387,7 +388,10 @@ class Main:
             self.backup_task = asyncio.create_task(self.backup_manager.start())
                 
             while True:
-                self.watchdog.tick()
+                try:
+                    self.watchdog.tick()
+                except Exception as w_ex:
+                    log(f"[WATCHDOG] Ошибка тика watchdog: {w_ex}", level="ERROR", throttle_sec=60)
                 await asyncio.sleep(MAIN_LOOP_DELAY_SEC)
 
         except KeyboardInterrupt:

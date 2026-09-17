@@ -208,6 +208,72 @@
             "long_cond": "RS_STRONG",
             "short_cond": "RS_WEAK",
             "_comment_relative_strength": "Фильтр относительной силы к BTC (spread = return(coin) - return(BTC) >= min_outperformance)"
+        },
+        "trend_anti": {
+            "is_active": false,
+            "timeframe": "5m",
+            "sma_fast": 10,
+            "sma_slow": 30,
+            "confirmation_candles": 3,
+            "require_rising": true,
+            "trend_positive": true,
+            "long_cond": "DOWN",
+            "short_cond": "UP",
+            "_comment_trend_anti": "Реверс тренда 5m: вход в лонг при DOWN, вход в шорт при UP"
+        },
+        "trend_htf_anti": {
+            "is_active": false,
+            "timeframe": "1h",
+            "sma_fast": 10,
+            "sma_slow": 30,
+            "confirmation_candles": 2,
+            "require_rising": true,
+            "trend_positive": true,
+            "long_cond": "DOWN",
+            "short_cond": "UP",
+            "_comment_trend_htf_anti": "Реверс тренда HTF 1h: вход в лонг при DOWN, вход в шорт при UP"
+        },
+        "rsi_anti": {
+            "is_active": false,
+            "timeframe": "5m",
+            "window": 14,
+            "conditions": {
+                "ENTER_LONG": "40 <= x < 50",
+                "ENTER_SHORT": "50 < x <= 60"
+            },
+            "_comment_rsi_anti": "Реверс RSI: вход в лонг при 40-50, вход в шорт при 50-60"
+        },
+        "sr_levels_anti": {
+            "is_active": false,
+            "timeframe": "5m",
+            "swing_len": 15,
+            "window": 300,
+            "margin": 2.0,
+            "thickness_k": 0.17,
+            "max_zones": 10,
+            "level_mode": "latest",
+            "breakout_edge": "h",
+            "long_cond": "BREAKOUT_SHORT",
+            "short_cond": "BREAKOUT_LONG",
+            "_comment_sr_levels_anti": "Реверс LuxAlgo SR: лонг при пробое поддержки вниз, шорт при пробое сопротивления вверх"
+        },
+        "ema_cross_anti": {
+            "is_active": false,
+            "timeframe": "5m",
+            "period1": 9,
+            "period2": 21,
+            "long_cond": "CROSS_DOWN",
+            "short_cond": "CROSS_UP",
+            "_comment_ema_cross_anti": "Реверс EMA-кроссовера: лонг при CROSS_DOWN, шорт при CROSS_UP"
+        },
+        "taker_flow_anti": {
+            "is_active": false,
+            "timeframe": "5m",
+            "min_buy_ratio": 0.6,
+            "max_buy_ratio": 0.4,
+            "long_cond": "TAKER_SELL_DOMINANT",
+            "short_cond": "TAKER_BUY_DOMINANT",
+            "_comment_taker_flow_anti": "Реверс Taker Flow: лонг при доминировании продаж, шорт при покупках"
         }
     },
     "exit_rules": {
@@ -230,6 +296,18 @@
         "stop_loss_ratio": {
             "value": null,
             "_comment_stop_loss_ratio": "null или доля от единицы, например 0.03 для 3%"
+        },
+        "trend_reversal_anti": {
+            "is_active": true,
+            "long_exit_trends": [
+                "FLAT",
+                "UP"
+            ],
+            "short_exit_trends": [
+                "FLAT",
+                "DOWN"
+            ],
+            "_comment_trend_reversal_anti": "Реверсивный выход по тренду: выход из лонга при FLAT/UP, выход из шорта при FLAT/DOWN"
         }
     },
     "universes": {
@@ -307,7 +385,7 @@
             "description": "Инверсная стратегия сливающего тренда: вход в противоположную сторону 5m+1h тренда при перегретом RSI (50-70 / 30-50)",
             "is_active": true,
             "enter_rules": {
-                "trend": {
+                "trend_anti": {
                     "is_active": true,
                     "timeframe": "5m",
                     "sma_fast": 10,
@@ -318,7 +396,7 @@
                     "long_cond": "DOWN",
                     "short_cond": "UP"
                 },
-                "trend_htf": {
+                "trend_htf_anti": {
                     "is_active": true,
                     "timeframe": "1h",
                     "sma_fast": 10,
@@ -329,7 +407,7 @@
                     "long_cond": "DOWN",
                     "short_cond": "UP"
                 },
-                "rsi": {
+                "rsi_anti": {
                     "is_active": true,
                     "timeframe": "5m",
                     "window": 14,
@@ -337,27 +415,17 @@
                         "ENTER_LONG": "40 <= x < 50",
                         "ENTER_SHORT": "50 < x <= 60"
                     }
-                },
-                "rsi_waterline50": {
-                    "is_active": false
-                },
-                "sr_levels": {
-                    "is_active": false
-                },
-                "ema_cross": {
-                    "is_active": false
-                },
-                "vol_filter": {
-                    "is_active": false
                 }
             },
             "exit_rules": {
-                "trend_reversal": {
+                "trend_reversal_anti": {
                     "is_active": true,
                     "long_exit_trends": [
+                        "FLAT",
                         "UP"
                     ],
                     "short_exit_trends": [
+                        "FLAT",
                         "DOWN"
                     ]
                 },
@@ -519,10 +587,7 @@
             "description": "Реверс ложного пробоя уровней LuxAlgo: вход против движения уровня при объемном выносе",
             "is_active": true,
             "enter_rules": {
-                "trend": {
-                    "is_active": false
-                },
-                "trend_htf": {
+                "trend_htf_anti": {
                     "is_active": true,
                     "timeframe": "1h",
                     "sma_fast": 10,
@@ -533,13 +598,7 @@
                     "long_cond": "DOWN",
                     "short_cond": "UP"
                 },
-                "rsi": {
-                    "is_active": false
-                },
-                "rsi_waterline50": {
-                    "is_active": false
-                },
-                "sr_levels": {
+                "sr_levels_anti": {
                     "is_active": true,
                     "timeframe": "5m",
                     "swing_len": 15,
@@ -551,9 +610,6 @@
                     "breakout_edge": "h",
                     "long_cond": "BREAKOUT_SHORT",
                     "short_cond": "BREAKOUT_LONG"
-                },
-                "ema_cross": {
-                    "is_active": false
                 },
                 "vol_filter": {
                     "is_active": true,
@@ -571,12 +627,14 @@
                 }
             },
             "exit_rules": {
-                "trend_reversal": {
+                "trend_reversal_anti": {
                     "is_active": true,
                     "long_exit_trends": [
+                        "FLAT",
                         "UP"
                     ],
                     "short_exit_trends": [
+                        "FLAT",
                         "DOWN"
                     ]
                 },
@@ -811,10 +869,7 @@
             "description": "Реверс Боевой кроссовер EMA 9/21 с фильтром дельты + объем + 1h HTF, TP 1.5%, SL 3.0%",
             "is_active": true,
             "enter_rules": {
-                "trend": {
-                    "is_active": false
-                },
-                "trend_htf": {
+                "trend_htf_anti": {
                     "is_active": true,
                     "timeframe": "1h",
                     "sma_fast": 10,
@@ -825,16 +880,7 @@
                     "long_cond": "DOWN",
                     "short_cond": "UP"
                 },
-                "rsi": {
-                    "is_active": false
-                },
-                "rsi_waterline50": {
-                    "is_active": false
-                },
-                "sr_levels": {
-                    "is_active": false
-                },
-                "ema_cross": {
+                "ema_cross_anti": {
                     "is_active": true,
                     "timeframe": "5m",
                     "period1": 9,
@@ -858,7 +904,7 @@
                 }
             },
             "exit_rules": {
-                "trend_reversal": {
+                "trend_reversal_anti": {
                     "is_active": true,
                     "long_exit_trends": [
                         "FLAT",
@@ -1380,7 +1426,7 @@
                     "is_active": false
                 },
                 "take_profit_ratio": {
-                    "value": 0.10
+                    "value": 0.1
                 },
                 "stop_loss_ratio": {
                     "value": 0.03
@@ -1437,8 +1483,8 @@
                 "taker_flow": {
                     "is_active": true,
                     "timeframe": "5m",
-                    "min_buy_ratio": 0.60,
-                    "max_buy_ratio": 0.40,
+                    "min_buy_ratio": 0.6,
+                    "max_buy_ratio": 0.4,
                     "long_cond": "TAKER_BUY_DOMINANT",
                     "short_cond": "TAKER_SELL_DOMINANT"
                 }
@@ -1466,10 +1512,7 @@
             "description": "Инверсная стратегия пробоя LuxAlgo: вход против выносов при агрессивном маркет-потоке",
             "is_active": true,
             "enter_rules": {
-                "trend": {
-                    "is_active": false
-                },
-                "trend_htf": {
+                "trend_htf_anti": {
                     "is_active": true,
                     "timeframe": "1h",
                     "sma_fast": 10,
@@ -1480,13 +1523,7 @@
                     "long_cond": "DOWN",
                     "short_cond": "UP"
                 },
-                "rsi": {
-                    "is_active": false
-                },
-                "rsi_waterline50": {
-                    "is_active": false
-                },
-                "sr_levels": {
+                "sr_levels_anti": {
                     "is_active": true,
                     "timeframe": "5m",
                     "swing_len": 15,
@@ -1499,29 +1536,26 @@
                     "long_cond": "BREAKOUT_SHORT",
                     "short_cond": "BREAKOUT_LONG"
                 },
-                "ema_cross": {
-                    "is_active": false
-                },
-                "vol_filter": {
-                    "is_active": false
-                },
-                "volatility_squeeze": {
-                    "is_active": false
-                },
-                "taker_flow": {
+                "taker_flow_anti": {
                     "is_active": true,
                     "timeframe": "5m",
-                    "min_buy_ratio": 0.60,
-                    "max_buy_ratio": 0.40,
+                    "min_buy_ratio": 0.6,
+                    "max_buy_ratio": 0.4,
                     "long_cond": "TAKER_SELL_DOMINANT",
                     "short_cond": "TAKER_BUY_DOMINANT"
                 }
             },
             "exit_rules": {
-                "chandelier_exit": {
+                "trend_reversal_anti": {
                     "is_active": true,
-                    "length": 15,
-                    "atr_mult": 2.2
+                    "long_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ]
                 },
                 "time_stop": {
                     "is_active": true,
@@ -1811,8 +1845,8 @@
                     "timeframe": "5m",
                     "mode": "realtime",
                     "window_sec": 60,
-                    "min_buy_ratio": 0.60,
-                    "max_buy_ratio": 0.40,
+                    "min_buy_ratio": 0.6,
+                    "max_buy_ratio": 0.4,
                     "long_cond": "TAKER_BUY_DOMINANT",
                     "short_cond": "TAKER_SELL_DOMINANT"
                 },
