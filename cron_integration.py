@@ -39,26 +39,30 @@ class CronIntegration:
 
             with open(symbols_path, "r", encoding="utf-8") as f:
                 app_json = json.load(f)
-            return app_json.get("symbols", [])
+            syms = app_json.get("symbols", [])
+            log(f"[CronIntegration] Загружено {len(syms)} символов из {symbols_path}", level="INFO")
+            return syms
         except Exception as e:
             log(f"[CronIntegration] Error reading symbols: {e}", level="ERROR", throttle_sec=60)
             return []
 
     @classmethod
     def _find_runtime_file(cls, symbol: str) -> Optional[str]:
-        """Ищет файл состояния валютной пары в runtime_path или локальных фикстурах."""
+        """
+        Ищет файл состояния валютной пары в целевом runtime_path.
+        Резервный путь к тестовым фикстурам используется только если runtime_path не существует.
+        """
         data_sources = cfg.get("data_sources", {})
         candidate_dirs = []
 
         runtime_path = data_sources.get("runtime_path")
         if runtime_path and os.path.exists(runtime_path):
             candidate_dirs.append(runtime_path)
-
-        # Резервный путь к тестовым фикстурам
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        fixtures_path = os.path.join(base_dir, "tests", "fixtures", "sample_runtime", "runtime")
-        if os.path.exists(fixtures_path):
-            candidate_dirs.append(fixtures_path)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            fixtures_path = os.path.join(base_dir, "tests", "fixtures", "sample_runtime", "runtime")
+            if os.path.exists(fixtures_path):
+                candidate_dirs.append(fixtures_path)
 
         sym_lower = symbol.lower()
         sym_upper = symbol.upper()
@@ -75,10 +79,12 @@ class CronIntegration:
         """
         Считывает базовый статус инвентаря для расчета размера ордера.
         Возвращает размер позиции в USD для LONG и SHORT.
+        При hardcoded_size = null размер рассчитывается динамически от набранной сетки:
+        хэдж-позиция берет 50% объема застрявшей сетки противоположной стороны.
         """
         result = {
-            "LONG": {"invest_size": 0.0, "volume": 0.0, "enabled": False},
-            "SHORT": {"invest_size": 0.0, "volume": 0.0, "enabled": False}
+            "LONG": {"invest_size": 50.0, "volume": 0.0, "enabled": False},
+            "SHORT": {"invest_size": 50.0, "volume": 0.0, "enabled": False}
         }
         try:
             data_sources = cfg.get("data_sources", {})
@@ -96,22 +102,39 @@ class CronIntegration:
             with open(file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            for side in ["LONG", "SHORT"]:
-                if side in data:
-                    side_data = data[side]
-                    result[side]["enabled"] = side_data.get("enable", False)
-                    total_vol_pct = 0.0
-                    grid = side_data.get("grid", {})
-                    for key, val in grid.items():
-                        if val.get("is_active", False):
-                            total_vol_pct += val.get("volume", 0.0)
+            sides_info = {}
+            for s in ("LONG", "SHORT"):
+                s_data = data.get(s, {})
+                enabled = s_data.get("enable", False)
+                base_inv = float(s_data.get("invest_size", 0.0))
+                grid = s_data.get("grid", {})
+                active_vol_pct = sum(v.get("volume", 0.0) for v in grid.values() if v.get("is_active", False))
+                level_0_pct = float(grid.get("0", {}).get("volume", 12.96))
+                accum_usd = (active_vol_pct / 100.0) * base_inv if active_vol_pct > 0 else 0.0
+                base_order_usd = (level_0_pct / 100.0) * base_inv if (base_inv > 0 and level_0_pct > 0) else 50.0
+                sides_info[s] = {
+                    "enabled": enabled,
+                    "base_inv": base_inv,
+                    "accum_usd": accum_usd,
+                    "base_order_usd": base_order_usd,
+                    "grid": grid
+                }
 
-                    invest_size = side_data.get("invest_size", 0.0)
-                    total_size_usd = (total_vol_pct / 100.0) * invest_size if total_vol_pct > 0 else 0.0
-                    if hardcoded_size is not None and hardcoded_size > 0:
-                        total_size_usd = float(hardcoded_size)
-                    result[side]["invest_size"] = total_size_usd
-                    result[side]["raw_grid"] = grid
+            for side in ("LONG", "SHORT"):
+                s_info = sides_info.get(side, {})
+                opp_info = sides_info.get("SHORT" if side == "LONG" else "LONG", {})
+                result[side]["enabled"] = s_info.get("enabled", False)
+                result[side]["raw_grid"] = s_info.get("grid", {})
+
+                # Хэджирование: если на противоположной стороне набран объем, хэдж берет 50% объема
+                if opp_info.get("accum_usd", 0.0) > 0:
+                    calc_size = opp_info["accum_usd"] * 0.5
+                elif s_info.get("accum_usd", 0.0) > 0:
+                    calc_size = s_info["accum_usd"]
+                else:
+                    calc_size = s_info.get("base_order_usd", 50.0)
+
+                result[side]["invest_size"] = round(calc_size, 2)
         except Exception as e:
             log(f"[CronIntegration] Error reading state for {symbol}: {e}", level="ERROR", throttle_sec=60)
         return result
@@ -127,7 +150,6 @@ class CronIntegration:
         cached = cls._cache.get(symbol)
         if cached and (now - cached["ts"] < cls._cache_ttl_sec):
             data = dict(cached["data"])
-            # Обновляем динамическую просадку по переданной текущей цене без дискового ввода
             if current_price > 0:
                 cls._enrich_drawdown(data, current_price)
             return data
@@ -135,6 +157,7 @@ class CronIntegration:
         empty_side = {
             "in_position": False,
             "volume_ratio": 0.0,
+            "accumulated_volume": 0.0,
             "max_level": -1,
             "drawdown_pct": 0.0,
             "stressed": False,
@@ -174,7 +197,6 @@ class CronIntegration:
                 in_pos = bool(s_data.get("in_position", False) or len(active_levels) > 0)
                 avg_price = float(s_data.get("avg_entry_price", 0.0))
 
-                # Расчет просадки сетки
                 dd_pct = 0.0
                 if current_price > 0 and avg_price > 0:
                     if side == "LONG":
@@ -182,7 +204,6 @@ class CronIntegration:
                     else:
                         dd_pct = max(0.0, (current_price - avg_price) / avg_price * 100.0)
 
-                # Критерии стресса: набрано >= 45% объема или уровень >= 2 и цена ушла против сетки
                 price_stressed = True
                 if avg_price > 0 and current_price > 0:
                     price_stressed = (current_price <= avg_price) if side == "LONG" else (current_price >= avg_price)
@@ -193,6 +214,7 @@ class CronIntegration:
                 res[side] = {
                     "in_position": in_pos,
                     "volume_ratio": vol_ratio,
+                    "accumulated_volume": round(accum_vol, 2),
                     "max_level": max_lvl,
                     "drawdown_pct": round(dd_pct, 2),
                     "stressed": stressed,
@@ -200,7 +222,6 @@ class CronIntegration:
                     "avg_entry_price": avg_price
                 }
 
-            # Определение доминирующей стороны стресса
             long_st = res["LONG"]["stressed"]
             short_st = res["SHORT"]["stressed"]
             long_ext = res["LONG"]["extreme"]
@@ -233,7 +254,6 @@ class CronIntegration:
                 res["volume_ratio"] = res["SHORT"]["volume_ratio"]
                 res["max_level"] = res["SHORT"]["max_level"]
             elif long_st and short_st:
-                # Если обе стороны в стрессе, выбираем сторону с максимальным объемом
                 if res["LONG"]["volume_ratio"] >= res["SHORT"]["volume_ratio"]:
                     res["status"] = "LONG_GRID_STRESSED"
                     res["stressed_side"] = "LONG"
@@ -248,6 +268,16 @@ class CronIntegration:
                     res["max_level"] = res["SHORT"]["max_level"]
 
             cls._cache[symbol] = {"ts": now, "data": dict(res)}
+            log(
+                f"[CRON3 RUNTIME PARSED] [{symbol}] LONG: in_pos={res['LONG']['in_position']}, "
+                f"vol={res['LONG']['volume_ratio']:.1%}, lvl={res['LONG']['max_level']}/5, "
+                f"avg={res['LONG']['avg_entry_price']:.4f} | SHORT: in_pos={res['SHORT']['in_position']}, "
+                f"vol={res['SHORT']['volume_ratio']:.1%}, lvl={res['SHORT']['max_level']}/5, "
+                f"avg={res['SHORT']['avg_entry_price']:.4f} | Status: {res['status']}",
+                level="DEBUG",
+                throttle_sec=30,
+                throttle_key=f"cron_parse_{symbol}"
+            )
         except Exception as e:
             log(f"[CronIntegration] Error calculating grid stress for {symbol}: {e}", level="ERROR", throttle_sec=60)
             cls._cache[symbol] = {"ts": now, "data": res}
@@ -300,18 +330,33 @@ class EntryGridStressRule:
         if not side_info.get("in_position", False):
             return False
 
+        passed = False
         if self.extreme_only:
             extreme_cond = "SHORT_GRID_EXTREME" if side == "LONG" else "LONG_GRID_EXTREME"
-            return (status == extreme_cond or side_info.get("extreme", False))
+            passed = (status == extreme_cond or side_info.get("extreme", False))
+        else:
+            vol_ok = side_info.get("volume_ratio", 0.0) >= self.min_volume_ratio
+            lvl_ok = side_info.get("max_level", -1) >= self.min_filled_level
+            if vol_ok and lvl_ok:
+                expected_cond = self.long_cond if side == "LONG" else self.short_cond
+                passed = status in (expected_cond, f"{target_side}_GRID_EXTREME") or side_info.get("stressed", False)
 
-        # Базовая проверка соотношения объемов и уровней
-        if side_info.get("volume_ratio", 0.0) < self.min_volume_ratio:
-            return False
-        if side_info.get("max_level", -1) < self.min_filled_level:
-            return False
-
-        expected_cond = self.long_cond if side == "LONG" else self.short_cond
-        return status in (expected_cond, f"{target_side}_GRID_EXTREME") or side_info.get("stressed", False)
+        if passed:
+            symbol = kwargs.get("symbol", indicators.get("symbol", "N/A"))
+            cur_p = kwargs.get("current_price", indicators.get("current_price", 0.0))
+            vol_r = side_info.get("volume_ratio", 0.0)
+            accum_v = side_info.get("accumulated_volume", vol_r * 100.0)
+            avg_p = side_info.get("avg_entry_price", 0.0)
+            dd_p = side_info.get("drawdown_pct", 0.0)
+            log(
+                f"[GRID STRESS MATCH] [{symbol}][{side}] cron3_stuck={target_side} | "
+                f"vol_ratio={vol_r:.1%} ({accum_v:.1f}%), max_lvl={side_info.get('max_level', -1)}/5, "
+                f"avg_price={avg_p:.4f}, cur_price={cur_p:.4f}, dd={dd_p:+.2f}%, status={status}",
+                level="INFO",
+                throttle_sec=5,
+                throttle_key=f"gsm_{symbol}_{side}"
+            )
+        return passed
 
 
 class ExitGridReliefRule:
@@ -334,7 +379,6 @@ class ExitGridReliefRule:
         if not stress or not isinstance(stress, dict):
             return False
 
-        # Хэджируемая сторона сетки противоположна стороне TrendH
         hedged_grid_side = "LONG" if side == "SHORT" else "SHORT"
         grid_data = stress.get(hedged_grid_side, {})
         if not grid_data:

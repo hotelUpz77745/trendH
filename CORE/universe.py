@@ -191,12 +191,24 @@ class StrategyUniverse:
                 vol_states = indicators.get("vol_filter", [])
                 vol_str = f", VolF: {','.join(vol_states)}" if vol_states else ""
 
+                grid_str = ""
+                stress_info = indicators.get("grid_stress")
+                if stress_info and isinstance(stress_info, dict):
+                    st_side = "SHORT" if side == "LONG" else "LONG"
+                    s_data = stress_info.get(st_side, {})
+                    if s_data.get("in_position"):
+                        grid_str = (
+                            f", Cron3[{st_side}]: vol={s_data.get('volume_ratio', 0.0):.1%}, "
+                            f"lvl={s_data.get('max_level', -1)}/5, avg={s_data.get('avg_entry_price', 0.0):.4f}, "
+                            f"dd={s_data.get('drawdown_pct', 0.0):+.2f}%, status={stress_info.get('status')}"
+                        )
+
                 log(
-                    f"[SIGNAL ENTRY] [{self.universe_id}][{symbol}][{side}] Trend: {indicators.get('trend')}{htf_str}, RSI: {rsi_str}{sr_str}{ec_str}{vol_str}",
+                    f"[SIGNAL ENTRY] [{self.universe_id}][{symbol}][{side}] Trend: {indicators.get('trend')}{htf_str}, RSI: {rsi_str}{sr_str}{ec_str}{vol_str}{grid_str}",
                     level="INFO"
                 )
                 if invest_size > 0:
-                    log(f"[POSITION OPEN] [{self.universe_id}][{symbol}][{side}] Цена: {current_price}, Размер: {invest_size}$", level="INFO")
+                    log(f"[POSITION OPEN] [{self.universe_id}][{symbol}][{side}] Цена: {current_price}, Размер: {invest_size}${grid_str}", level="INFO")
                     self.state.open_position(symbol, side, current_price, invest_size)
 
     def close_all_positions(self, current_prices: Dict[str, float], get_slippage_ratio_fn: Callable[[str], float]) -> int:

@@ -215,6 +215,35 @@ class TestGridStressIntegration(unittest.TestCase):
         u_extreme = mgr.get_universe("u_grid_extreme_breakout")
         self.assertTrue(u_extreme.check_entry("SHORT", indicators))
 
+    def test_empty_hardcoded_symbols_and_null_size(self):
+        """
+        Проверка целевых условий:
+        - hardcoded_symbols = [] -> парсит монеты из symbols_path (app.json)
+        - hardcoded_size = null -> размер рассчитывается динамически от набранной сетки
+        """
+        from consts import cfg
+        orig_syms = cfg.get("data_sources", {}).get("hardcoded_symbols")
+        orig_size = cfg.get("data_sources", {}).get("hardcoded_size")
+        try:
+            cfg["data_sources"]["hardcoded_symbols"] = []
+            cfg["data_sources"]["hardcoded_size"] = None
+
+            # 1. Загрузка символов из app.json
+            syms = CronIntegration.get_symbols()
+            self.assertGreaterEqual(len(syms), 50)
+            self.assertIn("ARXUSDT", syms)
+            self.assertIn("RAYSOLUSDT", syms)
+
+            # 2. Динамический расчет размера от сетки RAYSOLUSDT
+            state = CronIntegration.get_symbol_state("RAYSOLUSDT")
+            # Для SHORT (хэдж застрявшего лонга cron3 на ~316.5$): 50% объема = 158.26$
+            self.assertAlmostEqual(state["SHORT"]["invest_size"], 158.26, delta=1.0)
+            # Для LONG (хэдж шорта cron3 на ~171.6$): 50% объема = 85.8$
+            self.assertAlmostEqual(state["LONG"]["invest_size"], 85.8, delta=1.0)
+        finally:
+            cfg["data_sources"]["hardcoded_symbols"] = orig_syms
+            cfg["data_sources"]["hardcoded_size"] = orig_size
+
 
 if __name__ == "__main__":
     unittest.main()
