@@ -9,6 +9,7 @@ import time
 from typing import Optional
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -16,7 +17,9 @@ from consts import ANALYTICS_DIR
 from ANALYTICS.metrics import AnalyticsMathEngine
 from ANALYTICS.plotter import generate_equity_curve
 from TG.keyboards import TGKeyboards
+from c_log import UnifiedLogger
 
+logger = UnifiedLogger("TGAnalytics")
 analytics_router = Router(name="analytics_router")
 
 
@@ -116,23 +119,40 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u1") -
     )
 
 
-def _format_leaderboard_text(bot_core) -> str:
-    """Форматирует сравнительную таблицу всех параллельных вселенных."""
+def _format_leaderboard_text(bot_core, page: int = 1, page_size: int = 15) -> tuple[str, int]:
+    """Форматирует сравнительную таблицу всех параллельных вселенных с пагинацией."""
     if not bot_core or not hasattr(bot_core, "universe_manager"):
-        return "🏆 <b>Менеджер вселенных не инициализирован.</b>"
+        return ("🏆 <b>Менеджер вселенных не инициализирован.</b>", 1)
 
     board = bot_core.universe_manager.get_leaderboard(bot_core.current_prices)
     if not board:
-        return "🏆 <b>Нет активных вселенных.</b>"
+        return ("🏆 <b>Нет активных вселенных.</b>", 1)
 
+    total_items = len(board)
+    total_pages = max(1, (total_items + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+
+    start_idx = (page - 1) * page_size
+    end_idx = min(start_idx + page_size, total_items)
+    page_items = board[start_idx:end_idx]
+
+    page_info = f" (Стр. {page}/{total_pages})" if total_pages > 1 else ""
     lines = [
-        "<b>🏆 Таблица лидеров параллельных вселенных:</b>",
-        "<i>Сравнение эффективности всех запущенных стратегий</i>\n"
+        f"<b>🏆 Таблица лидеров параллельных вселенных{page_info}:</b>",
+        f"<i>Сравнение эффективности всех запущенных стратегий ({total_items} шт.)</i>\n"
     ]
 
-    medals = ["🥇", "🥈", "🥉"] + ["▫️"] * 20
-    for idx, item in enumerate(board, 1):
-        medal = medals[idx - 1]
+    for offset, item in enumerate(page_items):
+        idx = start_idx + offset + 1
+        if idx == 1:
+            medal = "🥇"
+        elif idx == 2:
+            medal = "🥈"
+        elif idx == 3:
+            medal = "🥉"
+        else:
+            medal = "▫️"
+
         pnl_sign = "+" if item["net_profit"] >= 0 else ""
         u_sign = "+" if item["unrealized_pnl"] >= 0 else ""
         dd_val = -abs(item["max_dd"]) if item["max_dd"] > 0 else 0.0
@@ -143,7 +163,7 @@ def _format_leaderboard_text(bot_core) -> str:
             f"   • DD: <code>{dd_val:.2f}$</code> | Открыто: <code>{item['active_count']}</code> ({u_sign}{item['unrealized_pnl']:.2f}$)\n"
         )
 
-    return "\n".join(lines)
+    return ("\n".join(lines), total_pages)
 
 
 def setup_analytics_handlers(router: Router, bot_core):
@@ -175,11 +195,29 @@ def setup_analytics_handlers(router: Router, bot_core):
         text = _format_analytics_text(data, bot_core=bot_core, universe_id=uid)
         await callback.message.edit_text(text, reply_markup=TGKeyboards.analytics_menu(uid, universes), parse_mode="HTML")
 
-    @router.callback_query(F.data == "analytics_leaderboard")
+    @router.callback_query(F.data.startswith("analytics_leaderboard"))
     async def on_analytics_leaderboard(callback: CallbackQuery):
         await callback.answer()
-        text = _format_leaderboard_text(bot_core)
-        await callback.message.edit_text(text, reply_markup=TGKeyboards.leaderboard_menu(), parse_mode="HTML")
+        page = 1
+        data_str = callback.data or ""
+        if "_p" in data_str:
+            try:
+                page = int(data_str.split("_p")[-1])
+            except (ValueError, IndexError):
+                page = 1
+
+        text, total_pages = _format_leaderboard_text(bot_core, page=page, page_size=15)
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=TGKeyboards.leaderboard_menu(page=page, total_pages=total_pages),
+                parse_mode="HTML"
+            )
+        except TelegramBadRequest as e:
+            if "message is not modified" not in str(e).lower():
+                logger.error(f"[Leaderboard] Telegram error: {e}")
+        except Exception as e:
+            logger.error(f"[Leaderboard] Error updating message: {e}")
 
     @router.callback_query(F.data.startswith("analytics_equity"))
     async def on_analytics_equity(callback: CallbackQuery):

@@ -87,12 +87,21 @@ class TGKeyboards:
         return InlineKeyboardMarkup(inline_keyboard=univ_rows + menu_rows)
 
     @staticmethod
-    def leaderboard_menu() -> InlineKeyboardMarkup:
-        """Клавиатура таблицы лидеров параллельных вселенных."""
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 Обновить Leaderboard", callback_data="analytics_leaderboard")],
-            [InlineKeyboardButton(text="🔙 Назад в Аналитику", callback_data="analytics_back")]
-        ])
+    def leaderboard_menu(page: int = 1, total_pages: int = 1) -> InlineKeyboardMarkup:
+        """Клавиатура таблицы лидеров параллельных вселенных с пагинацией."""
+        rows = []
+        if total_pages > 1:
+            nav_row = []
+            if page > 1:
+                nav_row.append(InlineKeyboardButton(text="◀️ Назад", callback_data=f"analytics_leaderboard_p{page - 1}"))
+            nav_row.append(InlineKeyboardButton(text=f"Стр. {page}/{total_pages}", callback_data=f"analytics_leaderboard_p{page}"))
+            if page < total_pages:
+                nav_row.append(InlineKeyboardButton(text="Вперед ▶️", callback_data=f"analytics_leaderboard_p{page + 1}"))
+            rows.append(nav_row)
+
+        rows.append([InlineKeyboardButton(text="🔄 Обновить Leaderboard", callback_data=f"analytics_leaderboard_p{page}")])
+        rows.append([InlineKeyboardButton(text="🔙 Назад в Аналитику", callback_data="analytics_back")])
+        return InlineKeyboardMarkup(inline_keyboard=rows)
 
     @staticmethod
     def analytics_ranking_menu(selected_uid: str = "u1") -> InlineKeyboardMarkup:
