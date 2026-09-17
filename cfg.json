@@ -574,10 +574,10 @@
                 "trend_reversal": {
                     "is_active": true,
                     "long_exit_trends": [
-                        "DOWN"
+                        "UP"
                     ],
                     "short_exit_trends": [
-                        "UP"
+                        "DOWN"
                     ]
                 },
                 "take_profit_ratio": {

@@ -112,24 +112,25 @@ class TestWatchdog(unittest.IsolatedAsyncioTestCase):
         watchdog.check_interval_sec = 0.05
         watchdog.heartbeat_interval_sec = 100.0
 
-        task = asyncio.create_task(watchdog.start())
-        await asyncio.sleep(0.02)
-        watchdog.last_tick = time.time() - 10.0  # Симулируем давний тик
+        with patch("CORE.watchdog.log"):
+            task = asyncio.create_task(watchdog.start())
+            await asyncio.sleep(0.02)
+            watchdog.last_tick = time.time() - 10.0  # Симулируем давний тик
 
-        # Ждем срабатывания проверки зависания
-        await asyncio.sleep(0.1)
-        self.assertTrue(watchdog._alert_sent)
-        self.assertTrue(mock_adapter.send_alert.called)
+            # Ждем срабатывания проверки зависания
+            await asyncio.sleep(0.1)
+            self.assertTrue(watchdog._alert_sent)
+            self.assertTrue(mock_adapter.send_alert.called)
 
-        # Симулируем восстановление цикла
-        watchdog.tick()
-        await asyncio.sleep(0.1)
-        self.assertFalse(watchdog._alert_sent)
+            # Симулируем восстановление цикла
+            watchdog.tick()
+            await asyncio.sleep(0.1)
+            self.assertFalse(watchdog._alert_sent)
 
-        watchdog.stop()
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+            watchdog.stop()
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
     async def test_loop_watchdog_tick_throughput(self):
         """Проверка подсчета итераций и пропускной способности главного цикла."""

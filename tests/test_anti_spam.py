@@ -124,29 +124,32 @@ class TestUnifiedLoggerIntegration(unittest.TestCase):
 
     def test_logger_methods_no_crash(self):
         """Методы debug, info, warning, error, exception должны безопасно вызываться с троттлингом."""
-        self.logger.info("Test info 1", throttle_sec=0.1)
-        self.logger.info("Test info 1", throttle_sec=0.1)  # Подавляется без падения
-        self.logger.warning("Test warning 1", throttle_sec=0.1)
-        self.logger.error("Test error 1", throttle_sec=0.1)
-        self.logger.debug("Test debug 1", throttle_sec=0.1)
+        with unittest.mock.patch.object(self.logger._logger.logger, 'callHandlers'):
+            self.logger.info("Test info 1", throttle_sec=0.1)
+            self.logger.info("Test info 1", throttle_sec=0.1)  # Подавляется без падения
+            self.logger.warning("Test warning 1", throttle_sec=0.1)
+            self.logger.error("Test error 1", throttle_sec=0.1)
+            self.logger.debug("Test debug 1", throttle_sec=0.1)
 
-        try:
-            raise ValueError("Test internal error")
-        except ValueError as ex:
-            self.logger.exception("Caught exception test", exc=ex, throttle_sec=0.1)
+            try:
+                raise ValueError("Test internal error")
+            except ValueError as ex:
+                self.logger.exception("Caught exception test", exc=ex, throttle_sec=0.1)
 
     def test_global_log_helper(self):
         """Глобальная функция log() должна корректно маршрутизировать троттлинг."""
-        log("Global info test 1", level="INFO", throttle_sec=0.1)
-        log("Global info test 1", level="INFO", throttle_sec=0.1)
-        log("Global error test 1", level="ERROR", throttle_sec=0.1)
-        log("Global warning test 1", level="WARNING", throttle_sec=0.1)
-        log("Global debug test 1", level="DEBUG", throttle_sec=0.1)
+        from c_log import _global_logger
+        with unittest.mock.patch.object(_global_logger._logger.logger, 'callHandlers'):
+            log("Global info test 1", level="INFO", throttle_sec=0.1)
+            log("Global info test 1", level="INFO", throttle_sec=0.1)
+            log("Global error test 1", level="ERROR", throttle_sec=0.1)
+            log("Global warning test 1", level="WARNING", throttle_sec=0.1)
+            log("Global debug test 1", level="DEBUG", throttle_sec=0.1)
 
-        try:
-            raise RuntimeError("Simulation error")
-        except RuntimeError as ex:
-            log("Global exception test", level="ERROR", exc=ex, throttle_sec=0.1)
+            try:
+                raise RuntimeError("Simulation error")
+            except RuntimeError as ex:
+                log("Global exception test", level="ERROR", exc=ex, throttle_sec=0.1)
 
 
 if __name__ == "__main__":
