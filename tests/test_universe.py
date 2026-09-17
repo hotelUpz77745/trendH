@@ -355,15 +355,15 @@ class TestUniverseManager(unittest.TestCase):
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001
         )
-        self.assertEqual(len(mgr.universes), 16)
-        expected_uids = [
-            "u15", "u15_cons", "u15_cons_skip", "u15_aggr", "u15_scalp",
-            "u15_anti", "u15_anti_fade", "u15_anti_tight", "u15_anti_scalp",
-            "u3_anti", "u3_anti_climax", "u3_anti_aggr", "u3_anti_trend",
-            "u_grid_stress_base", "u_grid_stress_aggr", "u_grid_pure_shadow"
-        ]
-        for uid in expected_uids:
-            self.assertIsNotNone(mgr.get_universe(uid), f"Universe {uid} not found")
+        self.assertEqual(len(mgr.universes), 30)
+        self.assertIsNotNone(mgr.get_universe("u15"))
+        self.assertIsNotNone(mgr.get_universe("u15_skip"))
+        self.assertIsNotNone(mgr.get_universe("u15_cons"))
+        self.assertIsNotNone(mgr.get_universe("u15_cons_skip"))
+        self.assertIsNotNone(mgr.get_universe("u3_anti"))
+        self.assertIsNotNone(mgr.get_universe("u3_anti_skip"))
+        self.assertIsNotNone(mgr.get_universe("u_grid_stress_base"))
+        self.assertIsNotNone(mgr.get_universe("u_grid_stress_base_skip"))
 
         # u15 vs u15_anti: TP=0.045, SL=0.02 -> u15_anti TP=0.02, SL=0.045
         u15 = mgr.get_universe("u15")

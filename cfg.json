@@ -317,7 +317,65 @@
                 "stop_loss_ratio": {
                     "value": 0.02
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u15_skip": {
+            "name": "Breakout LuxAlgo + Taker Flow (Skip Inactive)",
+            "description": "Пробой уровней LuxAlgo с фильтром агрессии маркета (Taker Buy >=60%) для отсечения ложных выносов стопов [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "sr_levels": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_LONG",
+                    "short_cond": "BREAKOUT_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.6,
+                    "max_buy_ratio": 0.4,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.2
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1200.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.045
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u15_cons": {
             "name": "Breakout Sniper (Conservative)",
@@ -377,8 +435,8 @@
             }
         },
         "u15_cons_skip": {
-            "name": "Breakout Sniper (Conservative + Grid Active Filter)",
-            "description": "Консервативный пробой (Taker Buy >=65%). Режим SKIP — входит только если сетка cron3 уже вошла в рынок (скипает сигнал при неактивной сетке)",
+            "name": "Breakout Sniper (Conservative) (Skip Inactive)",
+            "description": "Консервативный пробой с повышенным порогом Taker Buy >=65% и расширенной зоной уровней (margin 2.5). Режим TAKE_LEVEL_0 — входит автономно, не дожидаясь сетки [Режим SKIP: вход только если сетка cron3 активна]",
             "is_active": true,
             "inactive_grid_mode": "SKIP",
             "enter_rules": {
@@ -497,7 +555,75 @@
                 "stop_loss_ratio": {
                     "value": 0.025
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u15_aggr_skip": {
+            "name": "Momentum Surge Breakout (Aggressive) (Skip Inactive)",
+            "description": "Агрессивный пробой с ранним входом (Taker >=55%) и подтверждением всплеска объема 1m [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "sr_levels": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 1.5,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_LONG",
+                    "short_cond": "BREAKOUT_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.55,
+                    "max_buy_ratio": 0.45,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.1
+                    },
+                    "r": {
+                        "slice_factor": 2.1
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.5
+                },
+                "take_profit_ratio": {
+                    "value": 0.06
+                },
+                "stop_loss_ratio": {
+                    "value": 0.025
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u15_scalp": {
             "name": "Micro Breakout Scalp (Fast Scalp)",
@@ -537,7 +663,49 @@
                 "stop_loss_ratio": {
                     "value": 0.008
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u15_scalp_skip": {
+            "name": "Micro Breakout Scalp (Fast Scalp) (Skip Inactive)",
+            "description": "Сверхбыстрый скальп первичного импульса пробоя с жестким тайм-стопом 10 минут [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "sr_levels": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_LONG",
+                    "short_cond": "BREAKOUT_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.6,
+                    "max_buy_ratio": 0.4,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 600.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.015
+                },
+                "stop_loss_ratio": {
+                    "value": 0.008
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u15_anti": {
             "name": "Анти-Breakout LuxAlgo + Taker Flow (Standard)",
@@ -599,7 +767,71 @@
                 "stop_loss_ratio": {
                     "value": 0.045
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u15_anti_skip": {
+            "name": "Анти-Breakout LuxAlgo + Taker Flow (Standard) (Skip Inactive)",
+            "description": "Инверсная стратегия пробоя LuxAlgo: вход против выносов при агрессивном маркет-потоке [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf_anti": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "DOWN",
+                    "short_cond": "UP"
+                },
+                "sr_levels_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "taker_flow_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.6,
+                    "max_buy_ratio": 0.4,
+                    "long_cond": "TAKER_SELL_DOMINANT",
+                    "short_cond": "TAKER_BUY_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal_anti": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ]
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1200.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.02
+                },
+                "stop_loss_ratio": {
+                    "value": 0.045
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u15_anti_fade": {
             "name": "Pure Liquidity Fade (Range Return)",
@@ -650,7 +882,60 @@
                 "stop_loss_ratio": {
                     "value": 0.025
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u15_anti_fade_skip": {
+            "name": "Pure Liquidity Fade (Range Return) (Skip Inactive)",
+            "description": "Контртрендовый возврат в диапазон после ложного пробоя уровня без привязки к старшему тренду HTF [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "sr_levels_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "taker_flow_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.6,
+                    "max_buy_ratio": 0.4,
+                    "long_cond": "TAKER_SELL_DOMINANT",
+                    "short_cond": "TAKER_BUY_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal_anti": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ]
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1200.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.025
+                },
+                "stop_loss_ratio": {
+                    "value": 0.025
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u15_anti_tight": {
             "name": "Conservative Fade (Tight SL)",
@@ -708,7 +993,67 @@
                 "stop_loss_ratio": {
                     "value": 0.015
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u15_anti_tight_skip": {
+            "name": "Conservative Fade (Tight SL) (Skip Inactive)",
+            "description": "Консервативный фейд только при экстремальном перегреве маркета (Taker >=70%) со строгим защитным стопом 1.5% [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf_anti": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "DOWN",
+                    "short_cond": "UP"
+                },
+                "sr_levels_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "taker_flow_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.7,
+                    "max_buy_ratio": 0.3,
+                    "long_cond": "TAKER_SELL_DOMINANT",
+                    "short_cond": "TAKER_BUY_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal_anti": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ]
+                },
+                "take_profit_ratio": {
+                    "value": 0.025
+                },
+                "stop_loss_ratio": {
+                    "value": 0.015
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u15_anti_scalp": {
             "name": "Micro Fade Scalp (Quick Reversal)",
@@ -748,7 +1093,49 @@
                 "stop_loss_ratio": {
                     "value": 0.018
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u15_anti_scalp_skip": {
+            "name": "Micro Fade Scalp (Quick Reversal) (Skip Inactive)",
+            "description": "Микро-реверс скальп ложного пробоя уровня с быстрым тейком 1.2% и тайм-стопом 10 минут [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "sr_levels_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "taker_flow_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.6,
+                    "max_buy_ratio": 0.4,
+                    "long_cond": "TAKER_SELL_DOMINANT",
+                    "short_cond": "TAKER_BUY_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 600.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.012
+                },
+                "stop_loss_ratio": {
+                    "value": 0.018
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u3_anti": {
             "name": "Реверс Breakout & Volume (Standard)",
@@ -812,7 +1199,73 @@
                 "stop_loss_ratio": {
                     "value": 0.04
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u3_anti_skip": {
+            "name": "Реверс Breakout & Volume (Standard) (Skip Inactive)",
+            "description": "Реверс ложного пробоя уровней LuxAlgo: вход против движения уровня при объемном выносе 1m [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf_anti": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "DOWN",
+                    "short_cond": "UP"
+                },
+                "sr_levels_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.1
+                    },
+                    "r": {
+                        "slice_factor": 2.1
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal_anti": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ]
+                },
+                "take_profit_ratio": {
+                    "value": 0.02
+                },
+                "stop_loss_ratio": {
+                    "value": 0.04
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u3_anti_climax": {
             "name": "Volume Climax Exhaustion Reversal",
@@ -876,7 +1329,73 @@
                 "stop_loss_ratio": {
                     "value": 0.02
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u3_anti_climax_skip": {
+            "name": "Volume Climax Exhaustion Reversal (Skip Inactive)",
+            "description": "Ловит кульминацию объема и истощение импульса при повышенном всплеске объема (slice 1.5/2.8) [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf_anti": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "DOWN",
+                    "short_cond": "UP"
+                },
+                "sr_levels_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.5
+                    },
+                    "r": {
+                        "slice_factor": 2.8
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal_anti": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ]
+                },
+                "take_profit_ratio": {
+                    "value": 0.03
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u3_anti_aggr": {
             "name": "Aggressive Volume Fade",
@@ -929,7 +1448,62 @@
                 "stop_loss_ratio": {
                     "value": 0.03
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u3_anti_aggr_skip": {
+            "name": "Aggressive Volume Fade (Skip Inactive)",
+            "description": "Агрессивный контртренд ложного пробоя при объеме без ожидания фильтра HTF [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "sr_levels_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.1
+                    },
+                    "r": {
+                        "slice_factor": 2.1
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal_anti": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ]
+                },
+                "take_profit_ratio": {
+                    "value": 0.018
+                },
+                "stop_loss_ratio": {
+                    "value": 0.03
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u3_anti_trend": {
             "name": "Trend-Aligned Pullback Fade",
@@ -993,7 +1567,73 @@
                 "stop_loss_ratio": {
                     "value": 0.02
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u3_anti_trend_skip": {
+            "name": "Trend-Aligned Pullback Fade (Skip Inactive)",
+            "description": "Трендовый фейд: вход против 5m ложного пробоя, но строго в направлении тренда 1h HTF (покупка со скидкой) [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "sr_levels_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.1
+                    },
+                    "r": {
+                        "slice_factor": 2.1
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ]
+                },
+                "take_profit_ratio": {
+                    "value": 0.035
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u_grid_stress_base": {
             "name": "Grid Stress Momentum Overlay (TP 15%, SL 3.5%)",
@@ -1037,7 +1677,53 @@
                 "stop_loss_ratio": {
                     "value": 0.035
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u_grid_stress_base_skip": {
+            "name": "Grid Stress Momentum Overlay (TP 15%, SL 3.5%) (Skip Inactive)",
+            "description": "Решение 1: вход против застрявшей сетки cron3 (уровни 0-3+, ratio >= 0.5) + подтверждение 1h трендом, выход по Chandelier (3xATR) или закрытию сетки [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 3,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.2
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 3.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.15
+                },
+                "stop_loss_ratio": {
+                    "value": 0.035
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u_grid_stress_aggr": {
             "name": "Grid Stress Fast Momentum (TP 8%, SL 2.0%)",
@@ -1078,7 +1764,50 @@
                 "stop_loss_ratio": {
                     "value": 0.02
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u_grid_stress_aggr_skip": {
+            "name": "Grid Stress Fast Momentum (TP 8%, SL 2.0%) (Skip Inactive)",
+            "description": "Решение 1 (агрессивное): ранний вход при ratio >= 0.4 (уровень 2+) + перевес Taker Flow (>=55%) + трейлинг Chandelier (2xATR) [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.55,
+                    "max_buy_ratio": 0.45,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.2
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 10,
+                    "atr_mult": 2.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.08
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u_grid_extreme_breakout": {
             "name": "Grid Extreme Level Breakout (TP 25%, SL 4.0%)",
@@ -1125,7 +1854,56 @@
                 "stop_loss_ratio": {
                     "value": 0.04
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u_grid_extreme_breakout_skip": {
+            "name": "Grid Extreme Level Breakout (TP 25%, SL 4.0%) (Skip Inactive)",
+            "description": "Решение 2: вход на точке максимального стресса сеточника при пробое уровней 4/5 (ratio >= 0.70) + всплеск объема 1m. ОТКЛЮЧЕНА (высокий DD -58$, низкий PnL +0.05$) [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": false,
+            "enter_rules": {
+                "grid_stress_extreme": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.7,
+                    "min_filled_level": 4,
+                    "extreme_only": true,
+                    "long_cond": "SHORT_GRID_EXTREME",
+                    "short_cond": "LONG_GRID_EXTREME"
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.1
+                    },
+                    "r": {
+                        "slice_factor": 2.1
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.25
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 3.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.25
+                },
+                "stop_loss_ratio": {
+                    "value": 0.04
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         },
         "u_grid_pure_shadow": {
             "name": "Pure Grid Shadow Hedge (No TP, SL 5%)",
@@ -1153,7 +1931,37 @@
                 "stop_loss_ratio": {
                     "value": 0.05
                 }
-            }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u_grid_pure_shadow_skip": {
+            "name": "Pure Grid Shadow Hedge (No TP, SL 5%) (Skip Inactive)",
+            "description": "Чистый математический анти-сеточный хэдж без индикаторов. Вход при ratio >= 0.55, выход строго по разгрузке сетки (grid_relief) или защитный SL 5% [Режим SKIP: вход только если сетка cron3 активна]",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.55,
+                    "min_filled_level": 3,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "stop_loss_ratio": {
+                    "value": 0.05
+                }
+            },
+            "inactive_grid_mode": "SKIP"
         }
     },
     "watchdog": {
