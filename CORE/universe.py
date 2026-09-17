@@ -113,7 +113,8 @@ class StrategyUniverse:
         exit_rules: Dict[str, Any],
         get_slippage_ratio_fn: Callable[[str], float],
         is_active: bool = True,
-        backup_manager=None
+        backup_manager=None,
+        inactive_grid_mode: Optional[str] = None
     ):
         self.universe_id = universe_id
         self.name = name
@@ -121,6 +122,7 @@ class StrategyUniverse:
         self.is_active = is_active
         self.enter_rules = enter_rules
         self.exit_rules = exit_rules
+        self.inactive_grid_mode = str(inactive_grid_mode or "TAKE_LEVEL_0").strip().upper()
 
         self.entry_engine = EntrySignalEngine(enter_rules)
         self.exit_engine = ExitSignalEngine(exit_rules, ANALYTICS_CFG, get_slippage_ratio_fn)
@@ -151,7 +153,8 @@ class StrategyUniverse:
         indicators: Dict[str, Any],
         get_slippage_ratio_fn: Callable[[str], float],
         is_paused: bool,
-        invest_size: float
+        invest_size: float,
+        cron_state: Optional[Dict[str, Any]] = None
     ):
         """Обрабатывает тик цены для конкретной валютной пары и стороны."""
         pos = self.state.get_position(symbol, side)
@@ -181,6 +184,19 @@ class StrategyUniverse:
         else:
             # Проверка условий входа
             if not is_paused and self.check_entry(side, indicators):
+                eff_invest_size = invest_size
+                if cron_state and side in cron_state:
+                    s_info = cron_state[side]
+                    has_active = s_info.get("has_active", False)
+                    opp_side = "SHORT" if side == "LONG" else "LONG"
+                    opp_accum = cron_state.get(opp_side, {}).get("accum_usd", 0.0)
+
+                    if not has_active and opp_accum == 0.0:
+                        if self.inactive_grid_mode in ("SKIP", "SKIP_SIGNAL", "SKIP_IF_INACTIVE"):
+                            eff_invest_size = 0.0
+                        else:
+                            eff_invest_size = s_info.get("base_order_usd", invest_size)
+
                 rsi_val = indicators.get("rsi_value")
                 rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
                 htf_str = f", HTF: {indicators.get('trend_htf')}" if "trend_htf" in indicators else ""
@@ -207,9 +223,9 @@ class StrategyUniverse:
                     f"[SIGNAL ENTRY] [{self.universe_id}][{symbol}][{side}] Trend: {indicators.get('trend')}{htf_str}, RSI: {rsi_str}{sr_str}{ec_str}{vol_str}{grid_str}",
                     level="INFO"
                 )
-                if invest_size > 0:
-                    log(f"[POSITION OPEN] [{self.universe_id}][{symbol}][{side}] Цена: {current_price}, Размер: {invest_size}${grid_str}", level="INFO")
-                    self.state.open_position(symbol, side, current_price, invest_size)
+                if eff_invest_size > 0:
+                    log(f"[POSITION OPEN] [{self.universe_id}][{symbol}][{side}] Цена: {current_price}, Размер: {eff_invest_size}${grid_str}", level="INFO")
+                    self.state.open_position(symbol, side, current_price, eff_invest_size)
                 else:
                     log(f"[SIGNAL SKIPPED] [{self.universe_id}][{symbol}][{side}] Пропуск входа: размер позиции 0 (сетка cron3 не активна)", level="INFO", throttle_sec=30)
 
@@ -267,6 +283,7 @@ class UniverseManager:
                 desc = udata.get("description", "")
                 enter_rules = udata.get("enter_rules", default_enter_rules)
                 exit_rules = udata.get("exit_rules", default_exit_rules)
+                inactive_grid_mode = udata.get("inactive_grid_mode")
                 self.universes[uid] = StrategyUniverse(
                     universe_id=uid,
                     name=name,
@@ -275,7 +292,8 @@ class UniverseManager:
                     exit_rules=exit_rules,
                     get_slippage_ratio_fn=get_slippage_ratio_fn,
                     is_active=True,
-                    backup_manager=backup_manager
+                    backup_manager=backup_manager,
+                    inactive_grid_mode=inactive_grid_mode
                 )
         else:
             # Одиночная вселенная по умолчанию
@@ -343,7 +361,8 @@ class UniverseManager:
         indicators: Dict[str, Any],
         get_slippage_ratio_fn: Callable[[str], float],
         is_paused: bool,
-        invest_size: float
+        invest_size: float,
+        cron_state: Optional[Dict[str, Any]] = None
     ):
         """Раздает тик во все активные вселенные параллельно."""
         for universe in self.universes.values():
@@ -355,7 +374,8 @@ class UniverseManager:
                     indicators=indicators,
                     get_slippage_ratio_fn=get_slippage_ratio_fn,
                     is_paused=is_paused,
-                    invest_size=invest_size
+                    invest_size=invest_size,
+                    cron_state=cron_state
                 )
 
     def close_all_positions(self, current_prices: Dict[str, float], get_slippage_ratio_fn: Callable[[str], float]) -> int:

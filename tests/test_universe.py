@@ -357,10 +357,10 @@ class TestUniverseManager(unittest.TestCase):
         )
         self.assertEqual(len(mgr.universes), 16)
         expected_uids = [
-            "u15", "u15_cons", "u15_aggr", "u15_scalp",
+            "u15", "u15_cons", "u15_cons_skip", "u15_aggr", "u15_scalp",
             "u15_anti", "u15_anti_fade", "u15_anti_tight", "u15_anti_scalp",
             "u3_anti", "u3_anti_climax", "u3_anti_aggr", "u3_anti_trend",
-            "u_grid_stress_base", "u_grid_stress_aggr", "u_grid_extreme_breakout", "u_grid_pure_shadow"
+            "u_grid_stress_base", "u_grid_stress_aggr", "u_grid_pure_shadow"
         ]
         for uid in expected_uids:
             self.assertIsNotNone(mgr.get_universe(uid), f"Universe {uid} not found")

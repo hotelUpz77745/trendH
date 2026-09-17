@@ -285,7 +285,8 @@ class Main:
                 indicators=indicators,
                 get_slippage_ratio_fn=self.get_slippage_ratio,
                 is_paused=self.is_paused,
-                invest_size=invest_size
+                invest_size=invest_size,
+                cron_state=cron_state
             )
         await asyncio.sleep(0)
 

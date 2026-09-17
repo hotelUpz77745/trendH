@@ -130,6 +130,9 @@ class CronIntegration:
                 opp_info = sides_info.get("SHORT" if side == "LONG" else "LONG", {})
                 result[side]["enabled"] = s_info.get("enabled", False)
                 result[side]["raw_grid"] = s_info.get("grid", {})
+                result[side]["has_active"] = s_info.get("has_active", False)
+                result[side]["base_order_usd"] = s_info.get("base_order_usd", 50.0)
+                result[side]["accum_usd"] = s_info.get("accum_usd", 0.0)
 
                 # Хэджирование: если на противоположной стороне набран объем, хэдж берет 50% объема
                 if opp_info.get("accum_usd", 0.0) > 0:

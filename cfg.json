@@ -321,8 +321,66 @@
         },
         "u15_cons": {
             "name": "Breakout Sniper (Conservative)",
-            "description": "Консервативный пробой с повышенным порогом Taker Buy >=65% и расширенной зоной уровней (margin 2.5)",
+            "description": "Консервативный пробой с повышенным порогом Taker Buy >=65% и расширенной зоной уровней (margin 2.5). Режим TAKE_LEVEL_0 — входит автономно, не дожидаясь сетки",
             "is_active": true,
+            "inactive_grid_mode": "TAKE_LEVEL_0",
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "sr_levels": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.5,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_LONG",
+                    "short_cond": "BREAKOUT_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.65,
+                    "max_buy_ratio": 0.35,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.0
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1200.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.03
+                },
+                "stop_loss_ratio": {
+                    "value": 0.015
+                }
+            }
+        },
+        "u15_cons_skip": {
+            "name": "Breakout Sniper (Conservative + Grid Active Filter)",
+            "description": "Консервативный пробой (Taker Buy >=65%). Режим SKIP — входит только если сетка cron3 уже вошла в рынок (скипает сигнал при неактивной сетке)",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
             "enter_rules": {
                 "trend_htf": {
                     "is_active": true,
@@ -1024,8 +1082,8 @@
         },
         "u_grid_extreme_breakout": {
             "name": "Grid Extreme Level Breakout (TP 25%, SL 4.0%)",
-            "description": "Решение 2: вход на точке максимального стресса сеточника при пробое уровней 4/5 (ratio >= 0.70) + всплеск объема 1m",
-            "is_active": true,
+            "description": "Решение 2: вход на точке максимального стресса сеточника при пробое уровней 4/5 (ratio >= 0.70) + всплеск объема 1m. ОТКЛЮЧЕНА (высокий DD -58$, низкий PnL +0.05$)",
+            "is_active": false,
             "enter_rules": {
                 "grid_stress_extreme": {
                     "is_active": true,
