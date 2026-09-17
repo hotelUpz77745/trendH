@@ -252,6 +252,60 @@ class TestGridStressIntegration(unittest.TestCase):
             cfg["data_sources"]["hardcoded_symbols"] = orig_syms
             cfg["data_sources"]["hardcoded_size"] = orig_size
 
+    def test_inactive_grid_mode_options(self):
+        """
+        Проверка двух режимов при неактивной сетке (is_active=False на всех уровнях):
+        1. inactive_grid_mode = 'SKIP' -> invest_size = 0.0, сигнал пропускается.
+        2. inactive_grid_mode = 'TAKE_LEVEL_0' -> invest_size = base_order_usd (уровень 0).
+        """
+        from consts import cfg
+        # Создаем временный файл монеты с полностью неактивной сеткой
+        inactive_data = {
+            "LONG": {
+                "enable": True,
+                "invest_size": 400,
+                "grid": {
+                    "0": {"volume": 12.96, "is_active": False},
+                    "1": {"volume": 14.26, "is_active": False}
+                }
+            },
+            "SHORT": {
+                "enable": True,
+                "invest_size": 400,
+                "grid": {
+                    "0": {"volume": 12.96, "is_active": False},
+                    "1": {"volume": 14.26, "is_active": False}
+                }
+            }
+        }
+        test_file = os.path.join(self.fixtures_dir, "testinactivesymusdt.json")
+        try:
+            with open(test_file, "w", encoding="utf-8") as f:
+                json.dump(inactive_data, f)
+
+            orig_mode = cfg.get("data_sources", {}).get("inactive_grid_mode")
+            orig_size = cfg.get("data_sources", {}).get("hardcoded_size")
+            cfg["data_sources"]["hardcoded_size"] = None
+
+            # 1. Тест режима 'SKIP'
+            cfg["data_sources"]["inactive_grid_mode"] = "SKIP"
+            state_skip = CronIntegration.get_symbol_state("TESTINACTIVESYMUSDT")
+            self.assertEqual(state_skip["LONG"]["invest_size"], 0.0)
+            self.assertEqual(state_skip["SHORT"]["invest_size"], 0.0)
+
+            # 2. Тест режима 'TAKE_LEVEL_0' (дефолт)
+            cfg["data_sources"]["inactive_grid_mode"] = "TAKE_LEVEL_0"
+            state_take = CronIntegration.get_symbol_state("TESTINACTIVESYMUSDT")
+            self.assertEqual(state_take["LONG"]["invest_size"], 51.84)
+            self.assertEqual(state_take["SHORT"]["invest_size"], 51.84)
+
+            # Восстанавливаем оригинальные значения
+            cfg["data_sources"]["inactive_grid_mode"] = orig_mode
+            cfg["data_sources"]["hardcoded_size"] = orig_size
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
 
 if __name__ == "__main__":
     unittest.main()

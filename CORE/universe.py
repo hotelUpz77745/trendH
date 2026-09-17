@@ -210,6 +210,8 @@ class StrategyUniverse:
                 if invest_size > 0:
                     log(f"[POSITION OPEN] [{self.universe_id}][{symbol}][{side}] Цена: {current_price}, Размер: {invest_size}${grid_str}", level="INFO")
                     self.state.open_position(symbol, side, current_price, invest_size)
+                else:
+                    log(f"[SIGNAL SKIPPED] [{self.universe_id}][{symbol}][{side}] Пропуск входа: размер позиции 0 (сетка cron3 не активна)", level="INFO", throttle_sec=30)
 
     def close_all_positions(self, current_prices: Dict[str, float], get_slippage_ratio_fn: Callable[[str], float]) -> int:
         """Экстренное закрытие всех позиций вселенной."""

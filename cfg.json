@@ -12,7 +12,9 @@
         "runtime_path": "C:/Users/user/Desktop/My_Pro/HP_EliteBook_735_old/MY/HRON_3/cron3Papper/CFG/runtime",
         "hardcoded_symbols": [],
         "hardcoded_size": null,
-        "_comment_hardcoded": "If hardcoded_symbols/size are present and non-empty, they override reading from the paths"
+        "_comment_hardcoded": "If hardcoded_symbols/size are present and non-empty, they override reading from the paths",
+        "inactive_grid_mode": "TAKE_LEVEL_0",
+        "_comment_inactive_grid_mode": "Режим при неактивной сетке (is_active=false на всех уровнях нужной стороны): 'TAKE_LEVEL_0' (по дефолту) — брать объем нулевого уровня (invest_size * grid[0].volume) невзирая на активность; 'SKIP' — ничего не брать (размер позиции 0) и скипать трендовый сигнал."
     },
     "logging": {
         "debug": false,

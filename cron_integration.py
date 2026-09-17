@@ -95,6 +95,9 @@ class CronIntegration:
                 result["SHORT"] = {"invest_size": size_val, "volume": 0.0, "enabled": True}
                 return result
 
+            inactive_mode = str(data_sources.get("inactive_grid_mode", "TAKE_LEVEL_0")).strip().upper()
+            is_skip_mode = inactive_mode in ("SKIP", "SKIP_SIGNAL", "SKIP_IF_INACTIVE") or data_sources.get("skip_if_grid_inactive") is True
+
             file_path = cls._find_runtime_file(symbol)
             if not file_path:
                 return result
@@ -109,6 +112,7 @@ class CronIntegration:
                 base_inv = float(s_data.get("invest_size", 0.0))
                 grid = s_data.get("grid", {})
                 active_vol_pct = sum(v.get("volume", 0.0) for v in grid.values() if v.get("is_active", False))
+                has_active = any(v.get("is_active", False) for v in grid.values())
                 level_0_pct = float(grid.get("0", {}).get("volume", 12.96))
                 accum_usd = (active_vol_pct / 100.0) * base_inv if active_vol_pct > 0 else 0.0
                 base_order_usd = (level_0_pct / 100.0) * base_inv if (base_inv > 0 and level_0_pct > 0) else 50.0
@@ -117,6 +121,7 @@ class CronIntegration:
                     "base_inv": base_inv,
                     "accum_usd": accum_usd,
                     "base_order_usd": base_order_usd,
+                    "has_active": has_active,
                     "grid": grid
                 }
 
@@ -129,10 +134,14 @@ class CronIntegration:
                 # Хэджирование: если на противоположной стороне набран объем, хэдж берет 50% объема
                 if opp_info.get("accum_usd", 0.0) > 0:
                     calc_size = opp_info["accum_usd"] * 0.5
-                elif s_info.get("accum_usd", 0.0) > 0:
+                elif s_info.get("has_active", False) and s_info.get("accum_usd", 0.0) > 0:
                     calc_size = s_info["accum_usd"]
                 else:
-                    calc_size = s_info.get("base_order_usd", 50.0)
+                    # На нужной стороне не активирован ни один уровень сетки
+                    if is_skip_mode:
+                        calc_size = 0.0
+                    else:
+                        calc_size = s_info.get("base_order_usd", 50.0)
 
                 result[side]["invest_size"] = round(calc_size, 2)
         except Exception as e:
