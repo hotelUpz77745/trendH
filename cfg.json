@@ -38,7 +38,6 @@
     },
     "paper_trading": {
         "slippage_base_ratio": 0.0005,
-        "slippage_base_pct": 0.0005,
         "_desc_slippage_base_ratio": "Базовое проскальзывание. Значение 0.0005 означает 0.05%.",
         "daily_volume_tiers_usdt": {
             "5000000": 4.0,
