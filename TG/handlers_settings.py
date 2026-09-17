@@ -83,7 +83,7 @@ def setup_settings_handlers(router: Router, bot_core):
         exit_rev = EXIT_RULES.get("trend_reversal", {})
         exit_tp = EXIT_RULES.get("take_profit_ratio", {})
         exit_sl = EXIT_RULES.get("stop_loss_ratio", {})
-        slip_base = PAPER_TRADING_CFG.get("slippage_base_ratio", 0.001)
+        slip_base = PAPER_TRADING_CFG.get("slippage_base_ratio", PAPER_TRADING_CFG.get("slippage_base_pct", 0.0005))
         fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0.0006)
 
         htf_info = ""

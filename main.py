@@ -114,7 +114,7 @@ class Main:
 
     def get_slippage_ratio(self, symbol: str) -> float:
         vol = self.symbol_volume_24h.get(symbol, 0.0)
-        base_ratio = PAPER_TRADING_CFG["slippage_base_ratio"]
+        base_ratio = PAPER_TRADING_CFG.get("slippage_base_ratio", PAPER_TRADING_CFG.get("slippage_base_pct", 0.0005))
         tiers = PAPER_TRADING_CFG.get("daily_volume_tiers_usdt", {})
         
         multiplier = 1.0
