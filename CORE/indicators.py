@@ -7,50 +7,26 @@ from typing import Dict, List, Set, Any, Optional
 from CORE.sr_levels import SRLevelsCalculator
 
 
+from CORE.native_math import NativeMath
+
+
 class IndicatorsMath:
-    """Чистые математические формулы технических индикаторов."""
+    """Чистые высокопроизводительные формулы технических индикаторов на C/LLVM."""
 
     @staticmethod
     def calc_ema(prices: List[float], length: int) -> List[float]:
-        """Расчет Exponential Moving Average (EMA)."""
-        if not prices or len(prices) < length:
-            return []
-        k = 2 / (length + 1)
-        ema_list = []
-        ema = sum(prices[:length]) / length
-        ema_list.append(ema)
-        for price in prices[length:]:
-            ema = price * k + ema * (1 - k)
-            ema_list.append(ema)
-        return ema_list
+        """Высокоскоростной расчет Exponential Moving Average (EMA) на C/LLVM."""
+        return NativeMath.fast_ema(prices, length)
 
     @staticmethod
     def calc_rsi_series(closes: List[float], length: int = 14) -> List[float]:
-        """Расчет серии Relative Strength Index (RSI) по формуле Уайлдера."""
-        if not closes or len(closes) < length + 1:
-            return []
-
-        diffs = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
-        gains = [d if d > 0 else 0.0 for d in diffs]
-        losses = [-d if d < 0 else 0.0 for d in diffs]
-
-        avg_gain = sum(gains[:length]) / length
-        avg_loss = sum(losses[:length]) / length
-
-        def _to_rsi(g: float, l: float) -> float:
-            return 50.0 if (l == 0 and g == 0) else (100.0 if l == 0 else 100.0 - (100.0 / (1.0 + g / l)))
-
-        rsi_list = [_to_rsi(avg_gain, avg_loss)]
-        for i in range(length, len(gains)):
-            avg_gain = (avg_gain * (length - 1) + gains[i]) / length
-            avg_loss = (avg_loss * (length - 1) + losses[i]) / length
-            rsi_list.append(_to_rsi(avg_gain, avg_loss))
-        return rsi_list
+        """Высокоскоростной расчет серии RSI по формуле Уайлдера на C/LLVM."""
+        return NativeMath.fast_rsi_series(closes, length)
 
     @staticmethod
     def calc_rsi(closes: List[float], length: int = 14) -> Optional[float]:
         """Расчет последнего значения Relative Strength Index (RSI)."""
-        series = IndicatorsMath.calc_rsi_series(closes, length)
+        series = NativeMath.fast_rsi_series(closes, length)
         return series[-1] if series else None
 
 

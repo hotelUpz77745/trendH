@@ -62,30 +62,10 @@ class SRLevelsCalculator:
                 return {"support": [], "resistance": []}
 
             cutoff = max(0, n - window_len)
-            win = 2 * L + 1
-            if n < win:
-                return {"support": [], "resistance": []}
-
-            try:
-                h_win = sliding_window_view(highs, win)
-                l_win = sliding_window_view(lows, win)
-            except Exception:
-                return {"support": [], "resistance": []}
-
-            center_start = L
-            center_end = n - L
-
-            h_center = highs[center_start:center_end]
-            l_center = lows[center_start:center_end]
-
-            if h_center.size == 0:
-                return {"support": [], "resistance": []}
-
-            hi_mask = (h_center == h_win.max(axis=1))
-            lo_mask = (l_center == l_win.min(axis=1))
-
-            hi_idx = np.nonzero(hi_mask)[0] + L
-            lo_idx = np.nonzero(lo_mask)[0] + L
+            from CORE.native_math import NativeMath
+            ph, pl = NativeMath.fast_pivots(highs, lows, L)
+            hi_idx = np.nonzero(ph > 0)[0]
+            lo_idx = np.nonzero(pl > 0)[0]
 
             hi_idx = hi_idx[hi_idx >= cutoff]
             lo_idx = lo_idx[lo_idx >= cutoff]

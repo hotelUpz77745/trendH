@@ -178,37 +178,27 @@ class VolatilitySqueezeCalculator:
         else:
             return ["UNSTABLE"]
 
-        # 1. Bollinger Bands (SMA + StdDev)
-        n = len(closes)
-        bb_mid = np.convolve(closes, np.ones(self.bb_length) / self.bb_length, mode='valid')
-        pad = n - len(bb_mid)
-        bb_mid = np.pad(bb_mid, (pad, 0), mode='edge')
-
-        stds = np.array([np.std(closes[max(0, i - self.bb_length + 1):i + 1]) for i in range(n)])
-        bb_upper = bb_mid + self.bb_mult * stds
-        bb_lower = bb_mid - self.bb_mult * stds
-
-        # 2. Keltner Channels (EMA + ATR)
-        atr = self._calc_atr(highs, lows, closes, self.bb_length)
-        kc_mid = bb_mid
-        kc_upper = kc_mid + self.kc_mult * atr
-        kc_lower = kc_mid - self.kc_mult * atr
+        from CORE.native_math import NativeMath
+        bb_upper, bb_lower, kc_upper, kc_lower = NativeMath.fast_squeeze(
+            closes, highs, lows, self.bb_length, self.bb_mult, self.kc_mult
+        )
 
         # 3. Детекция сжатия (Squeeze: BB внутри KC)
         squeeze_on = (bb_upper <= kc_upper) & (bb_lower >= kc_lower)
 
         # 4. Проверка разжатия (Fire)
         is_curr_firing = not squeeze_on[-1]
-        was_squeezing = np.any(squeeze_on[-self.lookback_squeeze - 1:-1])
+        was_squeezing = bool(np.any(squeeze_on[-self.lookback_squeeze - 1:-1]))
+        mid = (bb_upper[-1] + bb_lower[-1]) / 2.0
 
         signals = []
         if squeeze_on[-1]:
             signals.append("SQUEEZE_ON")
 
         if is_curr_firing and was_squeezing:
-            if closes[-1] > kc_mid[-1] and closes[-1] > closes[-2]:
+            if closes[-1] > mid and closes[-1] > closes[-2]:
                 signals.append("SQUEEZE_LONG")
-            elif closes[-1] < kc_mid[-1] and closes[-1] < closes[-2]:
+            elif closes[-1] < mid and closes[-1] < closes[-2]:
                 signals.append("SQUEEZE_SHORT")
 
         return signals

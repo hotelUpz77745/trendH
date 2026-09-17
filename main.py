@@ -59,8 +59,10 @@ class Main:
         self.api_semaphore = asyncio.Semaphore(10)
         self.notifier = NotifierManager()
 
-        self.watchdog = LoopWatchdog(self.notifier)
+        self.watchdog = LoopWatchdog(self.notifier, server_name="TrendH_Papper")
         self.backup_manager = RuntimeBackupManager(self.notifier)
+        self._last_universe_eval_ms: Dict[str, int] = {}
+        self.universe_throttle_ms: int = 50
 
         # Менеджер параллельных вселенных (мульти-стратегия)
         self.universe_manager = UniverseManager(
@@ -250,6 +252,12 @@ class Main:
             await asyncio.sleep(0)
             return
 
+        now_ms = tick.event_time_ms if tick.event_time_ms > 0 else int(time.time() * 1000)
+        last_eval = self._last_universe_eval_ms.get(symbol, 0)
+        if now_ms - last_eval < self.universe_throttle_ms:
+            return
+        self._last_universe_eval_ms[symbol] = now_ms
+
         indicators = self.symbol_indicators.get(symbol)
         if not indicators:
             return
@@ -396,31 +404,14 @@ class Main:
             log("Завершение работы...", level="INFO")
             tasks_to_wait = []
             
-            if self.tg_task:
-                self.tg_task.cancel()
-                tasks_to_wait.append(self.tg_task)
-            if hasattr(self, 'indicators_task') and self.indicators_task:
-                self.indicators_task.cancel()
-                tasks_to_wait.append(self.indicators_task)
-            if hasattr(self, 'volumes_task') and self.volumes_task:
-                self.volumes_task.cancel()
-                tasks_to_wait.append(self.volumes_task)
-            if hasattr(self, 'auto_closing_task') and self.auto_closing_task:
-                self.auto_closing_task.cancel()
-                tasks_to_wait.append(self.auto_closing_task)
-            if self.stream_task:
-                self.stream_task.cancel()
-                tasks_to_wait.append(self.stream_task)
-                
+            for task_name in ('tg_task', 'indicators_task', 'volumes_task', 'auto_closing_task', 'stream_task', 'watchdog_task', 'backup_task'):
+                t = getattr(self, task_name, None)
+                if t:
+                    t.cancel()
+                    tasks_to_wait.append(t)
+
             self.watchdog.stop()
-            if self.watchdog_task:
-                self.watchdog_task.cancel()
-                tasks_to_wait.append(self.watchdog_task)
-                
             self.backup_manager.stop()
-            if self.backup_task:
-                self.backup_task.cancel()
-                tasks_to_wait.append(self.backup_task)
                 
             if self.tg_bot:
                 await self.tg_bot.stop()
