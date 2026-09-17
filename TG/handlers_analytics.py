@@ -18,6 +18,7 @@ from ANALYTICS.metrics import AnalyticsMathEngine
 from ANALYTICS.plotter import generate_equity_curve
 from TG.keyboards import TGKeyboards
 from c_log import UnifiedLogger
+from utils import Utils
 
 logger = UnifiedLogger("TGAnalytics")
 analytics_router = Router(name="analytics_router")
@@ -119,20 +120,19 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u1") -
     )
 
 
-def _format_leaderboard_text(bot_core) -> str:
-    """Форматирует сплошную сравнительную таблицу всех параллельных вселенных."""
+def _format_leaderboard_lines(bot_core) -> list:
+    """Форматирует строки таблицы лидеров для всех параллельных вселенных."""
     if not bot_core or not hasattr(bot_core, "universe_manager"):
-        return "🏆 <b>Менеджер вселенных не инициализирован.</b>"
+        return ["🏆 <b>Менеджер вселенных не инициализирован.</b>"]
 
     board = bot_core.universe_manager.get_leaderboard(bot_core.current_prices)
     if not board:
-        return "🏆 <b>Нет активных вселенных.</b>"
+        return ["🏆 <b>Нет активных вселенных.</b>"]
 
     total_items = len(board)
     lines = [
         f"<b>🏆 Таблица лидеров всех стратегий ({total_items} шт.):</b>\n"
     ]
-    cur_len = len(lines[0])
 
     for idx, item in enumerate(board, 1):
         medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}."))
@@ -148,19 +148,17 @@ def _format_leaderboard_text(bot_core) -> str:
         u_sign = "+" if item["unrealized_pnl"] >= 0 else ""
         dd_val = -abs(item["max_dd"]) if item["max_dd"] > 0 else 0.0
 
-        entry = (
+        lines.append(
             f"{medal} <b>{uid.upper()}</b>{skip_tag}{short_name}\n"
             f"   • PnL: <b>{pnl_sign}{item['net_profit']:.2f}$</b> | WR: {item['winrate']:.0f}% ({item['total_trades']}) | DD: {dd_val:.2f}$ | Откр: {item['active_count']} ({u_sign}{item['unrealized_pnl']:.2f}$)"
         )
 
-        if cur_len + len(entry) + 40 > 4000:
-            lines.append(f"\n<i>... и еще {total_items - idx + 1} стратегий</i>")
-            break
+    return lines
 
-        lines.append(entry)
-        cur_len += len(entry) + 1
 
-    return "\n".join(lines)
+def _format_leaderboard_text(bot_core) -> str:
+    """Возвращает полный текст таблицы лидеров."""
+    return "\n".join(_format_leaderboard_lines(bot_core))
 
 
 def setup_analytics_handlers(router: Router, bot_core):
@@ -195,18 +193,26 @@ def setup_analytics_handlers(router: Router, bot_core):
     @router.callback_query(F.data.startswith("analytics_leaderboard"))
     async def on_analytics_leaderboard(callback: CallbackQuery):
         await callback.answer()
-        text = _format_leaderboard_text(bot_core)
-        try:
-            await callback.message.edit_text(
-                text,
-                reply_markup=TGKeyboards.leaderboard_menu(),
-                parse_mode="HTML"
-            )
-        except TelegramBadRequest as e:
-            if "message is not modified" not in str(e).lower():
-                logger.error(f"[Leaderboard] Telegram error: {e}")
-        except Exception as e:
-            logger.error(f"[Leaderboard] Error updating message: {e}")
+        lines = _format_leaderboard_lines(bot_core)
+        messages = Utils.split_telegram_text(lines, max_len=4000)
+        kb = TGKeyboards.leaderboard_menu()
+
+        if len(messages) == 1:
+            try:
+                await callback.message.edit_text(messages[0], reply_markup=kb, parse_mode="HTML")
+            except TelegramBadRequest as e:
+                if "message is not modified" not in str(e).lower():
+                    logger.error(f"[Leaderboard] Telegram error: {e}")
+            except Exception as e:
+                logger.error(f"[Leaderboard] Error updating message: {e}")
+        else:
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+            for i, msg in enumerate(messages):
+                rm = kb if i == len(messages) - 1 else None
+                await callback.message.answer(msg, reply_markup=rm, parse_mode="HTML")
 
     @router.callback_query(F.data.startswith("analytics_equity"))
     async def on_analytics_equity(callback: CallbackQuery):
@@ -280,17 +286,31 @@ def setup_analytics_handlers(router: Router, bot_core):
             title = f"💵 <b>Рейтинг монет [{uid.upper()}] по PnL:</b>"
 
         lines = [title, ""]
-        for idx, item in enumerate(coin_items[:15], 1):
+        for idx, item in enumerate(coin_items, 1):
             sign = "+" if item["pnl"] >= 0 else ""
             lines.append(
                 f"{idx}. <b>{item['sym']}</b>: {sign}{item['pnl']:.2f}$ | {item['trades']} сд. | WR: {item['wr']:.1f}%"
             )
 
-        await callback.message.edit_text(
-            "\n".join(lines),
-            reply_markup=TGKeyboards.analytics_ranking_menu(uid),
-            parse_mode="HTML"
-        )
+        messages = Utils.split_telegram_text(lines, max_len=4000)
+        kb = TGKeyboards.analytics_ranking_menu(uid)
+
+        if len(messages) == 1:
+            try:
+                await callback.message.edit_text(messages[0], reply_markup=kb, parse_mode="HTML")
+            except TelegramBadRequest as e:
+                if "message is not modified" not in str(e).lower():
+                    logger.error(f"[Ranking] Telegram error: {e}")
+            except Exception as e:
+                logger.error(f"[Ranking] Error updating ranking: {e}")
+        else:
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+            for i, msg in enumerate(messages):
+                rm = kb if i == len(messages) - 1 else None
+                await callback.message.answer(msg, reply_markup=rm, parse_mode="HTML")
 
     @router.callback_query(F.data == "analytics_help")
     async def on_analytics_help(callback: CallbackQuery):

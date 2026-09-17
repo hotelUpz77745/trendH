@@ -12,6 +12,7 @@ from c_log import log
 from consts import CFG_PATH, BASE_DIR, DATA_DIR
 from cron_integration import CronIntegration
 from TG.keyboards import TGKeyboards
+from utils import Utils
 
 control_router = Router(name="control_router")
 
@@ -138,19 +139,21 @@ def setup_control_handlers(router: Router, bot_core):
                     )
 
         pos_count = len(open_positions)
-        pos_details = "\n".join(open_positions[:20]) if open_positions else "  <i>Нет открытых позиций</i>"
-        if len(open_positions) > 20:
-            pos_details += f"\n  <i>...и еще {len(open_positions) - 20} позиций</i>"
+        header_lines = [
+            "<b>📊 Control Panel & Status:</b>\n",
+            f"• Статус ядра: <b>{status_text}</b>",
+            f"• Режим направления: <b>{direction_mode}</b>",
+            f"• Монет в мониторинге: <b>{symbols_count}</b>",
+            f"• Открытых виртуальных позиций: <b>{pos_count}</b>\n",
+            "<b>Активные позиции:</b>"
+        ]
+        body_lines = open_positions if open_positions else ["  <i>Нет открытых позиций</i>"]
+        all_lines = header_lines + body_lines
+        messages = Utils.split_telegram_text(all_lines, max_len=4000)
 
-        text = (
-            f"<b>📊 Control Panel & Status:</b>\n\n"
-            f"• Статус ядра: <b>{status_text}</b>\n"
-            f"• Режим направления: <b>{direction_mode}</b>\n"
-            f"• Монет в мониторинге: <b>{symbols_count}</b>\n"
-            f"• Открытых виртуальных позиций: <b>{pos_count}</b>\n\n"
-            f"<b>Активные позиции:</b>\n{pos_details}"
-        )
-        await message.answer(text, reply_markup=TGKeyboards.main_menu(is_paused), parse_mode="HTML")
+        for i, msg in enumerate(messages):
+            rm = TGKeyboards.main_menu(is_paused) if i == len(messages) - 1 else None
+            await message.answer(msg, reply_markup=rm, parse_mode="HTML")
 
     @router.message(F.text == "🚨 Close All")
     async def on_close_all_prompt(message: Message, state: FSMContext):

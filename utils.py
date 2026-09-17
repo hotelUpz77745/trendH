@@ -186,6 +186,26 @@ class Utils:
         
         return state.avg_entry_price != state.pre_avg_price
 
+    @staticmethod
+    def split_telegram_text(lines: list, max_len: int = 4000) -> list:
+        """
+        Разбивает список строк на блоки сообщений, не превышающие max_len символов.
+        Гарантирует целостность строк и предотвращает ошибки Telegram (4096 char limit).
+        Аналог надежного разделения из cron3Papper.
+        """
+        messages = []
+        current_msg = ""
+        for line in lines:
+            if len(current_msg) + len(line) + 1 > max_len:
+                if current_msg:
+                    messages.append(current_msg.rstrip("\n"))
+                current_msg = line + "\n"
+            else:
+                current_msg += line + "\n"
+        if current_msg:
+            messages.append(current_msg.rstrip("\n"))
+        return messages or [""]
+
 
 class NetworkServices:
     def __init__(self):
