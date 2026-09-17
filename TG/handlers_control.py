@@ -91,38 +91,56 @@ def setup_control_handlers(router: Router, bot_core):
         direction_mode = getattr(bot_core, "direction_mode", "HEDGE")
         symbols_count = len(getattr(bot_core, "symbols", []))
 
-        # Сбор информации об открытых позициях
-        positions = getattr(bot_core.state, "positions", {}) if hasattr(bot_core, "state") else {}
+        # Сбор информации об открытых позициях со всех параллельных вселенных
         open_positions = []
-        for sym, sides in positions.items():
-            for side, pos_info in sides.items():
-                is_act = pos_info.is_active if hasattr(pos_info, "is_active") else (pos_info.get("is_active", False) if isinstance(pos_info, dict) else False)
-                if not is_act:
-                    continue
-                open_price = pos_info.open_price if hasattr(pos_info, "open_price") else float(pos_info.get("open_price", 0.0) if isinstance(pos_info, dict) else 0.0)
-                size_usd = pos_info.size if hasattr(pos_info, "size") else float(pos_info.get("size", 0.0) if isinstance(pos_info, dict) else 0.0)
-                cur_price = getattr(bot_core, "current_prices", {}).get(sym, open_price)
-                
-                if open_price > 0:
-                    if side == "LONG":
-                        pnl_ratio = (cur_price - open_price) / open_price
-                    else:
-                        pnl_ratio = (open_price - cur_price) / open_price
-                    pnl_usd = pnl_ratio * size_usd
-                    pnl_pct = pnl_ratio * 100
-                else:
-                    pnl_usd = 0.0
-                    pnl_pct = 0.0
+        if hasattr(bot_core, "universe_manager") and bot_core.universe_manager:
+            for uid, univ in bot_core.universe_manager.universes.items():
+                positions = getattr(univ.state, "positions", {})
+                for sym, sides in positions.items():
+                    for side, pos_info in sides.items():
+                        is_act = getattr(pos_info, "is_active", False) if hasattr(pos_info, "is_active") else (pos_info.get("is_active", False) if isinstance(pos_info, dict) else False)
+                        if not is_act:
+                            continue
+                        open_price = getattr(pos_info, "open_price", 0.0) if hasattr(pos_info, "open_price") else float(pos_info.get("open_price", 0.0) if isinstance(pos_info, dict) else 0.0)
+                        size_usd = getattr(pos_info, "size", 0.0) if hasattr(pos_info, "size") else float(pos_info.get("size", 0.0) if isinstance(pos_info, dict) else 0.0)
+                        cur_price = getattr(bot_core, "current_prices", {}).get(sym, open_price)
+                        
+                        if open_price > 0:
+                            pnl_ratio = (cur_price - open_price) / open_price if side == "LONG" else (open_price - cur_price) / open_price
+                            pnl_usd = pnl_ratio * size_usd
+                            pnl_pct = pnl_ratio * 100
+                        else:
+                            pnl_usd, pnl_pct = 0.0, 0.0
 
-                pnl_icon = "🟢" if pnl_usd >= 0 else "🔴"
-                open_positions.append(
-                    f"  {pnl_icon} <b>{sym}</b> {side}: {size_usd:.1f}$ (Вход: {open_price:.4f} → {cur_price:.4f} | {pnl_pct:+.2f}% / {pnl_usd:+.2f}$)"
-                )
+                        pnl_icon = "🟢" if pnl_usd >= 0 else "🔴"
+                        open_positions.append(
+                            f"  {pnl_icon} [<b>{uid}</b>] <b>{sym}</b> {side}: {size_usd:.1f}$ (Вход: {open_price:.4f} → {cur_price:.4f} | {pnl_pct:+.2f}% / {pnl_usd:+.2f}$)"
+                        )
+        else:
+            positions = getattr(bot_core.state, "positions", {}) if hasattr(bot_core, "state") else {}
+            for sym, sides in positions.items():
+                for side, pos_info in sides.items():
+                    is_act = getattr(pos_info, "is_active", False) if hasattr(pos_info, "is_active") else (pos_info.get("is_active", False) if isinstance(pos_info, dict) else False)
+                    if not is_act:
+                        continue
+                    open_price = getattr(pos_info, "open_price", 0.0) if hasattr(pos_info, "open_price") else float(pos_info.get("open_price", 0.0) if isinstance(pos_info, dict) else 0.0)
+                    size_usd = getattr(pos_info, "size", 0.0) if hasattr(pos_info, "size") else float(pos_info.get("size", 0.0) if isinstance(pos_info, dict) else 0.0)
+                    cur_price = getattr(bot_core, "current_prices", {}).get(sym, open_price)
+                    if open_price > 0:
+                        pnl_ratio = (cur_price - open_price) / open_price if side == "LONG" else (open_price - cur_price) / open_price
+                        pnl_usd = pnl_ratio * size_usd
+                        pnl_pct = pnl_ratio * 100
+                    else:
+                        pnl_usd, pnl_pct = 0.0, 0.0
+                    pnl_icon = "🟢" if pnl_usd >= 0 else "🔴"
+                    open_positions.append(
+                        f"  {pnl_icon} <b>{sym}</b> {side}: {size_usd:.1f}$ (Вход: {open_price:.4f} → {cur_price:.4f} | {pnl_pct:+.2f}% / {pnl_usd:+.2f}$)"
+                    )
 
         pos_count = len(open_positions)
-        pos_details = "\n".join(open_positions[:10]) if open_positions else "  <i>Нет открытых позиций</i>"
-        if len(open_positions) > 10:
-            pos_details += f"\n  <i>...и еще {len(open_positions) - 10} позиций</i>"
+        pos_details = "\n".join(open_positions[:20]) if open_positions else "  <i>Нет открытых позиций</i>"
+        if len(open_positions) > 20:
+            pos_details += f"\n  <i>...и еще {len(open_positions) - 20} позиций</i>"
 
         text = (
             f"<b>📊 Control Panel & Status:</b>\n\n"
@@ -137,13 +155,18 @@ def setup_control_handlers(router: Router, bot_core):
     @router.message(F.text == "🚨 Close All")
     async def on_close_all_prompt(message: Message, state: FSMContext):
         await state.clear()
-        positions = getattr(bot_core.state, "positions", {}) if hasattr(bot_core, "state") else {}
         total_open = 0
-        for sides in positions.values():
-            for pos in sides.values():
-                is_act = pos.is_active if hasattr(pos, "is_active") else (pos.get("is_active", False) if isinstance(pos, dict) else False)
-                if is_act:
-                    total_open += 1
+        if hasattr(bot_core, "universe_manager") and bot_core.universe_manager:
+            for univ in bot_core.universe_manager.universes.values():
+                for sides in getattr(univ.state, "positions", {}).values():
+                    for pos in sides.values():
+                        if getattr(pos, "is_active", False):
+                            total_open += 1
+        elif hasattr(bot_core, "state"):
+            for sides in getattr(bot_core.state, "positions", {}).values():
+                for pos in sides.values():
+                    if getattr(pos, "is_active", False):
+                        total_open += 1
 
         if total_open == 0:
             await message.answer("ℹ️ Нет открытых позиций для закрытия.")
