@@ -226,9 +226,9 @@ class EMACrossCalculator:
 
         signals = []
         if cross_up:
-            signals.append(self.long_cond)
+            signals.append("CROSS_UP")
         if cross_down:
-            signals.append(self.short_cond)
+            signals.append("CROSS_DOWN")
 
         return signals
 

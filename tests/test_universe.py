@@ -183,6 +183,40 @@ class TestUniverseManager(unittest.TestCase):
         self.assertIn("u1", uids)
         self.assertIn("u2", uids)
 
+    def test_inverted_strategies_concurrency(self):
+        u6_cfg = {
+            "name": "Normal EMA",
+            "is_active": True,
+            "enter_rules": {
+                "ema_cross": {"is_active": True, "long_cond": "CROSS_UP", "short_cond": "CROSS_DOWN"}
+            },
+            "exit_rules": {}
+        }
+        u61_cfg = {
+            "name": "Reverse EMA",
+            "is_active": True,
+            "enter_rules": {
+                "ema_cross": {"is_active": True, "long_cond": "CROSS_DOWN", "short_cond": "CROSS_UP"}
+            },
+            "exit_rules": {}
+        }
+        mgr = UniverseManager(
+            universes_cfg={"u6": u6_cfg, "u61": u61_cfg},
+            default_enter_rules={},
+            default_exit_rules={},
+            get_slippage_ratio_fn=lambda s: 0.001
+        )
+        indicators = {"ema_cross": ["CROSS_UP"]}
+        u6 = mgr.get_universe("u6")
+        u61 = mgr.get_universe("u61")
+
+        # CROSS_UP signal -> u6 should enter LONG, u61 should enter SHORT
+        self.assertTrue(u6.check_entry("LONG", indicators))
+        self.assertFalse(u6.check_entry("SHORT", indicators))
+
+        self.assertFalse(u61.check_entry("LONG", indicators))
+        self.assertTrue(u61.check_entry("SHORT", indicators))
+
     def test_close_all_positions(self):
         u1 = self.mgr.get_universe("u1")
         u2 = self.mgr.get_universe("u2")
