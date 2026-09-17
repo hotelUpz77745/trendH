@@ -49,42 +49,51 @@ class TGKeyboards:
         ])
 
     @staticmethod
-    def analytics_menu(selected_uid: str = "u1", universes: Optional[List[Any]] = None) -> InlineKeyboardMarkup:
+    def analytics_menu(selected_uid: str = "u15", universes: Optional[List[Any]] = None) -> InlineKeyboardMarkup:
         """
-        Меню аналитики торговой активности с селектором вселенных и кнопкой Leaderboard.
-        Позволяет переключать вид между параллельными стратегиями.
+        Меню аналитики торговой активности для выбранной стратегии.
+        Включает кнопку быстрого выбора стратегии и действия по выбранной стратегии.
         """
-        univ_rows = []
-        if universes:
-            row = []
-            for u in universes:
-                uid = u.universe_id if hasattr(u, "universe_id") else (u.get("universe_id", "") if isinstance(u, dict) else str(u))
-                prefix = "🔘 " if uid == selected_uid else ""
-                tag = uid.replace("u", "У").replace("_", "-")
-                short_label = f"{prefix}{tag}"
-                row.append(InlineKeyboardButton(text=short_label, callback_data=f"analytics_univ_{uid}"))
-                if len(row) == 4:
-                    univ_rows.append(row)
-                    row = []
-            if row:
-                univ_rows.append(row)
-
-        menu_rows = [
+        return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="🏆 Leaderboard (Все)", callback_data="analytics_leaderboard"),
-                InlineKeyboardButton(text="📈 Equity Curve", callback_data=f"analytics_equity_{selected_uid}"),
+                InlineKeyboardButton(text=f"🎯 Стратегия: [{selected_uid.upper()}] (Сменить)", callback_data=f"analytics_select_strat:{selected_uid}")
             ],
             [
-                InlineKeyboardButton(text="📄 Trades Ledger", callback_data=f"analytics_ledger_{selected_uid}"),
-                InlineKeyboardButton(text="🪙 Coin Ranking", callback_data=f"analytics_ranking_{selected_uid}_profit"),
+                InlineKeyboardButton(text="🏆 Leaderboard (Все)", callback_data="analytics_leaderboard"),
+                InlineKeyboardButton(text="📈 Equity Curve", callback_data=f"analytics_equity:{selected_uid}"),
+            ],
+            [
+                InlineKeyboardButton(text="📄 Trades Ledger", callback_data=f"analytics_ledger:{selected_uid}"),
+                InlineKeyboardButton(text="🪙 Coin Ranking", callback_data=f"analytics_ranking:{selected_uid}:profit"),
             ],
             [
                 InlineKeyboardButton(text="💰 Set Balance", callback_data=f"analytics_set_balance_{selected_uid}"),
-                InlineKeyboardButton(text="🔄 Reset", callback_data=f"analytics_reset_{selected_uid}"),
+                InlineKeyboardButton(text="🗑 Сброс", callback_data=f"analytics_reset:{selected_uid}"),
                 InlineKeyboardButton(text="ℹ️ Help", callback_data="analytics_help"),
             ]
-        ]
-        return InlineKeyboardMarkup(inline_keyboard=univ_rows + menu_rows)
+        ])
+
+    @staticmethod
+    def strategy_select_menu(universes: List[Any], selected_uid: str = "u15") -> InlineKeyboardMarkup:
+        """Клавиатура выбора стратегии из списка, упорядоченного по результативности."""
+        buttons = []
+        row = []
+        for idx, u in enumerate(universes, 1):
+            uid = u["uid"] if isinstance(u, dict) else (getattr(u, "universe_id", None) or getattr(u, "uid", str(u)))
+            is_active = (uid == selected_uid)
+            prefix = "🔘 " if is_active else ""
+            medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}."))
+            is_skip = uid.endswith("_skip") or "skip" in uid.lower()
+            skip_badge = " ⚡" if is_skip else ""
+            label = f"{prefix}{medal} {uid.upper()}{skip_badge}"
+            row.append(InlineKeyboardButton(text=label, callback_data=f"analytics_univ_{uid}"))
+            if len(row) == 2:
+                buttons.append(row)
+                row = []
+        if row:
+            buttons.append(row)
+        buttons.append([InlineKeyboardButton(text="🔙 Назад в Аналитику", callback_data=f"analytics_univ_{selected_uid}")])
+        return InlineKeyboardMarkup(inline_keyboard=buttons)
 
     @staticmethod
     def leaderboard_menu() -> InlineKeyboardMarkup:
@@ -95,25 +104,40 @@ class TGKeyboards:
         ])
 
     @staticmethod
-    def analytics_ranking_menu(selected_uid: str = "u1") -> InlineKeyboardMarkup:
+    def analytics_ranking_menu(selected_uid: str = "u15") -> InlineKeyboardMarkup:
         """Фильтры ранжирования монет по PnL, сделкам и винрейту."""
         return InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="💵 By Profit", callback_data=f"analytics_ranking_{selected_uid}_profit"),
-                InlineKeyboardButton(text="📊 By Trades", callback_data=f"analytics_ranking_{selected_uid}_trades"),
-                InlineKeyboardButton(text="🎯 By Winrate", callback_data=f"analytics_ranking_{selected_uid}_winrate")
+                InlineKeyboardButton(text="💵 By Profit", callback_data=f"analytics_ranking:{selected_uid}:profit"),
+                InlineKeyboardButton(text="📊 By Trades", callback_data=f"analytics_ranking:{selected_uid}:trades"),
+                InlineKeyboardButton(text="🎯 By Winrate", callback_data=f"analytics_ranking:{selected_uid}:winrate")
             ],
             [
+                InlineKeyboardButton(text=f"🎯 Сменить стратегию [{selected_uid.upper()}]", callback_data=f"analytics_select_strat:{selected_uid}"),
                 InlineKeyboardButton(text="🔙 Back to Analytics", callback_data=f"analytics_univ_{selected_uid}")
             ]
         ])
 
     @staticmethod
-    def confirm_reset_analytics(selected_uid: str = "u1") -> InlineKeyboardMarkup:
-        """Подтверждение сброса аналитики выбранной вселенной."""
+    def confirm_reset_analytics(selected_uid: str = "u15") -> InlineKeyboardMarkup:
+        """Безопасное окно подтверждения сброса аналитики: Отмена наверху, PIN внизу."""
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⚠️ Да, сбросить аналитику", callback_data=f"reset_analytics_confirm_{selected_uid}")],
-            [InlineKeyboardButton(text="🔙 Отмена", callback_data=f"analytics_univ_{selected_uid}")]
+            [InlineKeyboardButton(text="🔙 ❌ Отмена (Сохранить данные)", callback_data=f"analytics_univ_{selected_uid}")],
+            [InlineKeyboardButton(text="🔐 Запросить защитный PIN-код", callback_data=f"reset_req_pin:{selected_uid}")]
+        ])
+
+    @staticmethod
+    def confirm_reset_pin_menu(selected_uid: str, correct_pin: int, pin_options: List[int]) -> InlineKeyboardMarkup:
+        """Клавиатура подтверждения с выбором защитного PIN-кода среди случайных вариантов."""
+        pin_buttons = []
+        for pin in pin_options:
+            if pin == correct_pin:
+                pin_buttons.append(InlineKeyboardButton(text=f"[{pin}]", callback_data=f"reset_pin_ok:{selected_uid}:{pin}"))
+            else:
+                pin_buttons.append(InlineKeyboardButton(text=f"[{pin}]", callback_data=f"reset_pin_fail:{selected_uid}"))
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 ❌ Отмена", callback_data=f"analytics_univ_{selected_uid}")],
+            pin_buttons
         ])
 
     @staticmethod
