@@ -280,6 +280,30 @@ class TestUniverseManager(unittest.TestCase):
         self.assertTrue(u1_anti.check_entry("LONG", ind_down))
         self.assertFalse(u1_anti.check_entry("SHORT", ind_down))
 
+    def test_live_balance_with_unrealized_pnl(self):
+        from TG.handlers_analytics import _format_analytics_text
+        class MockBotCore:
+            def __init__(self, mgr):
+                self.universe_manager = mgr
+                self.current_prices = {"BTCUSDT": 55000.0}
+
+        u1 = self.mgr.get_universe("u1")
+        u1.state.open_position("BTCUSDT", "LONG", price=50000.0, size=100.0)
+        bot_core = MockBotCore(self.mgr)
+
+        # Start balance = 1000, unrealized pnl = (55000 - 50000) / 50000 * 100 = +10 USDT
+        data = {
+            "start_balance_usdt": 1000.0,
+            "cur_balance_usdt": 1000.0,
+            "realized_pnl_usdt": 0.0,
+            "net_profit_usdt": 0.0,
+            "total_trades": 0
+        }
+        text = _format_analytics_text(data, bot_core=bot_core, universe_id="u1")
+        self.assertIn("• Стартовый баланс: <code>1000.00 USDT</code>", text)
+        self.assertIn("• Текущий баланс: <code>1010.00 USDT</code>", text)
+        self.assertIn("• Чистый профит: <b>+10.0000 USDT</b>", text)
+        self.assertIn("• Нереализованный PnL: <code>+10.0000 USDT</code>", text)
 
 
 if __name__ == "__main__":

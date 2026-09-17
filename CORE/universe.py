@@ -349,7 +349,7 @@ class UniverseManager:
             if an_data:
                 AnalyticsMathEngine.calculate(an_data)
 
-            net_profit = an_data.get("net_profit_usdt", 0.0)
+            realized_pnl = float(an_data.get("realized_pnl_usdt", an_data.get("net_profit_usdt", 0.0)))
             total_trades = an_data.get("total_trades", 0)
             winrate = an_data.get("winrate_pct", 0.0)
             max_dd = an_data.get("max_drawdown_usdt", 0.0)
@@ -369,11 +369,13 @@ class UniverseManager:
                             ratio = (pos.open_price - cur_p) / pos.open_price
                         unrealized_pnl += ratio * pos.size
 
+            live_net_profit = realized_pnl + unrealized_pnl
             leaderboard.append({
                 "uid": uid,
                 "name": univ.name,
                 "description": univ.description,
-                "net_profit": net_profit,
+                "net_profit": live_net_profit,
+                "realized_pnl": realized_pnl,
                 "total_trades": total_trades,
                 "winrate": winrate,
                 "max_dd": max_dd,

@@ -11,7 +11,7 @@ import os
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from pathlib import Path
-from consts import ANALYTICS_DIR
+from consts import ANALYTICS_DIR, ANALYTICS_CFG
 from c_log import log
 from ANALYTICS.metrics import AnalyticsMathEngine
 
@@ -34,11 +34,12 @@ class AnalyticsManager:
     def _ensure_files(self):
         """Создает структуру файлов при их первичном отсутствии."""
         if not self.log_file.exists():
+            default_start = float(ANALYTICS_CFG.get("default_start_balance", 1000.0))
             current_ms = int(time.time() * 1000)
             default_data = {
-                "start_balance_usdt": 0.0,
+                "start_balance_usdt": default_start,
                 "first_trade_ts": current_ms,
-                "cur_balance_usdt": 0.0,
+                "cur_balance_usdt": default_start,
                 "total_trades": 0,
                 "winning_trades": 0,
                 "winrate_pct": 0.0,

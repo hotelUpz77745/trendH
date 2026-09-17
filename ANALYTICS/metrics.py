@@ -62,6 +62,11 @@ class AnalyticsMathEngine:
         Рассчитывает глобальные балансы, ROI, Winrate, Drawdowns и фактор восстановления.
         """
         initial = float(data.get("start_balance_usdt", 0.0))
+        if initial <= 0.0:
+            from consts import ANALYTICS_CFG
+            initial = float(ANALYTICS_CFG.get("default_start_balance", 1000.0))
+            data["start_balance_usdt"] = initial
+
         net_profit = float(data.get("net_profit_usdt", 0.0))
         bot_cur_balance = round(initial + net_profit, 4)
         data["cur_balance_usdt"] = bot_cur_balance

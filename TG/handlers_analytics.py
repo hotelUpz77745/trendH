@@ -60,10 +60,12 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u1") -
     if not data:
         return f"{univ_title}\n{desc_str}📊 <b>Аналитика пока не содержит данных по сделкам.</b>"
 
-    start_bal = data.get("start_balance_usdt", 0.0)
-    cur_bal = data.get("cur_balance_usdt", 0.0)
-    net_profit = data.get("net_profit_usdt", 0.0)
-    realized_pnl = data.get("realized_pnl_usdt", 0.0)
+    start_bal = float(data.get("start_balance_usdt", 0.0))
+    if start_bal <= 0.0:
+        from consts import ANALYTICS_CFG
+        start_bal = float(ANALYTICS_CFG.get("default_start_balance", 1000.0))
+
+    realized_pnl = float(data.get("realized_pnl_usdt", 0.0))
 
     # Расчет текущего нереализованного PnL по позициям этой вселенной
     unrealized_pnl = 0.0
@@ -85,23 +87,27 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "u1") -
     else:
         unrealized_pnl = float(data.get("unrealized_pnl_usdt", 0.0))
 
+    # Живой перерасчет текущего баланса (Equity) и чистого профита с учетом нереализованного PnL
+    live_net_profit = realized_pnl + unrealized_pnl
+    live_cur_bal = start_bal + live_net_profit
+    live_roi_pct = round(((live_cur_bal - start_bal) / start_bal) * 100, 2) if start_bal > 0 else 0.0
+
     total_trades = data.get("total_trades", 0)
     winning_trades = data.get("winning_trades", 0)
     winrate_pct = data.get("winrate_pct", 0.0)
     max_dd = data.get("max_drawdown_usdt", 0.0)
     rec_factor = data.get("recovery_factor", 0.0)
-    roi_pct = data.get("roi_pct", 0.0)
 
-    pnl_sign = "+" if net_profit >= 0 else ""
-    roi_sign = "+" if roi_pct >= 0 else ""
+    pnl_sign = "+" if live_net_profit >= 0 else ""
+    roi_sign = "+" if live_roi_pct >= 0 else ""
     u_sign = "+" if unrealized_pnl >= 0 else ""
     dd_val = -abs(max_dd) if max_dd > 0 else 0.0
 
     return (
         f"{univ_title}\n{desc_str}"
         f"• Стартовый баланс: <code>{start_bal:.2f} USDT</code>\n"
-        f"• Текущий баланс: <code>{cur_bal:.2f} USDT</code>\n"
-        f"• Чистый профит: <b>{pnl_sign}{net_profit:.4f} USDT</b> ({roi_sign}{roi_pct:.2f}%)\n"
+        f"• Текущий баланс: <code>{live_cur_bal:.2f} USDT</code>\n"
+        f"• Чистый профит: <b>{pnl_sign}{live_net_profit:.4f} USDT</b> ({roi_sign}{live_roi_pct:.2f}%)\n"
         f"• Реализованный PnL: <code>{realized_pnl:.4f} USDT</code>\n"
         f"• Нереализованный PnL: <code>{u_sign}{unrealized_pnl:.4f} USDT</code> ({active_count} поз.)\n"
         f"• Всего сделок: <b>{total_trades}</b> (Побед: {winning_trades} | Winrate: {winrate_pct:.1f}%)\n"
