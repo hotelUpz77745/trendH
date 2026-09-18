@@ -11,12 +11,12 @@ from c_log import UnifiedLogger
 logger = UnifiedLogger("StrategyGuide")
 
 PROVEN_LEADERS = {
-    "u3_anti_trend": {
+    "u3_reverse_trend": {
         "rank": "🥇",
         "badge": " 💎 [PROVEN LEADER]",
         "stats": "34 сд. | WR: 70.6% | Realized: +17.49$ | Net: +14.03$"
     },
-    "u15_anti_fade": {
+    "u15_reverse_fade": {
         "rank": "🥈",
         "badge": " 💎 [PROVEN LEADER]",
         "stats": "65 сд. | WR: 61.5% | Realized: +7.67$ | Net: -0.47$"
@@ -36,33 +36,47 @@ def get_leader_badge(uid: str) -> str:
 
 
 STRATEGY_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
-    "u3_anti_trend": {
+    "u3_reverse_trend": {
         "name": "Trend-Aligned Pullback Fade 🥇",
         "concept": "<b>Покупка откатов по старшему тренду.</b> Стратегия ловит ложные пробои уровней на M5 (fade) СТРОГО в направлении глобального тренда H1. Это позволяет заходить по лучшим ценам с минимальным риском.",
-        "entry": "• <b>HTF Trend (1h)</b>: EMA(10) > EMA(30) + подтверждение 2 свечи.\n• <b>S/R Anti (5m)</b>: Ложный пробой уровня против тренда.\n• <b>Volume Filter (1m)</b>: Всплеск тикового объема (slice_factor > 1.1).",
+        "entry": "• <b>HTF Trend (1h)</b>: EMA(10) > EMA(30) + подтверждение 2 свечи.\n• <b>S/R Reverse (5m)</b>: Ложный пробой уровня против тренда.\n• <b>Volume Filter (1m)</b>: Всплеск тикового объема (slice_factor > 1.1).",
         "exit": "• <b>Take Profit</b>: +3.5%\n• <b>Stop Loss</b>: -2.0%\n• <b>Trend Reversal</b>: Немедленный выход при сломе тренда H1 (переход в FLAT или разворот).",
         "note": "🏆 <b>Лидер #1 реальных торгов</b>: 70.6% винрейт, чистая прибыль +14.03 USDT."
     },
-    "u15_anti_fade": {
+    "u15_reverse_fade": {
         "name": "Pure Liquidity Fade (Range Return) 🥈",
         "concept": "<b>Сбор ликвидности на ложных импульсах.</b> Вход в контртренд, когда маркет-мейкер выносит стопы за экстремумы, а поток маркет-ордеров (Taker Flow) резко истощается.",
-        "entry": "• <b>S/R Anti (5m)</b>: Вынос за границу диапазона (Swing Length 15, Margin 2.0).\n• <b>Taker Flow Anti (5m)</b>: Доминирование противоположной стороны (покупка при падении агрессии продавцов).",
+        "entry": "• <b>S/R Reverse (5m)</b>: Вынос за границу диапазона (Swing Length 15, Margin 2.0).\n• <b>Taker Flow Reverse (5m)</b>: Доминирование противоположной стороны (покупка при истощении продавцов).",
         "exit": "• <b>Take Profit</b>: +2.5%\n• <b>Stop Loss</b>: -2.5%\n• <b>Time Stop</b>: Закрытие через 20 минут (1200 сек), если цена не пошла в плюс.",
         "note": "🥈 <b>Лидер #2 реальных торгов</b>: 61.5% винрейт на 65 сделках, около безубытка с комиссиями."
     },
-    "u3_anti_opt": {
+    "u3_reverse_opt": {
         "name": "Volume Fade (Noise-Filtered & Optimized) 🎯",
-        "concept": "<b>Оптимизированный сбор ликвидности на объемах.</b> Устраняет проблему комиссионного перегруза u3_anti_aggr: фильтр объема загрублен до 1.4 (отсекает 65% шума), TP поднят до 3.2%, добавлен кулдаун 3 мин.",
-        "entry": "• <b>S/R Anti (5m)</b>: Ложный пробой зоны уровня.\n• <b>Volume Filter (1m)</b>: Всплеск объема (slice_factor > 1.4).\n• <b>Re-entry Cooldown</b>: 180 сек.",
-        "exit": "• <b>Take Profit</b>: +3.2% | <b>Stop Loss</b>: -2.5%\n• <b>Trend Reversal Anti</b>: Выход при закреплении истинного пробоя.",
+        "concept": "<b>Оптимизированный сбор ликвидности на объемах.</b> Устраняет проблему комиссионного перегруза u3_reverse_aggr: фильтр объема загрублен до 1.4 (отсекает 65% шума), TP поднят до 3.2%, добавлен кулдаун 3 мин.",
+        "entry": "• <b>S/R Reverse (5m)</b>: Ложный пробой зоны уровня.\n• <b>Volume Filter (1m)</b>: Всплеск объема (slice_factor > 1.4).\n• <b>Re-entry Cooldown</b>: 180 сек.",
+        "exit": "• <b>Take Profit</b>: +3.2% | <b>Stop Loss</b>: -2.5%\n• <b>Trend Reversal Reverse</b>: Выход при закреплении истинного пробоя.",
         "note": "🎯 <b>Оптимизация</b>: За счет роста TP и фильтрации шума снижает комиссии в 3 раза, превращая валовый перевес в чистый плюс."
     },
-    "u3_anti_aggr": {
+    "u3_reverse_aggr": {
         "name": "Aggressive Volume Fade ⚠️",
         "concept": "<b>Агрессивный скальпинг перерастяжек.</b> Вход на минутном объеме против микро-пробоя M5. Паттерн показал высокий Gross (+18.29$), но из-за короткого TP 1.8% и 251 сделки комиссии съели весь результат.",
-        "entry": "• <b>S/R Anti (5m)</b>: Ложный импульс за локальный уровень.\n• <b>Volume Filter (1m)</b>: Импульсный объем (slice_factor > 1.1).",
-        "exit": "• <b>Take Profit</b>: +1.8% | <b>Stop Loss</b>: -3.0%\n• <b>Trend Reversal Anti</b>: Выход при закреплении пробоя.",
+        "entry": "• <b>S/R Reverse (5m)</b>: Ложный импульс за локальный уровень.\n• <b>Volume Filter (1m)</b>: Импульсный объем (slice_factor > 1.1).",
+        "exit": "• <b>Take Profit</b>: +1.8% | <b>Stop Loss</b>: -3.0%\n• <b>Trend Reversal Reverse</b>: Выход при закреплении пробоя.",
         "note": "⚠️ <b>Высокий оборот (High Churn)</b>: 251 сд., Net: -7.82$. Комиссии ($26.11) превысили валовую прибыль. Не является лидером!"
+    },
+    "u_sq_hvh_impulse": {
+        "name": "Squeeze HVH Breakout (Impulse) 🚀",
+        "concept": "<b>Взрыв волатильности из сжатия.</b> Рынок накапливает энергию (Bollinger Bands внутри Keltner Channels 14 свечей), после чего выстреливает через динамический коридор HVH в направлении тренда 1h.",
+        "entry": "• <b>HTF Trend (1h)</b>: Подтвержденный тренд H1 (UP/DOWN).\n• <b>Volatility Squeeze (5m)</b>: Выстрел пружины (SQUEEZE_LONG / SQUEEZE_SHORT).\n• <b>HVH (5m)</b>: Импульсный пробой границы канала HVH (dev=1.8, impulse).",
+        "exit": "• <b>Chandelier Exit</b>: Трейлинг 2.5x ATR | <b>TP</b>: +5.0% | <b>SL</b>: -2.5%\n• <b>Trend Reversal</b>: Слом тренда H1.",
+        "note": "🚀 <b>Сжатие + HVH</b>: Высокоточный вход на институциональной экспансии волатильности."
+    },
+    "u_sq_hvh_reverse": {
+        "name": "Squeeze HVH Climax Fade (Reverse) 🔄",
+        "concept": "<b>Ложный вынос из сжатия волатильности.</b> Цена резко вылетает за экстремальную полосу HVH (dev=2.2) в фазе сжатия, но движение захлебывается (истощение тейкеров). Бот входит на возврат к средней.",
+        "entry": "• <b>Volatility Squeeze (5m)</b>: Фаза сжатия (SQUEEZE_ON).\n• <b>HVH (5m)</b>: Касание экстремальной границы (dev=2.2, pullback).\n• <b>Taker Flow Reverse (5m)</b>: Истощение маркет-ордеров пробоя.",
+        "exit": "• <b>Take Profit</b>: +3.5% | <b>Stop Loss</b>: -2.0%\n• <b>Time Stop</b>: Выход через 20 минут.",
+        "note": "🔄 <b>Реверс после ложного импульса</b>: Ловит кульминацию ложного выноса стопов."
     },
     "u_hvh_pullback": {
         "name": "HVH Mean-Reversion Pullback 🆕",

@@ -88,7 +88,8 @@ class StrategyUniverse:
     ):
         self.universe_id, self.name, self.description, self.is_active = universe_id, name, description, is_active
         self.enter_rules, self.exit_rules = enter_rules, exit_rules
-        self.inactive_grid_mode = str(inactive_grid_mode or "TAKE_LEVEL_0").strip().upper()
+        default_grid_mode = cfg.get("data_sources", {}).get("inactive_grid_mode", "TAKE_LEVEL_0")
+        self.inactive_grid_mode = str(inactive_grid_mode or default_grid_mode).strip().upper()
         self.entry_engine, self.exit_engine = EntrySignalEngine(enter_rules), ExitSignalEngine(exit_rules, ANALYTICS_CFG, get_slippage_ratio_fn)
         self.state, self.analytics = UniverseState(universe_id=universe_id, backup_manager=backup_manager), AnalyticsManager(universe_id=universe_id)
         self.state.load_state()

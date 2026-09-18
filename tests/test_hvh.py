@@ -174,7 +174,7 @@ class TestStrategyGuideAndLeaders(unittest.TestCase):
     """Тестирование справочника стратегий и маркировки доказанных лидеров."""
 
     def test_proven_leaders_metadata(self):
-        expected_leaders = {"u3_anti_trend", "u15_anti_fade"}
+        expected_leaders = {"u3_reverse_trend", "u15_reverse_fade"}
         self.assertEqual(set(PROVEN_LEADERS.keys()), expected_leaders)
 
         for uid in expected_leaders:
@@ -183,18 +183,22 @@ class TestStrategyGuideAndLeaders(unittest.TestCase):
             self.assertIn("💎", badge)
             self.assertIn("PROVEN LEADER", badge)
 
-        self.assertFalse(is_proven_leader("u3_anti_aggr"))
-        self.assertEqual(get_leader_badge("u3_anti_aggr"), "")
+        self.assertFalse(is_proven_leader("u3_reverse_aggr"))
+        self.assertEqual(get_leader_badge("u3_reverse_aggr"), "")
         self.assertFalse(is_proven_leader("u1"))
         self.assertEqual(get_leader_badge("u1"), "")
 
     def test_format_strategy_guide(self):
-        text_u3 = format_strategy_guide_text("u3_anti_trend")
+        text_u3 = format_strategy_guide_text("u3_reverse_trend")
         self.assertIn("ШПАРГАЛКА", text_u3)
         self.assertIn("PROVEN LEADER", text_u3)
         self.assertIn("70.6%", text_u3)
         self.assertIn("Правила входа", text_u3)
         self.assertIn("Правила выхода", text_u3)
+
+        text_sq = format_strategy_guide_text("u_sq_hvh_impulse")
+        self.assertIn("SQUEEZE", text_sq.upper())
+        self.assertIn("HVH", text_sq)
 
         text_hvh = format_strategy_guide_text("u_hvh_pullback")
         self.assertIn("HVH", text_hvh)
@@ -203,19 +207,97 @@ class TestStrategyGuideAndLeaders(unittest.TestCase):
 
     def test_guide_keyboards(self):
         universes = [
-            {"uid": "u3_anti_trend", "name": "Leader 1"},
-            {"uid": "u15_anti_fade", "name": "Leader 2"},
-            {"uid": "u3_anti_aggr", "name": "Leader 3"},
+            {"uid": "u3_reverse_trend", "name": "Leader 1"},
+            {"uid": "u15_reverse_fade", "name": "Leader 2"},
+            {"uid": "u3_reverse_aggr", "name": "High Churn"},
             {"uid": "u1", "name": "Trend"},
             {"uid": "u_hvh_pullback", "name": "HVH Pullback"}
         ]
-        kb = strategy_guide_keyboard(universes, current_uid="u3_anti_trend")
+        kb = strategy_guide_keyboard(universes, current_uid="u3_reverse_trend")
         self.assertIsNotNone(kb)
         self.assertTrue(len(kb.inline_keyboard) > 0)
 
-        detail_kb = strategy_guide_detail_keyboard("u3_anti_trend")
+        detail_kb = strategy_guide_detail_keyboard("u3_reverse_trend")
         self.assertIsNotNone(detail_kb)
         self.assertEqual(len(detail_kb.inline_keyboard), 2)
+
+
+class TestSqueezeHVHStrategies(unittest.TestCase):
+    """Тестирование вселенных на стыке Squeeze + HVH Breakout/Fade."""
+
+    def test_sq_hvh_impulse_entry_logic(self):
+        from consts import load_config
+        from CORE.universe import UniverseManager
+        cfg_data = load_config()
+        u_cfg = cfg_data.get("universes", {})
+        self.assertIn("u_sq_hvh_impulse", u_cfg)
+
+        mgr = UniverseManager(
+            universes_cfg={"u_sq_hvh_impulse": u_cfg["u_sq_hvh_impulse"]},
+            default_enter_rules={},
+            default_exit_rules={},
+            get_slippage_ratio_fn=lambda s: 0.001
+        )
+        univ = mgr.get_universe("u_sq_hvh_impulse")
+
+        # Bullish Squeeze Fire + HVH Breakout + HTF UP
+        ind_long = {
+            "trend_htf": "UP",
+            "volatility_squeeze": ["SQUEEZE_LONG"],
+            "hvh": ["HVH_IMPULSE_LONG"]
+        }
+        self.assertTrue(univ.check_entry("LONG", ind_long))
+        self.assertFalse(univ.check_entry("SHORT", ind_long))
+
+        # Bearish Squeeze Fire + HVH Breakout + HTF DOWN
+        ind_short = {
+            "trend_htf": "DOWN",
+            "volatility_squeeze": ["SQUEEZE_SHORT"],
+            "hvh": ["HVH_IMPULSE_SHORT"]
+        }
+        self.assertTrue(univ.check_entry("SHORT", ind_short))
+        self.assertFalse(univ.check_entry("LONG", ind_short))
+
+        # Missing squeeze signal -> No entry
+        ind_no_sq = {
+            "trend_htf": "UP",
+            "volatility_squeeze": ["SQUEEZE_ON"],
+            "hvh": ["HVH_IMPULSE_LONG"]
+        }
+        self.assertFalse(univ.check_entry("LONG", ind_no_sq))
+
+    def test_sq_hvh_reverse_climax_logic(self):
+        from consts import load_config
+        from CORE.universe import UniverseManager
+        cfg_data = load_config()
+        u_cfg = cfg_data.get("universes", {})
+        self.assertIn("u_sq_hvh_reverse", u_cfg)
+
+        mgr = UniverseManager(
+            universes_cfg={"u_sq_hvh_reverse": u_cfg["u_sq_hvh_reverse"]},
+            default_enter_rules={},
+            default_exit_rules={},
+            get_slippage_ratio_fn=lambda s: 0.001
+        )
+        univ = mgr.get_universe("u_sq_hvh_reverse")
+
+        # False dump: Squeeze ON + HVH Pullback LONG + Bear Exhausted -> LONG Entry
+        ind_rev_long = {
+            "volatility_squeeze": ["SQUEEZE_ON"],
+            "hvh": ["HVH_PULLBACK_LONG"],
+            "taker_flow": ["BEAR_EXHAUSTED"]
+        }
+        self.assertTrue(univ.check_entry("LONG", ind_rev_long))
+        self.assertFalse(univ.check_entry("SHORT", ind_rev_long))
+
+        # False pump: Squeeze ON + HVH Pullback SHORT + Bull Exhausted -> SHORT Entry
+        ind_rev_short = {
+            "volatility_squeeze": ["SQUEEZE_ON"],
+            "hvh": ["HVH_PULLBACK_SHORT"],
+            "taker_flow": ["BULL_EXHAUSTED"]
+        }
+        self.assertTrue(univ.check_entry("SHORT", ind_rev_short))
+        self.assertFalse(univ.check_entry("LONG", ind_rev_short))
 
 
 if __name__ == "__main__":

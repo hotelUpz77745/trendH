@@ -318,21 +318,21 @@ class TestUniverseManager(unittest.TestCase):
         self.assertIn("Портфель: ВСЕ СТРАТЕГИИ", text)
         self.assertIn("Нереализованный PnL: <code>+15.0000 USDT</code> (2 поз.)", text)
 
-    def test_u15_anti_breakout_taker_flow_mirroring(self):
+    def test_u15_reverse_breakout_taker_flow_mirroring(self):
         from consts import load_config
         cfg_data = load_config()
         u_cfg = cfg_data.get("universes", {})
         self.assertIn("u15", u_cfg)
-        self.assertIn("u15_anti", u_cfg)
+        self.assertIn("u15_reverse", u_cfg)
 
         mgr = UniverseManager(
-            universes_cfg={"u15": u_cfg["u15"], "u15_anti": u_cfg["u15_anti"]},
+            universes_cfg={"u15": u_cfg["u15"], "u15_reverse": u_cfg["u15_reverse"]},
             default_enter_rules={},
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001
         )
         u15 = mgr.get_universe("u15")
-        u15_anti = mgr.get_universe("u15_anti")
+        u15_reverse = mgr.get_universe("u15_reverse")
 
         # Market case: HTF UP, LuxAlgo Breakout LONG, Taker Buy Dominant (u15 enters LONG)
         ind_long = {
@@ -342,9 +342,9 @@ class TestUniverseManager(unittest.TestCase):
         }
         self.assertTrue(u15.check_entry("LONG", ind_long))
         self.assertFalse(u15.check_entry("SHORT", ind_long))
-        # In u15_anti: Must NOT enter LONG, must enter SHORT!
-        self.assertFalse(u15_anti.check_entry("LONG", ind_long))
-        self.assertTrue(u15_anti.check_entry("SHORT", ind_long))
+        # In u15_reverse: Must NOT enter LONG, must enter SHORT!
+        self.assertFalse(u15_reverse.check_entry("LONG", ind_long))
+        self.assertTrue(u15_reverse.check_entry("SHORT", ind_long))
 
         # Market case: HTF DOWN, LuxAlgo Breakout SHORT, Taker Sell Dominant (u15 enters SHORT)
         ind_short = {
@@ -354,11 +354,11 @@ class TestUniverseManager(unittest.TestCase):
         }
         self.assertFalse(u15.check_entry("LONG", ind_short))
         self.assertTrue(u15.check_entry("SHORT", ind_short))
-        # In u15_anti: Must enter LONG, must NOT enter SHORT!
-        self.assertTrue(u15_anti.check_entry("LONG", ind_short))
-        self.assertFalse(u15_anti.check_entry("SHORT", ind_short))
+        # In u15_reverse: Must enter LONG, must NOT enter SHORT!
+        self.assertTrue(u15_reverse.check_entry("LONG", ind_short))
+        self.assertFalse(u15_reverse.check_entry("SHORT", ind_short))
 
-    def test_all_anti_universes_mirroring(self):
+    def test_all_reverse_and_squeeze_universes(self):
         from consts import load_config
         cfg_data = load_config()
         u_cfg = cfg_data.get("universes", {})
@@ -368,27 +368,29 @@ class TestUniverseManager(unittest.TestCase):
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001
         )
-        self.assertGreaterEqual(len(mgr.universes), 18)
+        self.assertGreaterEqual(len(mgr.universes), 20)
         self.assertIsNotNone(mgr.get_universe("u15"))
         self.assertIsNotNone(mgr.get_universe("u15_cons"))
-        self.assertIsNotNone(mgr.get_universe("u3_anti"))
-        self.assertIsNotNone(mgr.get_universe("u3_anti_opt"))
+        self.assertIsNotNone(mgr.get_universe("u3_reverse"))
+        self.assertIsNotNone(mgr.get_universe("u3_reverse_opt"))
         self.assertIsNotNone(mgr.get_universe("u_grid_stress_base"))
         self.assertIsNotNone(mgr.get_universe("u_hvh_pullback"))
         self.assertIsNotNone(mgr.get_universe("u_hvh_impulse"))
+        self.assertIsNotNone(mgr.get_universe("u_sq_hvh_impulse"))
+        self.assertIsNotNone(mgr.get_universe("u_sq_hvh_reverse"))
 
-        # u15 vs u15_anti: TP=0.045, SL=0.02 -> u15_anti TP=0.02, SL=0.045
+        # u15 vs u15_reverse: TP=0.045, SL=0.02 -> u15_reverse TP=0.02, SL=0.045
         u15 = mgr.get_universe("u15")
-        u15_anti = mgr.get_universe("u15_anti")
+        u15_reverse = mgr.get_universe("u15_reverse")
         self.assertEqual(u15.exit_rules["take_profit_ratio"]["value"], 0.045)
         self.assertEqual(u15.exit_rules["stop_loss_ratio"]["value"], 0.02)
-        self.assertEqual(u15_anti.exit_rules["take_profit_ratio"]["value"], 0.02)
-        self.assertEqual(u15_anti.exit_rules["stop_loss_ratio"]["value"], 0.045)
+        self.assertEqual(u15_reverse.exit_rules["take_profit_ratio"]["value"], 0.02)
+        self.assertEqual(u15_reverse.exit_rules["stop_loss_ratio"]["value"], 0.045)
 
-        # u3_anti: TP=0.02, SL=0.04
-        u3_anti = mgr.get_universe("u3_anti")
-        self.assertEqual(u3_anti.exit_rules["take_profit_ratio"]["value"], 0.02)
-        self.assertEqual(u3_anti.exit_rules["stop_loss_ratio"]["value"], 0.04)
+        # u3_reverse: TP=0.02, SL=0.04
+        u3_reverse = mgr.get_universe("u3_reverse")
+        self.assertEqual(u3_reverse.exit_rules["take_profit_ratio"]["value"], 0.02)
+        self.assertEqual(u3_reverse.exit_rules["stop_loss_ratio"]["value"], 0.04)
 
     def test_leaderboard_solid_list_and_safe_medals(self):
         from TG.handlers_analytics import _format_leaderboard_text
