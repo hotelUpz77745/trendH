@@ -217,7 +217,7 @@ class EntrySignalEngine:
             elif base_key == "relative_strength":
                 from CORE.indicators.squeeze_flow import EntryRelativeStrengthRule
                 self.rules.append(EntryRelativeStrengthRule(val))
-            elif base_key in ("grid_stress", "grid_inventory_stress"):
+            elif base_key in ("grid_stress", "grid_inventory_stress", "grid_stress_extreme"):
                 from cron_integration import EntryGridStressRule
                 self.rules.append(EntryGridStressRule(val))
             elif base_key == "hvh":
@@ -392,9 +392,11 @@ class ExitSignalEngine:
             elif base_key == "rsi":
                 self.rules.append(ExitRSIRule(val))
             elif base_key == "take_profit_ratio":
-                self.rules.append(ExitTakeProfitRule(val, analytics_cfg, get_slippage_ratio_fn))
+                if val.get("value") is not None:
+                    self.rules.append(ExitTakeProfitRule(val, analytics_cfg, get_slippage_ratio_fn))
             elif base_key == "stop_loss_ratio":
-                self.rules.append(ExitStopLossRule(val, analytics_cfg, get_slippage_ratio_fn))
+                if val.get("value") is not None:
+                    self.rules.append(ExitStopLossRule(val, analytics_cfg, get_slippage_ratio_fn))
             elif base_key == "time_stop":
                 self.rules.append(ExitTimeStopRule(val))
             elif base_key == "chandelier_exit":

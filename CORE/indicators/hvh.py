@@ -39,9 +39,9 @@ class HVHCalculator:
         self.is_active: bool = bool(cfg.get("is_active", False))
         self.timeframe: str = str(cfg.get("timeframe", "5m"))
         self.period: int = int(cfg.get("period", 20))
-        self.dev_multiplier: float = float(cfg.get("dev", 1.8))
-        self.mode: str = str(cfg.get("mode", "rolling")).lower()
-        self.signal_type: str = str(cfg.get("signal_type", "pullback")).lower()
+        self.dev_multiplier: float = float(cfg.get("dev", cfg.get("dev_multiplier", 1.8)))
+        self.mode: str = str(cfg.get("mode", cfg.get("corridor_mode", "rolling"))).lower()
+        self.signal_type: str = str(cfg.get("signal_type", cfg.get("strategy_mode", "pullback"))).lower()
         self.is_trend: int = int(cfg.get("is_trend", 1))
         self.long_cond: str = str(cfg.get("long_cond", "HVH_LONG"))
         self.short_cond: str = str(cfg.get("short_cond", "HVH_SHORT"))
@@ -139,15 +139,18 @@ class HVHCalculator:
         if is_pullback:
             # Контртрендовый отскок от экстремальной перерастяжки
             if curr_close >= upper_band:
-                signals.append(self.short_cond)
+                signals.extend([self.short_cond, "HVH_SHORT", "HVH_PULLBACK_SHORT"])
             elif curr_close <= lower_band:
-                signals.append(self.long_cond)
+                signals.extend([self.long_cond, "HVH_LONG", "HVH_PULLBACK_LONG"])
         else:
             # Импульсный пробой волатильности
             if curr_close >= upper_band:
-                signals.append(self.long_cond)
+                signals.extend([self.long_cond, "HVH_LONG", "HVH_IMPULSE_LONG"])
             elif curr_close <= lower_band:
-                signals.append(self.short_cond)
+                signals.extend([self.short_cond, "HVH_SHORT", "HVH_IMPULSE_SHORT"])
+
+        # Устраняем дубликаты с сохранением порядка
+        signals = list(dict.fromkeys(signals))
 
         return {
             "signals": signals,
