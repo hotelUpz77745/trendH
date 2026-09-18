@@ -18,6 +18,7 @@ from consts import ANALYTICS_DIR, ANALYTICS_CFG
 from ANALYTICS.metrics import AnalyticsMathEngine
 from ANALYTICS.plotter import generate_equity_curve
 from TG.keyboards import TGKeyboards
+from TG.strategy_guide import get_leader_badge, register_strategy_guide_handlers
 from c_log import UnifiedLogger
 from utils import Utils
 
@@ -75,7 +76,8 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "all") 
         total_trades, winning_trades, winrate = m["total_trades"], m["winning_trades"], m["winrate_pct"]
     else:
         univ = mgr.get_universe(universe_id) if mgr else None
-        title = f"🌐 <b>Вселенная: {univ.name if univ else universe_id.upper()}</b>\n"
+        badge = get_leader_badge(universe_id)
+        title = f"🌐 <b>Вселенная: {univ.name if univ else universe_id.upper()}{badge}</b>\n"
         desc = f"<i>{univ.description}</i>\n\n" if univ and univ.description else "\n"
         if not data and not univ:
             return f"{title}{desc}📊 <b>Аналитика пока не содержит данных по сделкам.</b>"
@@ -133,6 +135,7 @@ def _format_leaderboard_lines(bot_core) -> list:
     for idx, item in enumerate(board, 1):
         medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}."))
         uid = item["uid"]
+        badge = get_leader_badge(uid)
         skip_tag = " ⚡<b>[SKIP]</b>" if uid.endswith("_skip") or "skip" in uid.lower() else ""
         raw_name = item.get("name", uid).split("(")[0].strip().replace(" (SKIP)", "").replace(" (skip)", "")
         short_name = f" ({raw_name[:20]})" if raw_name else ""
@@ -140,7 +143,7 @@ def _format_leaderboard_lines(bot_core) -> list:
         u_s = "+" if item["unrealized_pnl"] >= 0 else ""
         dd = -abs(item["max_dd"]) if item["max_dd"] > 0 else 0.0
         lines.append(
-            f"{medal} <b>{uid.upper()}</b>{skip_tag}{short_name}\n"
+            f"{medal} <b>{uid.upper()}</b>{badge}{skip_tag}{short_name}\n"
             f"   • PnL: <b>{p_s}{item['net_profit']:.2f}$</b> | WR: {item['winrate']:.0f}% ({item['total_trades']}) | DD: {dd:.2f}$ | Откр: {item['active_count']} ({u_s}{item['unrealized_pnl']:.2f}$)"
         )
     return lines
@@ -196,6 +199,7 @@ async def _send_or_edit_split_messages(callback: CallbackQuery, messages: list, 
 
 def setup_analytics_handlers(router: Router, bot_core):
     """Регистрирует обработчики меню аналитики."""
+    register_strategy_guide_handlers(router, bot_core)
 
     @router.message(F.text == "📊 Analytics")
     async def on_analytics_menu(message: Message, state: FSMContext):
@@ -372,13 +376,8 @@ def setup_analytics_handlers(router: Router, bot_core):
         await state.set_state(AnalyticsStates.waiting_for_reset_confirm)
         text = (
             f"⚠️ <b>ВНИМАНИЕ: Сброс аналитики для [{uid.upper()}]!</b>\n\n"
-            "Это действие <b>безвозвратно удалит</b>:\n"
-            "• Историю сделок и журнал (Ledger)\n"
-            "• График кривой доходности (Equity)\n"
-            "• Статистику и метрики по монетам\n\n"
-            "🛡 <b>Защита от случайного сброса:</b>\n"
-            "• Отправьте в чат слово <code>СБРОС</code> для подтверждения\n"
-            "• Или нажмите «Запросить защитный PIN-код» ниже\n\n"
+            "Удалит историю сделок, Ledger, график Equity и метрики по монетам.\n\n"
+            "🛡 <b>Защита:</b> отправьте <code>СБРОС</code> в чат или запросите PIN ниже.\n"
             "<i>(Нажмите «Отмена», чтобы сохранить данные)</i>"
         )
         await callback.message.edit_text(text, reply_markup=TGKeyboards.confirm_reset_analytics(uid), parse_mode="HTML")

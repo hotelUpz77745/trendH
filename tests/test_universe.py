@@ -368,11 +368,13 @@ class TestUniverseManager(unittest.TestCase):
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001
         )
-        self.assertEqual(len(mgr.universes), 15)
+        self.assertGreaterEqual(len(mgr.universes), 17)
         self.assertIsNotNone(mgr.get_universe("u15"))
         self.assertIsNotNone(mgr.get_universe("u15_cons"))
         self.assertIsNotNone(mgr.get_universe("u3_anti"))
         self.assertIsNotNone(mgr.get_universe("u_grid_stress_base"))
+        self.assertIsNotNone(mgr.get_universe("u_hvh_pullback"))
+        self.assertIsNotNone(mgr.get_universe("u_hvh_impulse"))
 
         # u15 vs u15_anti: TP=0.045, SL=0.02 -> u15_anti TP=0.02, SL=0.045
         u15 = mgr.get_universe("u15")

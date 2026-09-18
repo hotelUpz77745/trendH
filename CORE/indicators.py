@@ -293,6 +293,13 @@ class IndicatorsEngine:
         rs_cfg = enter_rules.get("relative_strength")
         self.relative_strength_calc = RelativeStrengthCalculator(rs_cfg) if rs_cfg and rs_cfg.get("is_active") else None
 
+        hvh_cfg = enter_rules.get("hvh")
+        if hvh_cfg and hvh_cfg.get("is_active"):
+            from CORE.hvh import HVHCalculator
+            self.hvh_calc = HVHCalculator(hvh_cfg)
+        else:
+            self.hvh_calc = None
+
     def get_required_timeframes(self) -> Set[str]:
         """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
         tfs = set()
@@ -315,6 +322,8 @@ class IndicatorsEngine:
             tfs.add(self.squeeze_calc.timeframe)
         if self.relative_strength_calc and self.relative_strength_calc.is_active:
             tfs.add("5m")
+        if self.hvh_calc and self.hvh_calc.is_active:
+            tfs.add(self.hvh_calc.timeframe)
         return tfs if tfs else {"5m"}
 
     def calculate(
@@ -408,6 +417,12 @@ class IndicatorsEngine:
             result["relative_strength"] = self.relative_strength_calc.calculate(coin_closes, btc_closes or [])
         else:
             result["relative_strength"] = []
+
+        if self.hvh_calc and self.hvh_calc.is_active:
+            candles_hvh = klines_by_tf.get(self.hvh_calc.timeframe, [])
+            result["hvh"] = self.hvh_calc.calculate(candles_hvh)
+        else:
+            result["hvh"] = []
 
         result["candles_5m"] = klines_by_tf.get("5m", [])
         return result

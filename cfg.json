@@ -902,6 +902,114 @@
                 }
             },
             "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
+        "u_hvh_pullback": {
+            "name": "HVH Mean-Reversion Pullback",
+            "description": "Вход на откате к средней (инвертированный HVH) в направлении старшего тренда 1h при стрессе сетки сеточника (filled>=3)",
+            "is_active": true,
+            "inactive_grid_mode": "TAKE_LEVEL_0",
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "hvh": {
+                    "is_active": true,
+                    "timeframe": "15m",
+                    "period": 20,
+                    "dev": 1.8,
+                    "mode": "rolling",
+                    "signal_type": "pullback",
+                    "long_cond": "HVH_LONG",
+                    "short_cond": "HVH_SHORT"
+                },
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 3,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 3.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.08
+                },
+                "stop_loss_ratio": {
+                    "value": 0.03
+                },
+                "trend_reversal": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ]
+                }
+            }
+        },
+        "u_hvh_impulse": {
+            "name": "Pure Impulse HVH Breakout",
+            "description": "Импульсный пробой границы волатильности HVH при поддержке потока ордеров (Taker Flow) и застрявшей сетке",
+            "is_active": true,
+            "inactive_grid_mode": "TAKE_LEVEL_0",
+            "enter_rules": {
+                "hvh": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "period": 20,
+                    "dev": 2.0,
+                    "mode": "rolling",
+                    "signal_type": "impulse",
+                    "long_cond": "HVH_LONG",
+                    "short_cond": "HVH_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.60,
+                    "max_buy_ratio": 0.40,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                },
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 3,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.5
+                },
+                "take_profit_ratio": {
+                    "value": 0.06
+                },
+                "stop_loss_ratio": {
+                    "value": 0.025
+                }
+            }
         }
     },
     "watchdog": {

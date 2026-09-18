@@ -52,7 +52,7 @@ class TGKeyboards:
     def analytics_menu(selected_uid: str = "all", universes: Optional[List[Any]] = None) -> InlineKeyboardMarkup:
         """
         Меню аналитики торговой активности для выбранной стратегии или суммарного портфеля.
-        Включает кнопку быстрого выбора стратегии и действия по выбранной стратегии.
+        Включает кнопку быстрого выбора стратегии, справочник и действия по выбранной стратегии.
         """
         strat_name = "ВСЕ СТРАТЕГИИ" if selected_uid == "all" else selected_uid.upper()
         return InlineKeyboardMarkup(inline_keyboard=[
@@ -61,14 +61,17 @@ class TGKeyboards:
             ],
             [
                 InlineKeyboardButton(text="🏆 Leaderboard (Все)", callback_data="analytics_leaderboard"),
+                InlineKeyboardButton(text="📖 Справочник стратегий", callback_data=f"strat_guide_menu:{selected_uid}"),
+            ],
+            [
                 InlineKeyboardButton(text="📈 Equity Curve", callback_data=f"analytics_equity:{selected_uid}"),
-            ],
-            [
                 InlineKeyboardButton(text="📄 Trades Ledger", callback_data=f"analytics_ledger:{selected_uid}"),
-                InlineKeyboardButton(text="🪙 Coin Ranking", callback_data=f"analytics_ranking:{selected_uid}:profit"),
             ],
             [
+                InlineKeyboardButton(text="🪙 Coin Ranking", callback_data=f"analytics_ranking:{selected_uid}:profit"),
                 InlineKeyboardButton(text="💰 Set Balance", callback_data=f"analytics_set_balance_{selected_uid}"),
+            ],
+            [
                 InlineKeyboardButton(text="🗑 Сброс", callback_data=f"analytics_reset:{selected_uid}"),
                 InlineKeyboardButton(text="ℹ️ Help", callback_data="analytics_help"),
             ]
@@ -77,6 +80,7 @@ class TGKeyboards:
     @staticmethod
     def strategy_select_menu(universes: List[Any], selected_uid: str = "all") -> InlineKeyboardMarkup:
         """Клавиатура выбора стратегии из списка, упорядоченного по результативности."""
+        from TG.strategy_guide import is_proven_leader
         buttons = []
         is_all = (selected_uid == "all")
         all_prefix = "🔘 " if is_all else ""
@@ -91,7 +95,8 @@ class TGKeyboards:
             medal = "🥇" if idx == 1 else ("🥈" if idx == 2 else ("🥉" if idx == 3 else f"{idx}."))
             is_skip = uid.endswith("_skip") or "skip" in uid.lower()
             skip_badge = " ⚡" if is_skip else ""
-            label = f"{prefix}{medal} {uid.upper()}{skip_badge}"
+            leader_badge = " 💎" if is_proven_leader(uid) else ""
+            label = f"{prefix}{medal} {uid.upper()}{leader_badge}{skip_badge}"
             row.append(InlineKeyboardButton(text=label, callback_data=f"analytics_univ_{uid}"))
             if len(row) == 2:
                 buttons.append(row)

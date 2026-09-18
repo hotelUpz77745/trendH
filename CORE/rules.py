@@ -220,6 +220,9 @@ class EntrySignalEngine:
             elif base_key in ("grid_stress", "grid_inventory_stress"):
                 from cron_integration import EntryGridStressRule
                 self.rules.append(EntryGridStressRule(val))
+            elif base_key == "hvh":
+                from CORE.hvh import EntryHVHRule
+                self.rules.append(EntryHVHRule(val))
 
     def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
         """

@@ -335,7 +335,7 @@ C:\Users\user\Desktop\My_Pro\HP_EliteBook_735_old\MY\HRON_3\cron3Papper\CFG\runt
 7. **Живой расчет Текущего баланса (Equity) и стартового депозита**: Устранена рассинхронизация, когда `Текущий баланс` и `Чистый профит` в Telegram не учитывали открытые сделки. Теперь `live_cur_bal = start_bal + realized_pnl + unrealized_pnl`, а `live_net_profit = realized_pnl + unrealized_pnl`. В `cfg.json` и `ANALYTICS` внедрен параметр `default_start_balance` (1000 USDT), устранивший нулевой баланс виртуальных вселенных. -->
 
 
-
+<!-- 
 Новое:
 Мой вопрос:
     Привет. Конфиг посмотрел. Сетка: 6 уровней, суммарный объем 100, уровни -5/-8/-13/-21/-34%, TP 0.6-2.5% (fallback 1-4%). Логика trendH: если LONG-сетка набрала много лонга и цена продолжает падать — trendH шортит; если SHORT-сетка набрала много шорта и цена продолжает расти — trendH лонгует. Иначе говоря, direction = opposite(grid_stressed_side). Это и есть забор безоткатного движения.
@@ -668,4 +668,369 @@ C:\Users\user\Desktop\My_Pro\HP_EliteBook_735_old\MY\HRON_3\cron3Papper\CFG\runt
 
         "runtime_path": "C:\\Users\\user\\Desktop\\My_Pro\\HP_EliteBook_735_old\\MY\\HRON_3\\cron3Papper\\CFG\\runtime",
 
-        Пример runtime/ смотри в артефакте текущего проекта -- artefacts/runtime.tar.gz
+        Пример runtime/ смотри в артефакте текущего проекта -- artefacts/runtime.tar.gz -->
+
+## Новая стратегия
+
+    # ///////
+    def hvh_calc(self, df, ind_rules):
+        """
+        HVH-индикатор с режимами:
+        - "fixed": фиксированная макс. девиация за окно
+        - "rolling": скользящее макс. отклонение
+
+        ind_rules:
+            - "period": окно MA и девиации
+            - "dev": множитель девиации
+            - "mode": "fixed" или "rolling"
+            - "is_trend": 1 или 0
+        """
+        try:
+            ma_period = int(ind_rules.get("period", 0))
+            deviation_rate = float(ind_rules.get("dev", 1.0))
+            is_trend = int(ind_rules.get("is_trend", 1))
+            mode = ind_rules.get("mode", "rolling").lower()
+
+            if ma_period <= 0:
+                raise ValueError("hvh_calc: параметр 'period' должен быть положительным.")
+
+            if len(df) < ma_period:
+                return pd.Series(dtype=int, index=df.index, name="HVH")
+
+            close = df["Close"]
+            high = df["High"]
+            low = df["Low"]
+
+            ma = close.rolling(window=ma_period, min_periods=ma_period).mean()
+            high_dev = np.where(high > ma, (high - ma).abs(), 0)
+            low_dev = np.where(low < ma, (ma - low).abs(), 0)
+            deviation = pd.Series(np.maximum(high_dev, low_dev), index=df.index)
+
+            if mode == "fixed":
+                valid_dev = deviation[-ma_period:].dropna()
+                if valid_dev.empty:
+                    raise ValueError("hvh_calc: недостаточно валидных данных для fixed-девиации.")
+                
+                max_dev = valid_dev.max()
+                adj_dev_value = max_dev * deviation_rate
+                adj_dev = pd.Series(adj_dev_value, index=df.index)
+
+            elif mode == "rolling":
+                rolling_max_dev = deviation.rolling(window=ma_period, min_periods=ma_period).max()
+                adj_dev_series = rolling_max_dev * deviation_rate
+                adj_dev = pd.Series(adj_dev_series, index=df.index)
+
+            else:
+                raise ValueError("hvh_calc: неизвестный режим. Используйте 'fixed' или 'rolling'.")
+
+            direction = np.where(close >= ma, 1, -1)
+            trigger = ma + (adj_dev * direction)
+
+            raw_signals = np.zeros(len(close), dtype=np.int8)
+            raw_signals[(close >= trigger) & (direction == 1)] = 1 * is_trend
+            raw_signals[(close <= trigger) & (direction == -1)] = -1 * is_trend
+            filtered = filter_signals(raw_signals)
+
+            return pd.Series(filtered, index=df.index, name="HVH")
+
+        except Exception as ex:
+            print(f"hvh_calc: {ex}")
+            return pd.Series(dtype=int, index=df.index, name="HVH") (этот пробойный надо будет инвертировать и сделать отскокочным)   
+
+
+            +
+
+
+
+class TrendCalculator:
+    """Изолированный калькулятор тренда на базе быстрой и медленной EMA."""
+
+    def __init__(self, cfg: Dict[str, Any]):
+        self.is_active: bool = bool(cfg["is_active"])
+        self.timeframe: str = str(cfg["timeframe"])
+        self.sma_fast: int = int(cfg["sma_fast"])
+        self.sma_slow: int = int(cfg["sma_slow"])
+        self.confirmation_candles: int = int(cfg["confirmation_candles"])
+        self.require_rising: bool = bool(cfg["require_rising"])
+
+    def calculate(self, closes: List[float]) -> str:
+        """
+        Классифицирует состояние рынка по ценам закрытия:
+        - UP: быстрая EMA выше медленной на протяжении N свечей (и растет, если require_rising=True)
+        - DOWN: быстрая EMA ниже медленной на протяжении N свечей (и падает, если require_rising=True)
+        - FLAT: расхождение условий либо боковое движение
+        - UNSTABLE: недостаточно свечей для расчета
+        """
+        if not self.is_active or not closes:
+            return "UNSTABLE"
+
+        ema_fast = IndicatorsMath.calc_ema(closes, self.sma_fast)
+        ema_slow = IndicatorsMath.calc_ema(closes, self.sma_slow)
+
+        if not ema_fast or not ema_slow or len(ema_fast) < self.confirmation_candles:
+            return "UNSTABLE"
+
+        ef_tail = ema_fast[-self.confirmation_candles:]
+        es_tail = ema_slow[-self.confirmation_candles:]
+
+        is_above = all(f > s for f, s in zip(ef_tail, es_tail))
+        is_below = all(f < s for f, s in zip(ef_tail, es_tail))
+        is_rising = all(ef_tail[i] > ef_tail[i - 1] for i in range(1, len(ef_tail)))
+        is_falling = all(ef_tail[i] < ef_tail[i - 1] for i in range(1, len(ef_tail)))
+
+        if is_above and (not self.require_rising or is_rising):
+            return "UP"
+        elif is_below and (not self.require_rising or is_falling):
+            return "DOWN"
+        else:
+            return "FLAT"
+
+
+            -- уже у нас есть.
+
+
+Рецензия другого агента:
+
+# trendH — модуль «HVH-Pullback + EMA-Regime»
+
+Да, теперь картинка сходится. То, что ты описываешь, — это классический **trend + pullback entry**: направление берём у тренда, точку входа — у инвертированного HVH. Разберу по шагам, как это собрать в один модуль и встроить в trendH.
+
+---
+
+## 1. Ядро идеи
+
+**Инвертированный HVH** = mean-reversion триггер:
+- `close >= MA + dev` → **SHORT-триггер** (цена растянута вверх);
+- `close <= MA - dev` → **LONG-триггер** (цена растянута вниз).
+
+**TrendCalculator** = режим:
+- `UP` / `DOWN` / `FLAT` / `UNSTABLE`.
+
+**Сделка открывается только когда оба совпадают по направлению:**
+
+| TrendCalculator | Inverted HVH | Действие |
+|---|---|---|
+| DOWN | SHORT (растяжка вверх) | **SHORT** — продаём отскок в даунтренде |
+| UP | LONG (растяжка вниз) | **LONG** — покупаем пролив в аптренде |
+| DOWN | LONG | пропуск (контр-тренд) |
+| UP | SHORT | пропуск |
+| FLAT / UNSTABLE | любое | пропуск |
+
+Это ровно та логика, которую ты хотел: **не пробой, а вход на откате в сторону тренда**. В боковике сделок нет — FLAT отсекает.
+
+---
+
+## 2. Формула инвертированного HVH
+
+Берём твой `hvh_calc` на старший ТФ (H4 / D1) и делаем ровно две правки:
+
+```python
+# было:
+raw_signals[(close >= trigger) & (direction == 1)] = 1 * is_trend
+raw_signals[(close <= trigger) & (direction == -1)] = -1 * is_trend
+
+# станет (контртренд):
+raw_signals[(close >= trigger) & (direction == 1)] = -1 * is_trend
+raw_signals[(close <= trigger) & (direction == -1)] =  1 * is_trend
+```
+
+Всё остальное (`mode`, `dev`, `period`, `filter_signals`) — как есть.
+
+**Рекомендации по параметрам для старшего ТФ:**
+- `period`: 50–100 (MA на H4/D1);
+- `dev`: 1.5–2.2 (ниже — много ложных, выше — редкие входы);
+- `mode`: `rolling` (адаптируется к волатильности);
+- `is_trend`: 1.
+
+---
+
+## 3. Связка с инвентарём сеточника
+
+Это то, что отличает твой trendH от обычного pullback-бота.
+
+Для каждого символа читаем state сеточника:
+
+```
+side        = LONG | SHORT
+filled      = 0..5
+vol_ratio   = accumulated_volume / 100
+avg_price   = weighted avg сетки
+uPnL        = unrealized PnL сетки
+drawdown_t  = время в просадке
+```
+
+**Дополнительные условия входа (помимо HVH + TrendCalculator):**
+
+Для SHORT-входа (ловим даунтренд, LONG-сетка в стрессе):
+- `side == LONG`;
+- `filled >= 3` и `vol_ratio >= 0.6`;
+- `uPnL < 0` (сетка реально в минусе);
+- направление TrendCalculator = `DOWN`;
+- inverted HVH дал SHORT.
+
+Для LONG-входа — зеркально (SHORT-сетка, filled >= 3, `UP`, inverted HVH дал LONG).
+
+Если сеточник по символу в плюсе или не набрал объём — **trendH не входит**, даже если HVH+Trand совпали. Это твой главный риск-фильтр: не открываться «в пустоту».
+
+---
+
+## 4. Confirmation на младшем ТФ
+
+HVH на H4/D1 даёт редкий, но «жирный» сигнал. Чтобы не поймать ранний отскок, который ещё не закончился, добавь микро-подтверждение на M15/H1:
+
+**Для SHORT-входа (после HVH+Trend+Grid):**
+- на M15 свеча закрылась обратно ниже EMA20, **или**
+- bearish engulfing / pin bar у верхней границы HVH-канала, **или**
+- ADX(M15) > 20 и растёт.
+
+**Для LONG — зеркально.**
+
+Это отсекает «ловлю ножей» и входы в момент, когда растяжка только формируется.
+
+---
+
+## 5. Дополнительные фильтры от боковика
+
+Даже если FLAT отсекает большую часть, добавь:
+
+- ADX(H4) > 22 — иначе тренд вялый;
+- ATR(14) / ATR(50) > 1.1 — волатильность растёт;
+- |EMA_fast − EMA_slow| / EMA_slow > 0.005 — реальное расхождение, а не почти слипшиеся EMA;
+- `require_rising = True` в TrendCalculator — чтобы fast EMA реально шла в сторону тренда, а не просто была выше.
+
+Пункт про `require_rising=True` — важный. Без него TrendCalculator может дать `UP`, когда fast выше slow, но уже загибается — а это начало разворота.
+
+---
+
+## 6. Размер позиции и пирамидинг
+
+Базовая формула:
+
+```
+risk_per_trade = 0.5–1.0% от equity trendH
+stop           = max(1.5 * ATR(H4), 1.0% от entry)
+notional       = risk_per_trade * equity / stop_pct
+cap_notional   = 0.4 * notional_grid (чтобы не перехеджировать)
+```
+
+**Пирамидинг (для отработки движений +30–100%):**
+- 40% на первом входе (HVH + Trend + Grid + M15 confirm);
+- 30% при закрытии M15/H1 в сторону позиции и сохранении режима;
+- 30% при пробое последнего swing low (для шорта) / swing high (для лонга).
+
+После третьего добора стоп подтягивается в безубыток по средней.
+
+**Не масштабируй, если `vol_ratio` сеточника упал** (сетка начала закрывать TP) — это признак, что импульс выдохся.
+
+---
+
+## 7. Выход — под задачу «не дешевить»
+
+Цель — забрать +30–100%, а не +5%. Значит, выход — **лестница + трейлинг**, а не фикс на первом профите.
+
+**Лестница фиксации:**
+- +15–20% → снять 15%;
+- +30–40% → снять 20%;
+- +50–60% → снять 20%;
+- остаток 45% вести трейлингом.
+
+**Трейлинг остатка — по одному из:**
+- Chandelier Exit: `highest_high − 3×ATR(H4)` для лонга;
+- либо EMA50 на H1 как динамический стоп;
+- либо параболический SAR на H4.
+
+**Принудительный выход (полный или частичный):**
+- TrendCalculator перешёл в `FLAT` → закрыть 50%;
+- inverted HVH дал сигнал **против** позиции → закрыть 30%;
+- сеточник закрыл >= 50% инвентаря по TP → закрыть 50% trendH;
+- сеточник полностью разгрузился → закрыть trendH полностью;
+- ADX(H4) упал ниже 18 → закрыть всё;
+- прошло N баров без нового экстремума → закрыть всё.
+
+**Стоп-лосс:** всегда стоит, 1.5–2.5×ATR от входа. Не переносится против позиции.
+
+---
+
+## 8. Псевдокод модуля
+
+```python
+def trendH_decision(symbol, tf_high="H4", tf_low="M15"):
+    # 1. Данные
+    df_h = load(symbol, tf_high)
+    df_l = load(symbol, tf_low)
+
+    # 2. Режим тренда
+    trend = TrendCalculator(cfg).calculate(df_h["Close"].tolist())
+    if trend in ("FLAT", "UNSTABLE"):
+        return None
+
+    # 3. Инвертированный HVH на старшем ТФ
+    hvh = hvh_calc(df_h, ind_rules_inverted)
+    last_sig = hvh.iloc[-1]
+    if last_sig == 0:
+        return None
+
+    # 4. Согласованность тренда и HVH
+    if trend == "DOWN" and last_sig != -1: return None
+    if trend == "UP"   and last_sig !=  1: return None
+
+    # 5. Инвентарь сеточника
+    g = grid_state(symbol)
+    if trend == "DOWN":
+        if g.side != "LONG":  return None
+    if trend == "UP":
+        if g.side != "SHORT": return None
+    if g.filled < 3 or g.vol_ratio < 0.6 or g.uPnL >= 0:
+        return None
+
+    # 6. Доп. фильтры
+    if adx(df_h) < 22: return None
+    if atr_ratio(df_h) < 1.1: return None
+    if abs(ema_fast - ema_slow)/ema_slow < 0.005: return None
+
+    # 7. Подтверждение на младшем ТФ
+    if trend == "DOWN" and not bearish_confirm(df_l): return None
+    if trend == "UP"   and not bullish_confirm(df_l): return None
+
+    return "SHORT" if trend == "DOWN" else "LONG"
+```
+
+Выходы — отдельная функция `trendH_exit_manager(position, state)`, читающая те же сигналы + grid_state.
+
+---
+
+## 9. Рекомендованные параметры (стартовая точка)
+
+| Параметр | Значение |
+|---|---|
+| TF HVH | H4 |
+| HVH period | 60 |
+| HVH dev | 1.8 |
+| HVH mode | rolling |
+| EMA fast / slow | 21 / 55 |
+| confirmation_candles | 5 |
+| require_rising | True |
+| ADX min | 22 |
+| ATR ratio min | 1.1 |
+| Grid filled min | 3 |
+| Grid vol_ratio min | 0.6 |
+| Stop | 2.0 × ATR(H4) |
+| Trailing | Chandelier 3 × ATR(H4) |
+| TP ladder | 15 / 30 / 50 / trail |
+
+---
+
+## 10. Что это даёт
+
+- **Не пробой**, а вход на откате — там, где импульс уже подтверждён, но не перегрет.
+- **Сеточник становится сенсором**: он «сообщает», по какой стороне рынок давит.
+- **FLAT отсекает боковик**, HVH отсекает ранние входы, ATR/ADX отсекают вялый тренд.
+- **Лестница + трейлинг** позволяет досидеть до +50–100%, а не срезать на +5%.
+- **Диспозиция закрывается автоматически** по разгрузке сетки.
+
+Слабое место — вход всё равно опаздывает на 10–20% от начала импульса. Это лечится пирамидингом (пункт 6) и подтверждением на M15: ты входишь не в первые растянутые свечи, а в момент, когда отскок уже ломается обратно в сторону тренда.
+
+Если хочешь, могу расписать конкретный `trendH_exit_manager` с приоритетами выходов (что важнее: сигнал HVH против позиции vs. разгрузка сетки) или подобрать параметры под конкретный таймфрейм/монету.
+
+
+P\s: подумай как ее превратиь в чисто импульсную. Возможно будет как и для неккоторых из наших стратегий брать за основу количество сеток усредненных у Хрона и смотреть hvh подтверждение (но пробоя, не отскока) на младшем или среднем таймфрейме.
