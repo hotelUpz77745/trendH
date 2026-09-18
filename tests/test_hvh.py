@@ -174,7 +174,7 @@ class TestStrategyGuideAndLeaders(unittest.TestCase):
     """Тестирование справочника стратегий и маркировки доказанных лидеров."""
 
     def test_proven_leaders_metadata(self):
-        expected_leaders = {"u3_anti_trend", "u15_anti_fade", "u3_anti_aggr"}
+        expected_leaders = {"u3_anti_trend", "u15_anti_fade"}
         self.assertEqual(set(PROVEN_LEADERS.keys()), expected_leaders)
 
         for uid in expected_leaders:
@@ -183,6 +183,8 @@ class TestStrategyGuideAndLeaders(unittest.TestCase):
             self.assertIn("💎", badge)
             self.assertIn("PROVEN LEADER", badge)
 
+        self.assertFalse(is_proven_leader("u3_anti_aggr"))
+        self.assertEqual(get_leader_badge("u3_anti_aggr"), "")
         self.assertFalse(is_proven_leader("u1"))
         self.assertEqual(get_leader_badge("u1"), "")
 

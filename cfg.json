@@ -674,6 +674,61 @@
             },
             "inactive_grid_mode": "TAKE_LEVEL_0"
         },
+        "u3_anti_opt": {
+            "name": "Volume Fade (Noise-Filtered & Optimized)",
+            "description": "Оптимизированный сбор ликвидности: фильтр объема загрублен до 1.4 (отсекает 65% шума), TP увеличен до 3.2%, кулдаун 180с против комиссионного перетока",
+            "is_active": true,
+            "reentry_cooldown_sec": 180.0,
+            "enter_rules": {
+                "sr_levels_anti": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.4
+                    },
+                    "r": {
+                        "slice_factor": 2.5
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal_anti": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ]
+                },
+                "take_profit_ratio": {
+                    "value": 0.032
+                },
+                "stop_loss_ratio": {
+                    "value": 0.025
+                }
+            },
+            "inactive_grid_mode": "TAKE_LEVEL_0"
+        },
         "u3_anti_trend": {
             "name": "Trend-Aligned Pullback Fade",
             "description": "Трендовый фейд: вход против 5m ложного пробоя, но строго в направлении тренда 1h HTF (покупка со скидкой)",
