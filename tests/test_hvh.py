@@ -5,7 +5,7 @@
 
 import unittest
 import numpy as np
-from CORE.hvh import HVHCalculator, EntryHVHRule
+from CORE.indicators.hvh import HVHCalculator, EntryHVHRule
 from CORE.indicators import IndicatorsEngine
 from TG.strategy_guide import (
     PROVEN_LEADERS,

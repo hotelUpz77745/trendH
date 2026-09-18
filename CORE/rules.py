@@ -209,19 +209,19 @@ class EntrySignalEngine:
             elif base_key == "vol_filter":
                 self.rules.append(EntryVolumeFilterRule(val))
             elif base_key == "taker_flow":
-                from CORE.squeeze_flow import EntryTakerFlowRule
+                from CORE.indicators.squeeze_flow import EntryTakerFlowRule
                 self.rules.append(EntryTakerFlowRule(val))
             elif base_key == "volatility_squeeze":
-                from CORE.squeeze_flow import EntryVolatilitySqueezeRule
+                from CORE.indicators.squeeze_flow import EntryVolatilitySqueezeRule
                 self.rules.append(EntryVolatilitySqueezeRule(val))
             elif base_key == "relative_strength":
-                from CORE.squeeze_flow import EntryRelativeStrengthRule
+                from CORE.indicators.squeeze_flow import EntryRelativeStrengthRule
                 self.rules.append(EntryRelativeStrengthRule(val))
             elif base_key in ("grid_stress", "grid_inventory_stress"):
                 from cron_integration import EntryGridStressRule
                 self.rules.append(EntryGridStressRule(val))
             elif base_key == "hvh":
-                from CORE.hvh import EntryHVHRule
+                from CORE.indicators.hvh import EntryHVHRule
                 self.rules.append(EntryHVHRule(val))
 
     def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
@@ -398,7 +398,7 @@ class ExitSignalEngine:
             elif base_key == "time_stop":
                 self.rules.append(ExitTimeStopRule(val))
             elif base_key == "chandelier_exit":
-                from CORE.squeeze_flow import ExitChandelierRule
+                from CORE.indicators.squeeze_flow import ExitChandelierRule
                 self.rules.append(ExitChandelierRule(val))
             elif base_key in ("grid_relief", "grid_tp_exit"):
                 from cron_integration import ExitGridReliefRule

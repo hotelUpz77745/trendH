@@ -1,11 +1,10 @@
 # ============================================================
-# FILE: CORE/sr_levels.py
+# FILE: CORE/indicators/sr_levels.py
 # ROLE: Pure NumPy LuxAlgo Support/Resistance levels detector & breakout calculator
 # ============================================================
 
 from typing import Dict, List, Any, Optional
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
 
 
 class SRLevelsCalculator:
@@ -218,7 +217,6 @@ class SRLevelsCalculator:
         if not support and not resistance:
             return {"signals": ["UNSTABLE"], "support": [], "resistance": [], "active_res": None, "active_sup": None}
 
-        # Референсная цена для проверки пробоя
         price = current_price
         if price is None or price <= 0:
             if "close" in data and len(data["close"]) > 0:

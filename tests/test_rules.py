@@ -279,7 +279,7 @@ class TestExitRules(unittest.TestCase):
         self.assertFalse(rule.check("LONG", open_time_ms=now_ms - 2000))
 
     def test_taker_flow_rule(self):
-        from CORE.squeeze_flow import EntryTakerFlowRule
+        from CORE.indicators.squeeze_flow import EntryTakerFlowRule
         cfg = {"is_active": True, "min_buy_ratio": 0.58, "max_buy_ratio": 0.42}
         rule = EntryTakerFlowRule(cfg)
 
@@ -291,7 +291,7 @@ class TestExitRules(unittest.TestCase):
         self.assertFalse(rule.check("SHORT", indicators={"taker_flow": ["TAKER_BUY_DOMINANT"]}))
 
     def test_volatility_squeeze_rule(self):
-        from CORE.squeeze_flow import EntryVolatilitySqueezeRule
+        from CORE.indicators.squeeze_flow import EntryVolatilitySqueezeRule
         cfg = {"is_active": True}
         rule = EntryVolatilitySqueezeRule(cfg)
 
@@ -303,7 +303,7 @@ class TestExitRules(unittest.TestCase):
         self.assertFalse(rule.check("SHORT", indicators={"volatility_squeeze": ["SQUEEZE_LONG"]}))
 
     def test_chandelier_exit_rule(self):
-        from CORE.squeeze_flow import ExitChandelierRule
+        from CORE.indicators.squeeze_flow import ExitChandelierRule
         cfg = {"is_active": True, "length": 5, "atr_mult": 2.0}
         rule = ExitChandelierRule(cfg)
 
@@ -324,7 +324,7 @@ class TestExitRules(unittest.TestCase):
         self.assertFalse(rule.check("LONG", current_price=105.0, candles=candles))
 
     def test_realtime_flow_tracker(self):
-        from CORE.squeeze_flow import RealtimeFlowTracker
+        from CORE.indicators.squeeze_flow import RealtimeFlowTracker
         tracker = RealtimeFlowTracker(max_retention_sec=60.0)
         # Add aggressive taker buys (is_buyer_maker=False)
         tracker.add_trade("TESTUSDT", price=100.0, qty=10.0, is_buyer_maker=False)
@@ -336,7 +336,7 @@ class TestExitRules(unittest.TestCase):
         self.assertIn("TAKER_BUY_DOMINANT", flow["signals"])
 
     def test_relative_strength_rule(self):
-        from CORE.squeeze_flow import EntryRelativeStrengthRule
+        from CORE.indicators.squeeze_flow import EntryRelativeStrengthRule
         cfg = {"is_active": True}
         rule = EntryRelativeStrengthRule(cfg)
         self.assertTrue(rule.check("LONG", indicators={"relative_strength": ["RS_STRONG"]}))

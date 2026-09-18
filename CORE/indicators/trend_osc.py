@@ -1,12 +1,9 @@
 # ============================================================
-# FILE: CORE/indicators.py
-# ROLE: Standalone modular indicator calculation engine (Trend, RSI & SR Levels)
+# FILE: CORE/indicators/trend_osc.py
+# ROLE: Trend, RSI, EMA Cross & Volume Filter indicator calculators
 # ============================================================
 
-from typing import Dict, List, Set, Any, Optional
-from CORE.sr_levels import SRLevelsCalculator
-
-
+from typing import Dict, List, Any, Optional
 from CORE.native_math import NativeMath
 
 
@@ -86,17 +83,17 @@ class RSICalculator:
     def calculate(self, closes: List[float]) -> List[str]:
         if not self.is_active or not closes:
             return ["UNSTABLE"]
-        
+
         raw_rsi = IndicatorsMath.calc_rsi(closes, length=self.window)
         if raw_rsi is None:
             return ["UNSTABLE"]
-            
+
         from utils import eval_condition
         active_states = []
         for state_key, cond_expr in self.conditions.items():
             if cond_expr and eval_condition(cond_expr, raw_rsi):
                 active_states.append(state_key)
-                
+
         return active_states
 
     def get_raw_value(self, closes: List[float]) -> Optional[float]:
@@ -137,7 +134,7 @@ class RSIWaterlineCalculator:
 
 
 class EMACrossCalculator:
-    """Изолированный калькулятор боевого EMA-кроссовера с фильтром ускорения и импульса."""
+    """Изолированный калькулятор EMA-кроссовера с фильтром ускорения и импульса."""
 
     def __init__(self, cfg: Dict[str, Any]):
         self.is_active: bool = bool(cfg.get("is_active", False))
@@ -150,8 +147,8 @@ class EMACrossCalculator:
     def calculate(self, closes: List[float]) -> List[str]:
         """
         Вычисляет состояние EMA-кроссовера с фильтром ускорения и импульса:
-        - CROSS_UP: быстрая EMA пересекает медленную снизу вверх с нарастающим расхождением (импульс)
-        - CROSS_DOWN: быстрая EMA пересекает медленную сверху вниз с нарастающим расхождением (импульс)
+        - CROSS_UP: быстрая EMA пересекает медленную снизу вверх с нарастающим расхождением
+        - CROSS_DOWN: быстрая EMA пересекает медленную сверху вниз с нарастающим расхождением
         - UNSTABLE: недостаточно свечей
         - []: нет сигнала
         """
@@ -204,10 +201,10 @@ class VolumeFilterCalculator:
         self.timeframe: str = str(cfg.get("timeframe", "1m"))
         self.mode: str = str(cfg.get("mode", "a"))  # 'a' (absolute max) / 'r' (rolling average)
         self.period: int = int(cfg.get("period", 14))
-        
+
         mode_cfg = cfg.get(self.mode, {}) if isinstance(cfg.get(self.mode), dict) else {}
         self.slice_factor: float = float(mode_cfg.get("slice_factor", 1.1 if self.mode == "a" else 2.1))
-        
+
         self.long_cond: str = str(cfg.get("long_cond", "VOLF_PASSED"))
         self.short_cond: str = str(cfg.get("short_cond", "VOLF_PASSED"))
 
@@ -216,10 +213,6 @@ class VolumeFilterCalculator:
         Вычисляет условие всплеска объема:
         - mode 'a': last_vol > max(ref_values) * slice_factor
         - mode 'r': last_vol > avg(ref_values) * slice_factor
-        Возвращает:
-        - ['VOLF_PASSED']: если условие выполнено
-        - ['UNSTABLE']: если недостаточно свечей
-        - []: если всплеск объема не зафиксирован
         """
         if not self.is_active or not candles:
             return ["UNSTABLE"]
@@ -251,178 +244,3 @@ class VolumeFilterCalculator:
         if passed:
             return [self.long_cond]
         return []
-
-
-class IndicatorsEngine:
-    """
-    Фасадный интерфейс индикаторного блока системы.
-    Может быть скопирован и вызван в одну строку в ЛЮБОМ проекте.
-    """
-
-    def __init__(self, enter_rules: Dict[str, Any]):
-        self.trend_calcs: Dict[str, TrendCalculator] = {}
-        for key in ["trend", "trend_htf"]:
-            if key in enter_rules:
-                self.trend_calcs[key] = TrendCalculator(enter_rules[key])
-        
-        # Поддержка дополнительных ключей тренда при их наличии
-        for key, val in enter_rules.items():
-            if key.startswith("trend") and key not in self.trend_calcs and isinstance(val, dict):
-                self.trend_calcs[key] = TrendCalculator(val)
-
-        rsi_cfg = enter_rules.get("rsi")
-        self.rsi_calc = RSICalculator(rsi_cfg) if rsi_cfg else None
-
-        waterline_cfg = enter_rules.get("rsi_waterline50")
-        self.rsi_waterline_calc = RSIWaterlineCalculator(waterline_cfg) if waterline_cfg else None
-
-        sr_cfg = enter_rules.get("sr_levels")
-        self.sr_calc = SRLevelsCalculator(sr_cfg) if sr_cfg else None
-
-        ema_cross_cfg = enter_rules.get("ema_cross")
-        self.ema_cross_calc = EMACrossCalculator(ema_cross_cfg) if ema_cross_cfg else None
-
-        vol_cfg = enter_rules.get("vol_filter")
-        self.vol_filter_calc = VolumeFilterCalculator(vol_cfg) if vol_cfg else None
-
-        from CORE.squeeze_flow import TakerFlowCalculator, VolatilitySqueezeCalculator, RelativeStrengthCalculator
-        tf_cfg = enter_rules.get("taker_flow")
-        self.taker_flow_calc = TakerFlowCalculator(tf_cfg) if tf_cfg and tf_cfg.get("is_active") else None
-        sq_cfg = enter_rules.get("volatility_squeeze")
-        self.squeeze_calc = VolatilitySqueezeCalculator(sq_cfg) if sq_cfg and sq_cfg.get("is_active") else None
-        rs_cfg = enter_rules.get("relative_strength")
-        self.relative_strength_calc = RelativeStrengthCalculator(rs_cfg) if rs_cfg and rs_cfg.get("is_active") else None
-
-        hvh_cfg = enter_rules.get("hvh")
-        if hvh_cfg and hvh_cfg.get("is_active"):
-            from CORE.hvh import HVHCalculator
-            self.hvh_calc = HVHCalculator(hvh_cfg)
-        else:
-            self.hvh_calc = None
-
-    def get_required_timeframes(self) -> Set[str]:
-        """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
-        tfs = set()
-        for calc in self.trend_calcs.values():
-            if calc.is_active:
-                tfs.add(calc.timeframe)
-        if self.rsi_calc and self.rsi_calc.is_active:
-            tfs.add(self.rsi_calc.timeframe)
-        if self.rsi_waterline_calc and self.rsi_waterline_calc.is_active:
-            tfs.add(self.rsi_waterline_calc.timeframe)
-        if self.sr_calc and self.sr_calc.is_active:
-            tfs.add(self.sr_calc.timeframe)
-        if self.ema_cross_calc and self.ema_cross_calc.is_active:
-            tfs.add(self.ema_cross_calc.timeframe)
-        if self.vol_filter_calc and self.vol_filter_calc.is_active:
-            tfs.add(self.vol_filter_calc.timeframe)
-        if self.taker_flow_calc and self.taker_flow_calc.is_active:
-            tfs.add(self.taker_flow_calc.timeframe)
-        if self.squeeze_calc and self.squeeze_calc.is_active:
-            tfs.add(self.squeeze_calc.timeframe)
-        if self.relative_strength_calc and self.relative_strength_calc.is_active:
-            tfs.add("5m")
-        if self.hvh_calc and self.hvh_calc.is_active:
-            tfs.add(self.hvh_calc.timeframe)
-        return tfs if tfs else {"5m"}
-
-    def calculate(
-        self,
-        klines_by_tf: Dict[str, Any],
-        current_price: Optional[float] = None,
-        btc_closes: Optional[List[float]] = None,
-        realtime_flow: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """
-        Вычисляет показатели индикаторов по переданному словарю {таймфрейм: список_свечей_или_closes}.
-        Возвращает: {"trend": str, "trend_htf": str, "rsi": list[str], "rsi_value": float | None,
-                     "rsi_waterline50": list[str], "sr_levels": list[str], "sr_levels_data": dict,
-                     "ema_cross": list[str], "vol_filter": list[str]}
-        """
-        # Извлечение close цен для EMA и RSI
-        closes_by_tf: Dict[str, List[float]] = {}
-        for tf, raw in klines_by_tf.items():
-            if isinstance(raw, list):
-                if raw and isinstance(raw[0], dict):
-                    closes_by_tf[tf] = [float(c.get("close", 0.0)) for c in raw]
-                else:
-                    closes_by_tf[tf] = [float(c) for c in raw]
-            elif isinstance(raw, dict) and "close" in raw:
-                closes_by_tf[tf] = [float(x) for x in raw["close"]]
-            else:
-                closes_by_tf[tf] = []
-
-        result: Dict[str, Any] = {}
-        for key, calc in self.trend_calcs.items():
-            if calc.is_active:
-                closes = closes_by_tf.get(calc.timeframe, [])
-                result[key] = calc.calculate(closes)
-            else:
-                result[key] = "UNSTABLE"
-
-        if "trend" not in result:
-            result["trend"] = "UNSTABLE"
-
-        rsi_states = ["UNSTABLE"]
-        rsi_val = None
-        if self.rsi_calc and self.rsi_calc.is_active:
-            closes_rsi = closes_by_tf.get(self.rsi_calc.timeframe, [])
-            rsi_states = self.rsi_calc.calculate(closes_rsi)
-            rsi_val = self.rsi_calc.get_raw_value(closes_rsi)
-
-        result["rsi"] = rsi_states
-        result["rsi_value"] = rsi_val
-
-        if self.rsi_waterline_calc and self.rsi_waterline_calc.is_active:
-            closes_wl = closes_by_tf.get(self.rsi_waterline_calc.timeframe, [])
-            result["rsi_waterline50"] = self.rsi_waterline_calc.calculate(closes_wl)
-        else:
-            result["rsi_waterline50"] = []
-
-        if self.sr_calc and self.sr_calc.is_active:
-            candles_sr = klines_by_tf.get(self.sr_calc.timeframe, [])
-            sr_res = self.sr_calc.calculate(candles_sr, current_price=current_price)
-            result["sr_levels"] = sr_res["signals"]
-            result["sr_levels_data"] = sr_res
-        else:
-            result["sr_levels"] = []
-            result["sr_levels_data"] = {"signals": [], "support": [], "resistance": []}
-
-        if self.ema_cross_calc and self.ema_cross_calc.is_active:
-            closes_ec = closes_by_tf.get(self.ema_cross_calc.timeframe, [])
-            result["ema_cross"] = self.ema_cross_calc.calculate(closes_ec)
-        else:
-            result["ema_cross"] = []
-
-        if self.vol_filter_calc and self.vol_filter_calc.is_active:
-            candles_vol = klines_by_tf.get(self.vol_filter_calc.timeframe, [])
-            result["vol_filter"] = self.vol_filter_calc.calculate(candles_vol)
-        else:
-            result["vol_filter"] = []
-
-        if self.taker_flow_calc and self.taker_flow_calc.is_active:
-            candles_tf = klines_by_tf.get(self.taker_flow_calc.timeframe, [])
-            result["taker_flow"] = self.taker_flow_calc.calculate(candles_tf, realtime_flow=realtime_flow)
-        else:
-            result["taker_flow"] = []
-
-        if self.squeeze_calc and self.squeeze_calc.is_active:
-            candles_sq = klines_by_tf.get(self.squeeze_calc.timeframe, [])
-            result["volatility_squeeze"] = self.squeeze_calc.calculate(candles_sq)
-        else:
-            result["volatility_squeeze"] = []
-
-        if self.relative_strength_calc and self.relative_strength_calc.is_active:
-            coin_closes = closes_by_tf.get("5m", [])
-            result["relative_strength"] = self.relative_strength_calc.calculate(coin_closes, btc_closes or [])
-        else:
-            result["relative_strength"] = []
-
-        if self.hvh_calc and self.hvh_calc.is_active:
-            candles_hvh = klines_by_tf.get(self.hvh_calc.timeframe, [])
-            result["hvh"] = self.hvh_calc.calculate(candles_hvh)
-        else:
-            result["hvh"] = []
-
-        result["candles_5m"] = klines_by_tf.get("5m", [])
-        return result

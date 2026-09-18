@@ -10,7 +10,7 @@ from typing import Dict, Any, List
 
 from CORE.models import PositionState
 from CORE.universe import StrategyUniverse
-from CORE.squeeze_flow import ChandelierTrailingCalculator, ExitChandelierRule
+from CORE.indicators.squeeze_flow import ChandelierTrailingCalculator, ExitChandelierRule
 from CORE.rules import (
     ExitSignalEngine, ExitTakeProfitRule, ExitStopLossRule,
     ExitTrendReversalRule, ExitTimeStopRule

@@ -20,7 +20,7 @@ from TG.tg_receiver import TelegramReceiver
 from CORE.indicators import IndicatorsEngine
 from CORE.watchdog import LoopWatchdog
 from CORE.backup import RuntimeBackupManager
-from CORE.squeeze_flow import RealtimeFlowTracker
+from CORE.indicators.squeeze_flow import RealtimeFlowTracker
 from consts import AUTO_CLOSING_CFG
 
 if TYPE_CHECKING:
