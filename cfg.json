@@ -1070,7 +1070,10 @@
                     "kc_mult": 1.5,
                     "lookback_squeeze": 14,
                     "long_cond": "SQUEEZE_LONG",
-                    "short_cond": "SQUEEZE_SHORT"
+                    "short_cond": "SQUEEZE_SHORT",
+                    "ignore_last_bars": 2,
+                    "min_squeeze_bars": 3,
+                    "_comment_ignore_last_bars": "Количество последних свечей (1-2), исключаемых из проверки сжатия во избежание конфликта с пробоем"
                 },
                 "hvh": {
                     "is_active": true,
@@ -1122,8 +1125,11 @@
                     "bb_mult": 2.0,
                     "kc_mult": 1.5,
                     "lookback_squeeze": 14,
-                    "long_cond": "SQUEEZE_ON",
-                    "short_cond": "SQUEEZE_ON"
+                    "long_cond": "SQUEEZE_PREV_ON",
+                    "short_cond": "SQUEEZE_PREV_ON",
+                    "ignore_last_bars": 2,
+                    "min_squeeze_bars": 3,
+                    "_comment_ignore_last_bars": "Количество последних свечей (1-2), исключаемых из проверки сжатия во избежание конфликта с ложным выносом"
                 },
                 "hvh": {
                     "is_active": true,

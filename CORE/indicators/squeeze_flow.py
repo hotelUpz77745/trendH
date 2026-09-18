@@ -141,7 +141,9 @@ class VolatilitySqueezeCalculator:
         self.bb_length: int = int(cfg.get("bb_length", 20))
         self.bb_mult: float = float(cfg.get("bb_mult", 2.0))
         self.kc_mult: float = float(cfg.get("kc_mult", 1.5))
-        self.lookback_squeeze: int = int(cfg.get("lookback_squeeze", 3))
+        self.lookback_squeeze: int = int(cfg.get("lookback_squeeze", 14))
+        self.ignore_last_bars: int = int(cfg.get("ignore_last_bars", cfg.get("exclude_last_bars", 1)))
+        self.min_squeeze_bars: int = int(cfg.get("min_squeeze_bars", 1))
 
     @staticmethod
     def _calc_atr(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, length: int) -> np.ndarray:
@@ -163,11 +165,12 @@ class VolatilitySqueezeCalculator:
         - SQUEEZE_LONG: выход из сжатия волатильности вверх
         - SQUEEZE_SHORT: выход из сжатия волатильности вниз
         - SQUEEZE_ON: рынок находится в фазе сжатия пружины (накопление)
+        - SQUEEZE_PREV_ON / SQUEEZE_COMPRESSED: сжатие волатильности в истории до последних N свечей
         """
         if not self.is_active or not candles:
             return ["UNSTABLE"]
 
-        req_len = self.bb_length + self.lookback_squeeze + 5
+        req_len = self.bb_length + self.lookback_squeeze + self.ignore_last_bars + 5
         if len(candles) < req_len:
             return ["UNSTABLE"]
 
@@ -186,19 +189,37 @@ class VolatilitySqueezeCalculator:
         # 3. Детекция сжатия (Squeeze: BB внутри KC)
         squeeze_on = (bb_upper <= kc_upper) & (bb_lower >= kc_lower)
 
-        # 4. Проверка разжатия (Fire)
-        is_curr_firing = not squeeze_on[-1]
-        was_squeezing = bool(np.any(squeeze_on[-self.lookback_squeeze - 1:-1]))
-        mid = (bb_upper[-1] + bb_lower[-1]) / 2.0
+        # 4. Проверка разжатия (Fire) с отсечением последних ignore_last_bars
+        ign = max(0, self.ignore_last_bars)
+        lookback = max(1, self.lookback_squeeze)
+        min_bars = max(1, self.min_squeeze_bars)
 
+        if ign > 0:
+            hist_slice = squeeze_on[-lookback - ign : -ign]
+            was_squeezing = bool(np.sum(hist_slice) >= min_bars)
+            is_curr_firing = not bool(np.all(squeeze_on[-ign:]))
+        else:
+            hist_slice = squeeze_on[-lookback - 1 : -1]
+            was_squeezing = bool(np.sum(hist_slice) >= min_bars)
+            is_curr_firing = not squeeze_on[-1]
+
+        mid = (bb_upper[-1] + bb_lower[-1]) / 2.0
         signals = []
+
         if squeeze_on[-1]:
             signals.append("SQUEEZE_ON")
 
+        if was_squeezing:
+            signals.append("SQUEEZE_PREV_ON")
+            signals.append("SQUEEZE_COMPRESSED")
+            if ign > 0 and "SQUEEZE_ON" not in signals:
+                signals.append("SQUEEZE_ON")
+
         if is_curr_firing and was_squeezing:
-            if closes[-1] > mid and closes[-1] > closes[-2]:
+            compare_idx = -1 - ign if ign > 0 else -2
+            if closes[-1] > mid and closes[-1] >= closes[compare_idx]:
                 signals.append("SQUEEZE_LONG")
-            elif closes[-1] < mid and closes[-1] < closes[-2]:
+            elif closes[-1] < mid and closes[-1] <= closes[compare_idx]:
                 signals.append("SQUEEZE_SHORT")
 
         return signals

@@ -281,23 +281,49 @@ class TestSqueezeHVHStrategies(unittest.TestCase):
         )
         univ = mgr.get_universe("u_sq_hvh_reverse")
 
-        # False dump: Squeeze ON + HVH Pullback LONG + Bear Exhausted -> LONG Entry
+        # False dump: Squeeze PREV ON + HVH Pullback LONG + Bear Exhausted -> LONG Entry
         ind_rev_long = {
-            "volatility_squeeze": ["SQUEEZE_ON"],
+            "volatility_squeeze": ["SQUEEZE_PREV_ON", "SQUEEZE_COMPRESSED"],
             "hvh": ["HVH_PULLBACK_LONG"],
             "taker_flow": ["BEAR_EXHAUSTED"]
         }
         self.assertTrue(univ.check_entry("LONG", ind_rev_long))
         self.assertFalse(univ.check_entry("SHORT", ind_rev_long))
 
-        # False pump: Squeeze ON + HVH Pullback SHORT + Bull Exhausted -> SHORT Entry
+        # False pump: Squeeze PREV ON + HVH Pullback SHORT + Bull Exhausted -> SHORT Entry
         ind_rev_short = {
-            "volatility_squeeze": ["SQUEEZE_ON"],
+            "volatility_squeeze": ["SQUEEZE_PREV_ON", "SQUEEZE_COMPRESSED"],
             "hvh": ["HVH_PULLBACK_SHORT"],
             "taker_flow": ["BULL_EXHAUSTED"]
         }
         self.assertTrue(univ.check_entry("SHORT", ind_rev_short))
         self.assertFalse(univ.check_entry("LONG", ind_rev_short))
+
+    def test_squeeze_calculator_ignore_last_bars(self):
+        """Проверка, что ignore_last_bars=2 корректно исключает последние свечи из проверки сжатия."""
+        from CORE.indicators.squeeze_flow import VolatilitySqueezeCalculator
+        calc = VolatilitySqueezeCalculator({
+            "is_active": True,
+            "timeframe": "5m",
+            "bb_length": 10,
+            "bb_mult": 2.0,
+            "kc_mult": 1.5,
+            "lookback_squeeze": 10,
+            "ignore_last_bars": 2,
+            "min_squeeze_bars": 3
+        })
+        # Сначала узкий флэт (сжатие 25 свечей), затем на последних 2 свечах резкий взрыв цены вверх
+        candles = []
+        for i in range(25):
+            candles.append({"open": 100.0, "high": 100.2, "low": 99.8, "close": 100.0, "volume": 10.0})
+        # Взрыв на последних двух свечах
+        candles.append({"open": 100.0, "high": 110.0, "low": 99.8, "close": 108.0, "volume": 500.0})
+        candles.append({"open": 108.0, "high": 120.0, "low": 107.5, "close": 118.0, "volume": 1000.0})
+
+        signals = calc.calculate(candles)
+        # Так как последние 2 свечи исключены из проверки сжатия, предшествующее сжатие обнаружено
+        self.assertIn("SQUEEZE_PREV_ON", signals)
+        self.assertIn("SQUEEZE_LONG", signals)
 
 
 if __name__ == "__main__":
