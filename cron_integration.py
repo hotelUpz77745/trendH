@@ -126,6 +126,7 @@ class CronIntegration:
                     "grid": grid
                 }
 
+            default_hedge_ratio = float(data_sources.get("default_hedge_ratio", 0.5))
             for side in ("LONG", "SHORT"):
                 s_info = sides_info.get(side, {})
                 opp_info = sides_info.get("SHORT" if side == "LONG" else "LONG", {})
@@ -135,9 +136,9 @@ class CronIntegration:
                 result[side]["base_order_usd"] = s_info.get("base_order_usd", 50.0)
                 result[side]["accum_usd"] = s_info.get("accum_usd", 0.0)
 
-                # Хэджирование: если на противоположной стороне набран объем, хэдж берет 50% объема
+                # Хэджирование: если на противоположной стороне набран объем, хэдж берет долю default_hedge_ratio
                 if opp_info.get("accum_usd", 0.0) > 0:
-                    calc_size = opp_info["accum_usd"] * 0.5
+                    calc_size = opp_info["accum_usd"] * default_hedge_ratio
                 elif s_info.get("has_active", False) and s_info.get("accum_usd", 0.0) > 0:
                     calc_size = s_info["accum_usd"]
                 else:

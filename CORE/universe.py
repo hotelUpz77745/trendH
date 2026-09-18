@@ -84,18 +84,19 @@ class StrategyUniverse:
 
     def __init__(
         self, universe_id: str, name: str, description: str, enter_rules: Dict[str, Any], exit_rules: Dict[str, Any],
-        get_slippage_ratio_fn: Callable[[str], float], is_active: bool = True, backup_manager=None, inactive_grid_mode: Optional[str] = None
+        get_slippage_ratio_fn: Callable[[str], float], is_active: bool = True, backup_manager=None,
+        inactive_grid_mode: Optional[str] = None, hedge_ratio: Optional[float] = None
     ):
         self.universe_id, self.name, self.description, self.is_active = universe_id, name, description, is_active
         self.enter_rules, self.exit_rules = enter_rules, exit_rules
         default_grid_mode = cfg.get("data_sources", {}).get("inactive_grid_mode", "TAKE_LEVEL_0")
         self.inactive_grid_mode = str(inactive_grid_mode or default_grid_mode).strip().upper()
+        self.hedge_ratio = float(hedge_ratio if hedge_ratio is not None else cfg.get("data_sources", {}).get("default_hedge_ratio", 0.5))
         self.entry_engine, self.exit_engine = EntrySignalEngine(enter_rules), ExitSignalEngine(exit_rules, ANALYTICS_CFG, get_slippage_ratio_fn)
         self.state, self.analytics = UniverseState(universe_id=universe_id, backup_manager=backup_manager), AnalyticsManager(universe_id=universe_id)
         self.state.load_state()
         self.reentry_cooldown_sec: float = float(cfg.get("reentry_cooldown_sec", 60.0))
-        self.last_exit_time: Dict[str, Dict[str, float]] = {}
-        self.position_ext_data: Dict[str, Dict[str, Dict[str, float]]] = {}
+        self.last_exit_time, self.position_ext_data = {}, {}
 
     def check_entry(self, side: str, indicators: Dict[str, Any]) -> bool:
         return self.entry_engine.check_signal(side, indicators)
@@ -159,12 +160,10 @@ class StrategyUniverse:
                     has_active = s_info.get("has_active", False)
                     opp_side = "SHORT" if side == "LONG" else "LONG"
                     opp_accum = cron_state.get(opp_side, {}).get("accum_usd", 0.0)
-
-                    if not has_active and opp_accum == 0.0:
-                        if self.inactive_grid_mode in ("SKIP", "SKIP_SIGNAL", "SKIP_IF_INACTIVE"):
-                            eff_invest_size = 0.0
-                        else:
-                            eff_invest_size = s_info.get("base_order_usd", invest_size)
+                    if opp_accum > 0:
+                        eff_invest_size = round(opp_accum * self.hedge_ratio, 2)
+                    elif not has_active and opp_accum == 0.0:
+                        eff_invest_size = 0.0 if self.inactive_grid_mode in ("SKIP", "SKIP_SIGNAL", "SKIP_IF_INACTIVE") else s_info.get("base_order_usd", invest_size)
 
                 rsi_val = indicators.get("rsi_value")
                 rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
@@ -266,7 +265,7 @@ class UniverseManager:
                         universe_id=uid, name=udata.get("name", uid), description=udata.get("description", ""),
                         enter_rules=udata.get("enter_rules", default_enter_rules), exit_rules=udata.get("exit_rules", default_exit_rules),
                         get_slippage_ratio_fn=get_slippage_ratio_fn, is_active=True, backup_manager=backup_manager,
-                        inactive_grid_mode=udata.get("inactive_grid_mode")
+                        inactive_grid_mode=udata.get("inactive_grid_mode"), hedge_ratio=udata.get("hedge_ratio")
                     )
         else:
             self.universes["default"] = StrategyUniverse(
