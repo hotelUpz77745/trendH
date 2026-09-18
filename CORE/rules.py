@@ -9,7 +9,7 @@ from c_log import log
 class BaseRule(ABC):
     """Базовый абстрактный класс торгового правила."""
     @abstractmethod
-    def check(self, side: str, **kwargs) -> bool:
+    def check(self, *args, **kwargs) -> bool:
         pass
 
 

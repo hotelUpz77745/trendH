@@ -105,9 +105,11 @@ class HVHCalculator:
         high_series = pd.Series(highs)
         low_series = pd.Series(lows)
 
-        ma_series = close_series.rolling(window=self.period, min_periods=self.period).mean()
-        high_dev = np.where(high_series > ma_series, (high_series - ma_series).abs(), 0.0)
-        low_dev = np.where(low_series < ma_series, (ma_series - low_series).abs(), 0.0)
+        ma_series = pd.Series(close_series.rolling(window=self.period, min_periods=self.period).mean())
+        high_diff = np.abs(np.asarray(highs) - np.asarray(ma_series))
+        low_diff = np.abs(np.asarray(ma_series) - np.asarray(lows))
+        high_dev = np.where(highs > ma_series, high_diff, 0.0)
+        low_dev = np.where(lows < ma_series, low_diff, 0.0)
         dev_series = pd.Series(np.maximum(high_dev, low_dev))
 
         if self.mode == "fixed":
@@ -124,7 +126,7 @@ class HVHCalculator:
                 rolling_max = dev_series.rolling(window=self.period, min_periods=1).max()
             curr_adj_dev = float(rolling_max.iloc[-1] * self.dev_multiplier)
 
-        curr_ma = float(ma_series.iloc[-1])
+        curr_ma = float(ma_series.dropna().iloc[-1]) if not ma_series.dropna().empty else float(closes[-1])
         curr_close = float(closes[-1])
 
         if np.isnan(curr_ma) or np.isnan(curr_adj_dev):

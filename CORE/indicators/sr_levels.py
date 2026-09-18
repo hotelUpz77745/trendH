@@ -124,9 +124,9 @@ class SRLevelsCalculator:
 
             for idx, typ in zip(piv_idx, piv_typ):
                 ts_val = int(ts[idx]) if isinstance(ts[idx], (int, float, np.integer, np.floating)) else 0
-                level = highs[idx] if typ == 1 else lows[idx]
+                level = float(highs[idx] if typ == 1 else lows[idx])
 
-                z_l, z_h = calc_zone(level, idx, typ == 1)
+                z_l, z_h = calc_zone(level, int(idx), typ == 1)
 
                 rec = {
                     "idx": int(idx),

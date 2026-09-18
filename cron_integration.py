@@ -8,6 +8,7 @@ import time
 from typing import Dict, Any, List, Optional
 from c_log import log
 from consts import cfg
+from CORE.rules import BaseRule
 
 
 class CronIntegration:
@@ -311,7 +312,7 @@ class CronIntegration:
 # ==========================================
 # RULES FOR GRID STRESS INTEGRATION
 # ==========================================
-class EntryGridStressRule:
+class EntryGridStressRule(BaseRule):
     """
     Правило входа по стрессу инвентаря сетки (Inventory-Stress Momentum Overlay).
     Если застряла LONG-сетка -> TrendH открывает SHORT.
@@ -371,7 +372,7 @@ class EntryGridStressRule:
         return passed
 
 
-class ExitGridReliefRule:
+class ExitGridReliefRule(BaseRule):
     """
     Правило выхода при закрытии или разгрузке позиции сетки сеточником (Grid Relief).
     Если застрявшая сторона закрыла позицию по TP или сбросила объемы, хэдж закрывается.

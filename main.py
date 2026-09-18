@@ -109,8 +109,9 @@ class Main:
             log(f"[Main] Ошибка сохранения auto_start: {e}", level="ERROR")
         
     async def fetch_24h_volume(self, symbol: str):
-        vol = await self.binance_client.get_24h_volume(self.network.session, symbol)
-        self.symbol_volume_24h[symbol] = vol
+        if self.network.session is not None:
+            vol = await self.binance_client.get_24h_volume(self.network.session, symbol)
+            self.symbol_volume_24h[symbol] = vol
 
     def get_slippage_ratio(self, symbol: str) -> float:
         vol = self.symbol_volume_24h.get(symbol, 0.0)
@@ -328,7 +329,7 @@ class Main:
         log("Запущен auto_closing_daemon.", level="INFO")
         while True:
             try:
-                path = self.utils.get_analytics_path() if hasattr(self.utils, "get_analytics_path") else ANALYTICS_DIR / "analytics.json"
+                path = str(getattr(self.utils, "get_analytics_path", lambda: ANALYTICS_DIR / "analytics.json")())
                 analytics_data = self.utils.read_json_file(path)
                 if analytics_data:
                     pnl = float(analytics_data.get("net_profit_usdt", 0.0))
@@ -365,7 +366,7 @@ class Main:
         if TG_ENABLED and TG_TOKEN:
             try:
                 self.tg_bot = TelegramReceiver(self)
-                self.notifier.tg_bot = self.tg_bot
+                setattr(self.notifier, "tg_bot", self.tg_bot)
                 self.tg_task = asyncio.create_task(self.tg_bot.start())
                 log(" TelegramReceiver успешно запущен параллельно с ядром.", level="INFO")
             except Exception as e:

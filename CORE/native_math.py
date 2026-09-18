@@ -3,14 +3,22 @@
 # ROLE: High-performance C/LLVM compiled computational kernels
 # ============================================================
 
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Any
 import numpy as np
 
 try:
-    import numba
+    import numba  # type: ignore
     HAS_NUMBA = True
 except ImportError:
     HAS_NUMBA = False
+
+    class _DummyNumba:
+        def njit(self, *args: Any, **kwargs: Any) -> Any:
+            def decorator(f: Any) -> Any:
+                return f
+            return decorator
+
+    numba: Any = _DummyNumba()
 
 
 # ============================================================
