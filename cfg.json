@@ -4,6 +4,7 @@
     "INDICATORS_REFRESH_INTERVAL_SEC": 60,
     "DIRECTION_MODE": "HEDGE",
     "MAIN_LOOP_DELAY_SEC": 0.1,
+    "reentry_cooldown_sec": 60.0,
     "MAX_RECONNECT_ATTEMPTS": 5,
     "BINANCE_FUTURES_BASE_URL": "https://fapi.binance.com",
     "TIME_ZONE": "UTC",

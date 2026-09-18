@@ -12,8 +12,7 @@ from c_log import log
 from CORE.models import PositionState
 from CORE.rules import EntrySignalEngine, ExitSignalEngine
 from ANALYTICS.analytics import AnalyticsManager
-from ANALYTICS.metrics import AnalyticsMathEngine
-from consts import DATA_DIR, ANALYTICS_DIR, ANALYTICS_CFG
+from consts import DATA_DIR, ANALYTICS_DIR, ANALYTICS_CFG, cfg
 
 
 class UniverseState:
@@ -90,17 +89,21 @@ class StrategyUniverse:
         self.universe_id, self.name, self.description, self.is_active = universe_id, name, description, is_active
         self.enter_rules, self.exit_rules = enter_rules, exit_rules
         self.inactive_grid_mode = str(inactive_grid_mode or "TAKE_LEVEL_0").strip().upper()
-        self.entry_engine = EntrySignalEngine(enter_rules)
-        self.exit_engine = ExitSignalEngine(exit_rules, ANALYTICS_CFG, get_slippage_ratio_fn)
-        self.state = UniverseState(universe_id=universe_id, backup_manager=backup_manager)
-        self.analytics = AnalyticsManager(universe_id=universe_id)
+        self.entry_engine, self.exit_engine = EntrySignalEngine(enter_rules), ExitSignalEngine(exit_rules, ANALYTICS_CFG, get_slippage_ratio_fn)
+        self.state, self.analytics = UniverseState(universe_id=universe_id, backup_manager=backup_manager), AnalyticsManager(universe_id=universe_id)
         self.state.load_state()
+        self.reentry_cooldown_sec: float = float(cfg.get("reentry_cooldown_sec", 60.0))
+        self.last_exit_time: Dict[str, Dict[str, float]] = {}
+        self.position_ext_data: Dict[str, Dict[str, Dict[str, float]]] = {}
 
     def check_entry(self, side: str, indicators: Dict[str, Any]) -> bool:
         return self.entry_engine.check_signal(side, indicators)
 
-    def check_exit(self, side: str, symbol: str, open_price: float, current_price: float, indicators: Dict[str, Any], open_time_ms: Optional[int] = None) -> bool:
-        return self.exit_engine.check_signal(side, symbol, indicators.get("trend", "UNSTABLE"), open_price, current_price, indicators, open_time_ms)
+    def check_exit(self, side: str, symbol: str, open_price: float, current_price: float, indicators: Dict[str, Any], open_time_ms: Optional[int] = None, highest_price: Optional[float] = None, lowest_price: Optional[float] = None) -> bool:
+        return self.exit_engine.check_signal(
+            side, symbol, indicators.get("trend", "UNSTABLE"), open_price, current_price,
+            indicators, open_time_ms, highest_price=highest_price, lowest_price=lowest_price
+        )
 
     def process_tick(
         self,
@@ -116,29 +119,37 @@ class StrategyUniverse:
         """Обрабатывает тик цены для конкретной валютной пары и стороны."""
         pos = self.state.get_position(symbol, side)
         if pos:
-            # Проверка условий выхода (Take Profit, Stop Loss, Trend Reversal, Time Stop)
-            should_exit = self.check_exit(side, symbol, pos.open_price, current_price, indicators, open_time_ms=pos.open_time)
+            ext = self.position_ext_data.setdefault(symbol, {}).setdefault(side, {"highest": current_price, "lowest": current_price})
+            ext["highest"] = max(ext["highest"], current_price)
+            ext["lowest"] = min(ext["lowest"], current_price)
+
+            should_exit = self.check_exit(
+                side, symbol, pos.open_price, current_price, indicators,
+                open_time_ms=pos.open_time, highest_price=ext["highest"], lowest_price=ext["lowest"]
+            )
             if should_exit:
                 fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
                 slippage_ratio = get_slippage_ratio_fn(symbol) * 2
                 fee_slip_ratio = fee_ratio + slippage_ratio
 
-                if side == "LONG":
-                    pnl_ratio = (current_price - pos.open_price) / pos.open_price
-                else:
-                    pnl_ratio = (pos.open_price - current_price) / pos.open_price
-
-                pnl_usd = pnl_ratio * pos.size
-                comm_usd = -(fee_slip_ratio * pos.size)
-                pnl_pct = pnl_ratio * 100
+                pnl_ratio = (current_price - pos.open_price) / pos.open_price if side == "LONG" else (pos.open_price - current_price) / pos.open_price
+                pnl_usd, comm_usd = pnl_ratio * pos.size, -(fee_slip_ratio * pos.size)
+                exit_reason = getattr(self.exit_engine, "last_exit_reason", "") or "EXIT"
 
                 log(
-                    f"[SIGNAL EXIT] [{self.universe_id}][{symbol}][{side}] Выход! Вход: {pos.open_price:.4f} -> {current_price:.4f} | PnL: {pnl_pct:+.2f}% ({pnl_usd:+.2f}$)",
+                    f"[SIGNAL EXIT] [{self.universe_id}][{symbol}][{side}] Выход [{exit_reason}]! Вход: {pos.open_price:.4f} -> {current_price:.4f} | PnL: {pnl_ratio * 100:+.2f}% ({pnl_usd:+.2f}$)",
                     level="INFO"
                 )
                 self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd, open_time_ms=pos.open_time)
                 self.state.close_position(symbol, side)
+                self.last_exit_time.setdefault(symbol, {})[side] = time.time()
+                self.position_ext_data.get(symbol, {}).pop(side, None)
         else:
+            # Защита от моментального перезахода (re-entry cooldown)
+            last_exit = self.last_exit_time.get(symbol, {}).get(side, 0.0)
+            if (time.time() - last_exit) < self.reentry_cooldown_sec:
+                return
+
             # Проверка условий входа
             if not is_paused and self.check_entry(side, indicators):
                 eff_invest_size = invest_size
@@ -169,6 +180,7 @@ class StrategyUniverse:
                 if eff_invest_size > 0:
                     log(f"[POSITION OPEN] [{self.universe_id}][{symbol}][{side}] Цена: {current_price}, Размер: {eff_invest_size}${grid_str}", level="INFO")
                     self.state.open_position(symbol, side, current_price, eff_invest_size)
+                    self.position_ext_data.setdefault(symbol, {})[side] = {"highest": current_price, "lowest": current_price}
                 else:
                     log(f"[SIGNAL SKIPPED] [{self.universe_id}][{symbol}][{side}] Пропуск входа: размер 0", level="INFO", throttle_sec=30)
 

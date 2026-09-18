@@ -251,11 +251,21 @@ class ChandelierTrailingCalculator:
         self.length: int = int(cfg.get("length", 15))
         self.atr_mult: float = float(cfg.get("atr_mult", 2.5))
 
-    def should_exit(self, side: str, candles: Any, current_price: float) -> bool:
+    def should_exit(
+        self,
+        side: str,
+        candles: Any,
+        current_price: float,
+        open_price: float = 0.0,
+        open_time_ms: Optional[int] = None,
+        highest_price: Optional[float] = None,
+        lowest_price: Optional[float] = None
+    ) -> bool:
         """
-        Проверяет, пробит ли трейлинг Chandelier Exit:
-        LONG: current_price <= highest(highs, length) - atr_mult * ATR
-        SHORT: current_price >= lowest(lows, length) + atr_mult * ATR
+        Проверяет трейлинг-стоп Chandelier Exit:
+        - Опирается на волатильность рынка ATR (за self.length свечей).
+        - Трейлит пик/дно С МОМЕНТА ВХОДА в позицию (open_price, open_time_ms, тики).
+        - Никогда не выбивает сделку сразу при входе (начальный стоп всегда на расстоянии atr_mult * ATR от входа).
         """
         if not self.is_active or not candles or len(candles) < self.length + 2:
             return False
@@ -273,14 +283,35 @@ class ChandelierTrailingCalculator:
         tr3 = np.abs(lows[1:] - closes[:-1])
         tr = np.maximum(np.maximum(tr1, tr2), tr3)
         atr = float(np.mean(tr)) if len(tr) > 0 else 0.0
+        if atr <= 0.0:
+            return False
+
+        atr_dist = self.atr_mult * atr
 
         if side == "LONG":
-            highest_high = float(np.max(highs))
-            chandelier_stop = highest_high - (self.atr_mult * atr)
+            if open_price > 0:
+                trade_highs = [open_price, current_price]
+                if highest_price and highest_price > 0:
+                    trade_highs.append(highest_price)
+                if open_time_ms and open_time_ms > 0:
+                    trade_highs.extend([float(c["high"]) for c in candles if c.get("ts", 0) >= open_time_ms])
+                highest_high = max(trade_highs)
+            else:
+                highest_high = float(np.max(highs))
+            chandelier_stop = highest_high - atr_dist
             return current_price <= chandelier_stop
+
         elif side == "SHORT":
-            lowest_low = float(np.min(lows))
-            chandelier_stop = lowest_low + (self.atr_mult * atr)
+            if open_price > 0:
+                trade_lows = [open_price, current_price]
+                if lowest_price and lowest_price > 0:
+                    trade_lows.append(lowest_price)
+                if open_time_ms and open_time_ms > 0:
+                    trade_lows.extend([float(c["low"]) for c in candles if c.get("ts", 0) >= open_time_ms])
+                lowest_low = min(trade_lows)
+            else:
+                lowest_low = float(np.min(lows))
+            chandelier_stop = lowest_low + atr_dist
             return current_price >= chandelier_stop
 
         return False
@@ -347,7 +378,17 @@ class ExitChandelierRule(BaseRule):
         if not self.is_active:
             return False
         candles = candles or kwargs.get("candles")
-        return self.calc.should_exit(side, candles, current_price)
+        open_price = float(kwargs.get("open_price", 0.0) or 0.0)
+        open_time_ms = kwargs.get("open_time_ms")
+        highest_price = kwargs.get("highest_price")
+        lowest_price = kwargs.get("lowest_price")
+        return self.calc.should_exit(
+            side, candles, current_price,
+            open_price=open_price,
+            open_time_ms=open_time_ms,
+            highest_price=highest_price,
+            lowest_price=lowest_price
+        )
 
 
 class EntryRelativeStrengthRule(BaseRule):

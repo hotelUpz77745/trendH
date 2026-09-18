@@ -400,6 +400,7 @@ class ExitSignalEngine:
             elif base_key in ("grid_relief", "grid_tp_exit"):
                 from cron_integration import ExitGridReliefRule
                 self.rules.append(ExitGridReliefRule(val))
+        self.last_exit_reason: str = ""
 
     def check_signal(
         self,
@@ -409,13 +410,15 @@ class ExitSignalEngine:
         open_price: float,
         current_price: float,
         indicators: Optional[Dict[str, Any]] = None,
-        open_time_ms: Optional[int] = None
+        open_time_ms: Optional[int] = None,
+        **kwargs
     ) -> bool:
         """
         Проверяет правила выхода.
         Возвращает True, если ХОТЯ БЫ ОДНО активное правило сработало.
         """
         indicators = indicators or {}
+        self.last_exit_reason = ""
         for rule in self.rules:
             if rule.check(
                 side,
@@ -427,7 +430,10 @@ class ExitSignalEngine:
                 rsi_value=indicators.get("rsi_value"),
                 rsi=indicators.get("rsi", []),
                 open_time_ms=open_time_ms,
-                candles=indicators.get("candles_5m", indicators.get("candles"))
+                candles=indicators.get("candles_5m", indicators.get("candles")),
+                highest_price=kwargs.get("highest_price"),
+                lowest_price=kwargs.get("lowest_price")
             ):
+                self.last_exit_reason = rule.__class__.__name__
                 return True
         return False
