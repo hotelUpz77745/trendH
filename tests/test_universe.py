@@ -8,22 +8,30 @@ from pathlib import Path
 from CORE.universe import UniverseState, StrategyUniverse, UniverseManager
 
 
-from consts import DATA_DIR, ANALYTICS_DIR
+import tempfile
+import consts
+import CORE.universe
+import ANALYTICS.analytics
+
+TEMP_DIR = tempfile.TemporaryDirectory()
+TEMP_PATH = Path(TEMP_DIR.name)
+consts.DATA_DIR = TEMP_PATH / "data"
+consts.ANALYTICS_DIR = TEMP_PATH / "analytics"
+consts.DATA_DIR.mkdir(parents=True, exist_ok=True)
+consts.ANALYTICS_DIR.mkdir(parents=True, exist_ok=True)
+CORE.universe.DATA_DIR = consts.DATA_DIR
+CORE.universe.ANALYTICS_DIR = consts.ANALYTICS_DIR
+ANALYTICS.analytics.ANALYTICS_DIR = consts.ANALYTICS_DIR
+
+
+def tearDownModule():
+    TEMP_DIR.cleanup()
 
 
 class TestUniverseState(unittest.TestCase):
     def setUp(self):
         self.state1 = UniverseState(universe_id="test_u1")
         self.state2 = UniverseState(universe_id="test_u2")
-
-    def tearDown(self):
-        for uid in ["test_u1", "test_u2", "test_u3", "u1", "u2"]:
-            for folder in [DATA_DIR, ANALYTICS_DIR]:
-                for f in folder.glob(f"*{uid}*"):
-                    try:
-                        f.unlink(missing_ok=True)
-                    except Exception:
-                        pass
 
     def test_state_isolation(self):
         self.state1.open_position("BTCUSDT", "LONG", 50000.0, 100.0)

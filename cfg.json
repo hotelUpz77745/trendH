@@ -1184,6 +1184,248 @@
                 }
             },
             "hedge_ratio": 0.5
+        },
+        "u_grid_stress_40": {
+            "name": "Grid Stress Overlay 40% (Soft Lvl 2)",
+            "description": "Мягкий стресс-хэдж: вход против застрявшей сетки cron3 при наборе 40% объема (уровень 2+) + 1h тренд, выход по Chandelier (2.5xATR) или разгрузке сетки",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.2
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.5
+                },
+                "take_profit_ratio": {
+                    "value": 0.1
+                },
+                "stop_loss_ratio": {
+                    "value": 0.025
+                }
+            },
+            "hedge_ratio": 0.5
+        },
+        "u_grid_stress_50": {
+            "name": "Grid Stress Overlay 50% (Med Lvl 2)",
+            "description": "Умеренный стресс-хэдж: вход против застрявшей сетки cron3 при наборе 50% объема (уровень 2+) + 1h тренд, выход по Chandelier (3.0xATR) или разгрузке сетки",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.2
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 3.0
+                },
+                "take_profit_ratio": {
+                    "value": 0.12
+                },
+                "stop_loss_ratio": {
+                    "value": 0.03
+                }
+            },
+            "hedge_ratio": 0.5
+        },
+        "u_grid_shadow_40": {
+            "name": "Pure Grid Shadow 40% (Soft Lvl 2)",
+            "description": "Чистый реверс-хэдж без индикаторов при 40% объема застрявшей сетки (уровень 2+). Выход строго по разгрузке сетки (<=15%) или SL 4%",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "stop_loss_ratio": {
+                    "value": 0.04
+                }
+            },
+            "hedge_ratio": 0.5
+        },
+        "u_grid_shadow_50": {
+            "name": "Pure Grid Shadow 50% (Med Lvl 2)",
+            "description": "Чистый реверс-хэдж без индикаторов при 50% объема застрявшей сетки (уровень 2+). Выход по разгрузке сетки (<=15%) или SL 5%",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "stop_loss_ratio": {
+                    "value": 0.05
+                }
+            },
+            "hedge_ratio": 0.5
+        },
+        "u_hvh_impulse_40": {
+            "name": "HVH Impulse Overlay 40% (Soft)",
+            "description": "Импульсный пробой скоростного канала HVH (5m, dev=1.8) при умеренном перевесе тейкеров (>=53%) и сетке 40% (Lvl 2+)",
+            "is_active": true,
+            "enter_rules": {
+                "hvh": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "period": 20,
+                    "dev": 1.8,
+                    "mode": "rolling",
+                    "signal_type": "impulse",
+                    "long_cond": "HVH_LONG",
+                    "short_cond": "HVH_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.53,
+                    "max_buy_ratio": 0.47,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                },
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.5
+                },
+                "take_profit_ratio": {
+                    "value": 0.05
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            },
+            "hedge_ratio": 0.5
+        },
+        "u_hvh_impulse_50": {
+            "name": "HVH Impulse Overlay 50% (Med)",
+            "description": "Импульсный пробой скоростного канала HVH (5m, dev=1.9) при доминировании тейкеров (>=55%) и застрявшей сетке 50% (Lvl 2+)",
+            "is_active": true,
+            "enter_rules": {
+                "hvh": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "period": 20,
+                    "dev": 1.9,
+                    "mode": "rolling",
+                    "signal_type": "impulse",
+                    "long_cond": "HVH_LONG",
+                    "short_cond": "HVH_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.55,
+                    "max_buy_ratio": 0.45,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                },
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.5
+                },
+                "take_profit_ratio": {
+                    "value": 0.06
+                },
+                "stop_loss_ratio": {
+                    "value": 0.025
+                }
+            },
+            "hedge_ratio": 0.5
         }
     },
     "watchdog": {

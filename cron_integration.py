@@ -233,7 +233,8 @@ class CronIntegration:
                     "drawdown_pct": round(dd_pct, 2),
                     "stressed": stressed,
                     "extreme": extreme,
-                    "avg_entry_price": avg_price
+                    "avg_entry_price": avg_price,
+                    "price_stressed": price_stressed
                 }
 
             long_st = res["LONG"]["stressed"]
@@ -353,7 +354,7 @@ class EntryGridStressRule(BaseRule):
             lvl_ok = side_info.get("max_level", -1) >= self.min_filled_level
             if vol_ok and lvl_ok:
                 expected_cond = self.long_cond if side == "LONG" else self.short_cond
-                passed = status in (expected_cond, f"{target_side}_GRID_EXTREME") or side_info.get("stressed", False)
+                passed = status in (expected_cond, f"{target_side}_GRID_EXTREME") or side_info.get("stressed", False) or side_info.get("price_stressed", True)
 
         if passed:
             symbol = kwargs.get("symbol", indicators.get("symbol", "N/A"))
