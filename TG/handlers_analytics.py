@@ -14,7 +14,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from consts import ANALYTICS_DIR
+from consts import ANALYTICS_DIR, ANALYTICS_CFG
 from ANALYTICS.metrics import AnalyticsMathEngine
 from ANALYTICS.plotter import generate_equity_curve
 from TG.keyboards import TGKeyboards
@@ -160,9 +160,10 @@ def _do_reset_analytics(uid: str, bot_core=None) -> None:
     else:
         targets = [uid]
 
+    start_bal = float(ANALYTICS_CFG.get("default_start_balance", 200.0))
     for target_uid in set(targets):
         data = {
-            "start_balance_usdt": 1000.0, "first_trade_ts": now_ms, "cur_balance_usdt": 1000.0,
+            "start_balance_usdt": start_bal, "first_trade_ts": now_ms, "cur_balance_usdt": start_bal,
             "total_trades": 0, "winning_trades": 0, "winrate_pct": 0.0, "realized_pnl_usdt": 0.0,
             "net_profit_usdt": 0.0, "unrealized_pnl_usdt": 0.0, "per_coin": {}
         }

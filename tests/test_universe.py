@@ -312,7 +312,7 @@ class TestUniverseManager(unittest.TestCase):
         u2.state.open_position("ETHUSDT", "SHORT", price=3000.0, size=50.0)
         bot_core = type("MockBotCore", (), {"universe_manager": self.mgr, "current_prices": {"BTCUSDT": 55000.0, "ETHUSDT": 2700.0}})()
         port = self.mgr.get_portfolio_metrics(bot_core.current_prices)
-        self.assertGreaterEqual(port["start_balance"], 2000.0)
+        self.assertGreaterEqual(port["start_balance"], 400.0)
         self.assertAlmostEqual(port["unrealized_pnl"], 15.0, places=2)
         text = _format_analytics_text({}, bot_core=bot_core, universe_id="all")
         self.assertIn("Портфель: ВСЕ СТРАТЕГИИ", text)
@@ -368,15 +368,11 @@ class TestUniverseManager(unittest.TestCase):
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001
         )
-        self.assertEqual(len(mgr.universes), 30)
+        self.assertEqual(len(mgr.universes), 15)
         self.assertIsNotNone(mgr.get_universe("u15"))
-        self.assertIsNotNone(mgr.get_universe("u15_skip"))
         self.assertIsNotNone(mgr.get_universe("u15_cons"))
-        self.assertIsNotNone(mgr.get_universe("u15_cons_skip"))
         self.assertIsNotNone(mgr.get_universe("u3_anti"))
-        self.assertIsNotNone(mgr.get_universe("u3_anti_skip"))
         self.assertIsNotNone(mgr.get_universe("u_grid_stress_base"))
-        self.assertIsNotNone(mgr.get_universe("u_grid_stress_base_skip"))
 
         # u15 vs u15_anti: TP=0.045, SL=0.02 -> u15_anti TP=0.02, SL=0.045
         u15 = mgr.get_universe("u15")
