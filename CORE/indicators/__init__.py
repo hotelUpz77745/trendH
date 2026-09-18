@@ -69,8 +69,14 @@ class IndicatorsEngine:
         rs_cfg = enter_rules.get("relative_strength")
         self.relative_strength_calc = RelativeStrengthCalculator(rs_cfg) if rs_cfg and rs_cfg.get("is_active") else None
 
+        self.hvh_calcs: Dict[str, HVHCalculator] = {}
+        for key, val in enter_rules.items():
+            if (key == "hvh" or key.startswith("hvh_")) and isinstance(val, dict) and val.get("is_active"):
+                tf = str(val.get("timeframe", "5m"))
+                self.hvh_calcs[tf] = HVHCalculator(val)
+
         hvh_cfg = enter_rules.get("hvh")
-        self.hvh_calc = HVHCalculator(hvh_cfg) if hvh_cfg and hvh_cfg.get("is_active") else None
+        self.hvh_calc = self.hvh_calcs.get(str(hvh_cfg.get("timeframe", "5m"))) if hvh_cfg and hvh_cfg.get("is_active") else (list(self.hvh_calcs.values())[0] if self.hvh_calcs else None)
 
     def get_required_timeframes(self) -> Set[str]:
         """Возвращает набор таймфреймов, данные по которым требуются для расчетов."""
@@ -94,6 +100,9 @@ class IndicatorsEngine:
             tfs.add(self.squeeze_calc.timeframe)
         if self.relative_strength_calc and self.relative_strength_calc.is_active:
             tfs.add("5m")
+        for tf, calc in self.hvh_calcs.items():
+            if calc.is_active:
+                tfs.add(tf)
         if self.hvh_calc and self.hvh_calc.is_active:
             tfs.add(self.hvh_calc.timeframe)
         return tfs if tfs else {"5m"}
@@ -186,11 +195,17 @@ class IndicatorsEngine:
         else:
             result["relative_strength"] = []
 
-        if self.hvh_calc and self.hvh_calc.is_active:
+        all_hvh_sigs: List[str] = []
+        for tf, calc in self.hvh_calcs.items():
+            if calc.is_active:
+                c_hvh = klines_by_tf.get(tf, [])
+                s_hvh = calc.calculate(c_hvh)
+                result[f"hvh_{tf}"] = s_hvh
+                all_hvh_sigs.extend(s_hvh)
+        if self.hvh_calc and self.hvh_calc.is_active and not all_hvh_sigs:
             candles_hvh = klines_by_tf.get(self.hvh_calc.timeframe, [])
-            result["hvh"] = self.hvh_calc.calculate(candles_hvh)
-        else:
-            result["hvh"] = []
+            all_hvh_sigs = self.hvh_calc.calculate(candles_hvh)
+        result["hvh"] = list(dict.fromkeys(all_hvh_sigs)) if all_hvh_sigs else []
 
         result["candles_5m"] = klines_by_tf.get("5m", [])
         return result

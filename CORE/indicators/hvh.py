@@ -141,15 +141,15 @@ class HVHCalculator:
         if is_pullback:
             # Контртрендовый отскок от экстремальной перерастяжки
             if curr_close >= upper_band:
-                signals.extend([self.short_cond, "HVH_SHORT", "HVH_PULLBACK_SHORT"])
+                signals.extend([self.short_cond, "HVH_SHORT", "HVH_PULLBACK_SHORT", "HVH_IMPULSE_LONG"])
             elif curr_close <= lower_band:
-                signals.extend([self.long_cond, "HVH_LONG", "HVH_PULLBACK_LONG"])
+                signals.extend([self.long_cond, "HVH_LONG", "HVH_PULLBACK_LONG", "HVH_IMPULSE_SHORT"])
         else:
             # Импульсный пробой волатильности
             if curr_close >= upper_band:
-                signals.extend([self.long_cond, "HVH_LONG", "HVH_IMPULSE_LONG"])
+                signals.extend([self.long_cond, "HVH_LONG", "HVH_IMPULSE_LONG", "HVH_PULLBACK_SHORT"])
             elif curr_close <= lower_band:
-                signals.extend([self.short_cond, "HVH_SHORT", "HVH_IMPULSE_SHORT"])
+                signals.extend([self.short_cond, "HVH_SHORT", "HVH_IMPULSE_SHORT", "HVH_PULLBACK_LONG"])
 
         # Устраняем дубликаты с сохранением порядка
         signals = list(dict.fromkeys(signals))

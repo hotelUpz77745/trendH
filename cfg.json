@@ -274,7 +274,7 @@
         "u15_reverse": {
             "name": "Анти-Breakout LuxAlgo + Taker Flow (Standard)",
             "description": "Инверсная стратегия пробоя LuxAlgo: вход против выносов при агрессивном маркет-потоке",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "trend_htf_reverse": {
                     "is_active": true,
@@ -387,7 +387,7 @@
         "u15_reverse_tight": {
             "name": "Conservative Fade (Tight SL)",
             "description": "Консервативный фейд только при экстремальном перегреве маркета (Taker >=70%) со строгим защитным стопом 1.5%",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "trend_htf_reverse": {
                     "is_active": true,
@@ -445,7 +445,7 @@
         "u15_reverse_scalp": {
             "name": "Micro Fade Scalp (Quick Reversal)",
             "description": "Микро-реверс скальп ложного пробоя уровня с быстрым тейком 1.2% и тайм-стопом 10 минут",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "sr_levels_reverse": {
                     "is_active": true,
@@ -485,7 +485,7 @@
         "u3_reverse": {
             "name": "Реверс Breakout & Volume (Standard)",
             "description": "Реверс ложного пробоя уровней LuxAlgo: вход против движения уровня при объемном выносе 1m",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "trend_htf_reverse": {
                     "is_active": true,
@@ -549,7 +549,7 @@
         "u3_reverse_climax": {
             "name": "Volume Climax Exhaustion Reversal",
             "description": "Ловит кульминацию объема и истощение импульса при повышенном всплеске объема (slice 1.5/2.8)",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "trend_htf_reverse": {
                     "is_active": true,
@@ -613,7 +613,7 @@
         "u3_reverse_aggr": {
             "name": "Aggressive Volume Fade",
             "description": "Агрессивный контртренд ложного пробоя при объеме без ожидания фильтра HTF",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "sr_levels_reverse": {
                     "is_active": true,
@@ -666,7 +666,7 @@
         "u3_reverse_opt": {
             "name": "Volume Fade (Noise-Filtered & Optimized)",
             "description": "Оптимизированный сбор ликвидности: фильтр объема загрублен до 1.4 (отсекает 65% шума), TP увеличен до 3.2%, кулдаун 180с против комиссионного перетока",
-            "is_active": true,
+            "is_active": false,
             "reentry_cooldown_sec": 180.0,
             "enter_rules": {
                 "sr_levels_reverse": {
@@ -969,8 +969,8 @@
                 },
                 "grid_stress": {
                     "is_active": true,
-                    "min_volume_ratio": 0.5,
-                    "min_filled_level": 3,
+                    "min_volume_ratio": 0.25,
+                    "min_filled_level": 1,
                     "extreme_only": false,
                     "long_cond": "SHORT_GRID_STRESSED",
                     "short_cond": "LONG_GRID_STRESSED"
@@ -1026,8 +1026,8 @@
                 },
                 "grid_stress": {
                     "is_active": true,
-                    "min_volume_ratio": 0.5,
-                    "min_filled_level": 3,
+                    "min_volume_ratio": 0.25,
+                    "min_filled_level": 1,
                     "extreme_only": false,
                     "long_cond": "SHORT_GRID_STRESSED",
                     "short_cond": "LONG_GRID_STRESSED"
@@ -1115,7 +1115,7 @@
         "u_sq_hvh_reverse": {
             "name": "Squeeze HVH Climax Fade (Reverse)",
             "description": "Реверсивный отскок: ложный вынос из сжатия волатильности с резким вылетом за пределы HVH канала (dev=2.2) и возвратом к средней",
-            "is_active": true,
+            "is_active": false,
             "reentry_cooldown_sec": 180.0,
             "enter_rules": {
                 "volatility_squeeze": {

@@ -325,8 +325,10 @@ class TestUniverseManager(unittest.TestCase):
         self.assertIn("u15", u_cfg)
         self.assertIn("u15_reverse", u_cfg)
 
+        u15_cfg = dict(u_cfg["u15"], is_active=True)
+        u15_rev_cfg = dict(u_cfg["u15_reverse"], is_active=True)
         mgr = UniverseManager(
-            universes_cfg={"u15": u_cfg["u15"], "u15_reverse": u_cfg["u15_reverse"]},
+            universes_cfg={"u15": u15_cfg, "u15_reverse": u15_rev_cfg},
             default_enter_rules={},
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001
@@ -362,8 +364,10 @@ class TestUniverseManager(unittest.TestCase):
         from consts import load_config
         cfg_data = load_config()
         u_cfg = cfg_data.get("universes", {})
+        self.assertGreaterEqual(len(u_cfg), 20)
+        all_active_cfg = {k: dict(v, is_active=True) for k, v in u_cfg.items()}
         mgr = UniverseManager(
-            universes_cfg=u_cfg,
+            universes_cfg=all_active_cfg,
             default_enter_rules={},
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001

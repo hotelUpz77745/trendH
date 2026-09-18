@@ -16,7 +16,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 from consts import ANALYTICS_DIR, ANALYTICS_CFG
 from ANALYTICS.metrics import AnalyticsMathEngine
-from ANALYTICS.plotter import generate_equity_curve
+from ANALYTICS.plotter import generate_equity_curve, consolidate_portfolio_ledger
 from TG.keyboards import TGKeyboards
 from TG.strategy_guide import get_leader_badge, register_strategy_guide_handlers
 from c_log import UnifiedLogger
@@ -266,6 +266,8 @@ def setup_analytics_handlers(router: Router, bot_core):
     async def on_analytics_ledger(callback: CallbackQuery):
         uid = (callback.data.split(":")[-1] if ":" in callback.data else callback.data.replace("analytics_ledger_", "")) or _get_default_universe_id(bot_core)
         await callback.answer()
+        if uid in ("all", "default"):
+            consolidate_portfolio_ledger()
         suffix = f"_{uid}" if uid and uid != "default" else ""
         txt_path = ANALYTICS_DIR / f"trades_ledger{suffix}.txt"
         if not txt_path.exists():

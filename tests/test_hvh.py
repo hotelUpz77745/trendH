@@ -273,8 +273,9 @@ class TestSqueezeHVHStrategies(unittest.TestCase):
         u_cfg = cfg_data.get("universes", {})
         self.assertIn("u_sq_hvh_reverse", u_cfg)
 
+        u_sq_cfg = dict(u_cfg["u_sq_hvh_reverse"], is_active=True)
         mgr = UniverseManager(
-            universes_cfg={"u_sq_hvh_reverse": u_cfg["u_sq_hvh_reverse"]},
+            universes_cfg={"u_sq_hvh_reverse": u_sq_cfg},
             default_enter_rules={},
             default_exit_rules={},
             get_slippage_ratio_fn=lambda s: 0.001

@@ -288,6 +288,9 @@ class UniverseManager:
                         combined[key] = dict(val)
                     else:
                         combined[key]["is_active"] = True
+                    if key == "hvh":
+                        tf = val.get("timeframe", "5m")
+                        combined[f"hvh_{tf}"] = dict(val)
                     for suffix in ("_anti", "_reverse", "_inv"):
                         if key.endswith(suffix):
                             base_key = key[:-len(suffix)]
