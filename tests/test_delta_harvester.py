@@ -256,6 +256,29 @@ class TestDeltaHarvesterAndTrailing(unittest.TestCase):
         }
         self.assertTrue(rule.check("LONG", indicators=ind_bullish))
 
+    def test_u_delta_sniper_universe_configuration(self):
+        """Проверка наличия и параметров вселенной u_delta_sniper в cfg.json."""
+        full_cfg = load_config()
+        universes = full_cfg.get("universes", {})
+        self.assertIn("u_delta_sniper", universes)
+
+        u_cfg = universes["u_delta_sniper"]
+        self.assertTrue(u_cfg.get("is_active"))
+        self.assertEqual(u_cfg.get("inactive_grid_mode"), "SKIP")
+        self.assertEqual(u_cfg.get("reentry_cooldown_sec"), 900.0)
+
+        # Проверка правил входа
+        enter_rules = u_cfg.get("enter_rules", {})
+        self.assertIn("delta_harvester", enter_rules)
+        self.assertIn("hvh", enter_rules)
+        self.assertTrue(enter_rules["hvh"].get("is_active"))
+        self.assertEqual(enter_rules["hvh"].get("signal_type"), "impulse")
+
+        # Проверка правил выхода
+        exit_rules = u_cfg.get("exit_rules", {})
+        self.assertEqual(exit_rules.get("stop_loss_ratio", {}).get("value"), 0.038)
+        self.assertTrue(exit_rules.get("breakeven_ratchet", {}).get("is_active"))
+
 
 if __name__ == "__main__":
     unittest.main()

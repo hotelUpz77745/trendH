@@ -1813,6 +1813,61 @@
                     "max_volume_ratio": 0.15
                 }
             }
+        },
+        "u_delta_sniper": {
+            "name": "Delta Sniper (Harvester + HVH Volume Shock)",
+            "description": "Explosive Volatility Delta-Neutral Grid Hedge with Dynamic Trailing",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "delta_harvester": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "require_shock": false,
+                    "require_momentum": true,
+                    "min_rsi": 48.0
+                },
+                "hvh": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "period": 20,
+                    "dev": 1.8,
+                    "signal_type": "impulse",
+                    "long_cond": "HVH_LONG",
+                    "short_cond": "HVH_SHORT"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.038
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "trail_ratio": 0.018,
+                    "buffer_ratio": 0.005
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
         }
     },
     "watchdog": {
