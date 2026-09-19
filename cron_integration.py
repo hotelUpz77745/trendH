@@ -76,6 +76,20 @@ class CronIntegration:
         return None
 
     @classmethod
+    def _safe_read_json(cls, fpath: str) -> Optional[Dict[str, Any]]:
+        for attempt in range(2):
+            try:
+                if os.path.getsize(fpath) == 0:
+                    time.sleep(0.02)
+                    continue
+                with open(fpath, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                if attempt == 0:
+                    time.sleep(0.02)
+        return None
+
+    @classmethod
     def get_symbol_state(cls, symbol: str) -> Dict[str, Any]:
         """
         Считывает базовый статус инвентаря для расчета размера ордера.
@@ -91,10 +105,8 @@ class CronIntegration:
             data_sources = cfg.get("data_sources", {})
             hardcoded_size = data_sources.get("hardcoded_size")
             if hardcoded_size is not None and float(hardcoded_size) > 0:
-                size_val = float(hardcoded_size)
-                result["LONG"] = {"invest_size": size_val, "volume": 0.0, "enabled": True}
-                result["SHORT"] = {"invest_size": size_val, "volume": 0.0, "enabled": True}
-                return result
+                s_val = float(hardcoded_size)
+                return {s: {"invest_size": s_val, "volume": 0.0, "enabled": True} for s in ("LONG", "SHORT")}
 
             inactive_mode = str(data_sources.get("inactive_grid_mode", "TAKE_LEVEL_0")).strip().upper()
             is_skip_mode = inactive_mode in ("SKIP", "SKIP_SIGNAL", "SKIP_IF_INACTIVE") or data_sources.get("skip_if_grid_inactive") is True
@@ -103,8 +115,9 @@ class CronIntegration:
             if not file_path:
                 return result
 
-            with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            data = cls._safe_read_json(file_path)
+            if not data or not isinstance(data, dict):
+                return result
 
             sides_info = {}
             for s in ("LONG", "SHORT"):
@@ -147,11 +160,7 @@ class CronIntegration:
                 elif s_info.get("has_active", False) and s_info.get("accum_usd", 0.0) > 0:
                     calc_size = s_info["accum_usd"]
                 else:
-                    # На нужной стороне не активирован ни один уровень сетки
-                    if is_skip_mode:
-                        calc_size = 0.0
-                    else:
-                        calc_size = s_info.get("base_order_usd", 50.0)
+                    calc_size = 0.0 if is_skip_mode else s_info.get("base_order_usd", 50.0)
 
                 result[side]["invest_size"] = round(calc_size, 2)
         except Exception as e:
@@ -231,8 +240,10 @@ class CronIntegration:
             return res
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                raw_data = json.load(f)
+            raw_data = cls._safe_read_json(file_path)
+            if not raw_data or not isinstance(raw_data, dict):
+                cls._cache[symbol] = {"ts": now, "data": res}
+                return res
 
             for side in ("LONG", "SHORT"):
                 if side not in raw_data or not isinstance(raw_data[side], dict):
