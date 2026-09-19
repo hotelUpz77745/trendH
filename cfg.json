@@ -1767,6 +1767,42 @@
                 "3": 0.75,
                 "default": 0.5
             }
+        },
+        "u_delta_harvester": {
+            "name": "Delta Harvester (Universal Grid Hedge)",
+            "description": "1:1 Dynamic Delta-Neutral Grid Hedge with Trailing Harvest",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": 1.0,
+            "invest_size": 50.0,
+            "enter_rules": {
+                "delta_harvester": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "require_shock": false
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.07
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "trail_ratio": 0.018,
+                    "buffer_ratio": 0.005
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
         }
     },
     "watchdog": {

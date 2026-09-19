@@ -73,6 +73,7 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "all") 
         start_bal, realized_pnl, unrealized_pnl = m["start_balance"], m["realized_pnl"], m["unrealized_pnl"]
         active_count, live_net, live_bal = m["active_count"], m["live_net_profit"], m["live_equity"]
         max_dd, curr_dd = m["max_dd"], m["current_dd"]
+        peak_bal = m.get("peak_equity", max(start_bal, live_bal))
         total_trades, winning_trades, winrate = m["total_trades"], m["winning_trades"], m["winrate_pct"]
     else:
         univ = mgr.get_universe(universe_id) if mgr else None
@@ -89,6 +90,7 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "all") 
             unrealized_pnl, active_count = m["unrealized_pnl"], m["active_count"]
             live_net, live_bal = realized_pnl + unrealized_pnl, start_bal + (realized_pnl + unrealized_pnl)
             max_dd, curr_dd = m["max_dd"], m["current_dd"]
+            peak_bal = m.get("peak_equity", float(data.get("peak_balance_usdt", max(start_bal, live_bal))))
         else:
             start_bal = float(data.get("start_balance_usdt", 0.0)) or 1000.0
             realized_pnl = float(data.get("realized_pnl_usdt", 0.0))
@@ -102,9 +104,12 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "all") 
                             unrealized_pnl += ((cp - pos.open_price if side == "LONG" else pos.open_price - cp) / pos.open_price) * pos.size
             live_net, live_bal = realized_pnl + unrealized_pnl, start_bal + (realized_pnl + unrealized_pnl)
             max_dd, curr_dd = float(data.get("max_drawdown_usdt", 0.0)), float(data.get("current_drawdown_usdt", 0.0))
+            peak_bal = float(data.get("peak_balance_usdt", max(start_bal, live_bal)))
         total_trades, winning_trades = int(data.get("total_trades", 0)), int(data.get("winning_trades", 0))
         winrate = float(data.get("winrate_pct", 0.0))
 
+    peak_pnl = peak_bal - start_bal
+    peak_p_s = "+" if peak_pnl >= 0 else ""
     roi = round((live_net / start_bal) * 100, 2) if start_bal > 0 else 0.0
     dd = -abs(max_dd) if max_dd > 0 else 0.0
     c_dd = -abs(curr_dd) if curr_dd > 0 else 0.0
@@ -114,6 +119,7 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "all") 
     return (
         f"{title}{desc}"
         f"• Стартовый баланс: <code>{start_bal:.2f} USDT</code>\n"
+        f"• Пиковый баланс: <code>{peak_bal:.2f} USDT</code> ({peak_p_s}{peak_pnl:.2f}$)\n"
         f"• Текущий баланс: <code>{live_bal:.2f} USDT</code>\n"
         f"• Чистый профит: <b>{p_s}{live_net:.4f} USDT</b> ({r_s}{roi:.2f}%)\n"
         f"• Реализованный PnL: <code>{realized_pnl:.4f} USDT</code>\n"
@@ -389,18 +395,13 @@ def setup_analytics_handlers(router: Router, bot_core):
         await callback.answer()
         uid = (callback.data.split(":")[-1] if ":" in callback.data else "") or _get_default_universe_id(bot_core)
         pin = random.randint(1000, 9999)
-        decoys = set()
-        while len(decoys) < 2:
-            d = random.randint(1000, 9999)
-            if d != pin:
-                decoys.add(d)
-        opts = list(decoys) + [pin]
+        decoys = {random.randint(1000, 9999) for _ in range(10) if _ != pin}
+        opts = list(list(decoys)[:2]) + [pin]
         random.shuffle(opts)
         await state.update_data(reset_pin=pin, reset_target_uid=uid)
         await callback.message.edit_text(
             f"🔐 <b>Защитная проверка сброса [{uid.upper()}]</b>\n\nДля подтверждения нажмите кнопку с PIN: <b>[{pin}]</b>\n<i>(Другой PIN отменит операцию)</i>",
-            reply_markup=TGKeyboards.confirm_reset_pin_menu(uid, pin, opts),
-            parse_mode="HTML"
+            reply_markup=TGKeyboards.confirm_reset_pin_menu(uid, pin, opts), parse_mode="HTML"
         )
 
     @router.callback_query(F.data.startswith("reset_pin_fail"))
