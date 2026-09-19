@@ -96,6 +96,7 @@ LOG_ERROR: bool = bool(LOGGING_CFG.get("error", True))
 MAX_LOG_LINES: int = int(LOGGING_CFG.get("max_log_lines", 50000))
 LOG_TO_CONSOLE: bool = bool(LOGGING_CFG.get("log_to_console", False))
 LOG_TO_FILE: bool = bool(LOGGING_CFG.get("log_to_file", True))
+LOG_BACKUP_COUNT: int = int(LOGGING_CFG.get("backup_count", 5))
 
 # ============================================================
 # БАЗОВЫЕ ДИРЕКТОРИИ И ПУТИ

@@ -12,6 +12,7 @@ import time
 import traceback
 from datetime import datetime, timezone
 from functools import wraps
+import shutil
 from logging.handlers import RotatingFileHandler
 from pprint import pformat
 from typing import Any, Optional, Dict, Tuple
@@ -24,6 +25,7 @@ from consts import (
     LOG_TO_CONSOLE,
     LOG_TO_FILE,
     MAX_LOG_LINES,
+    LOG_BACKUP_COUNT,
     TIME_ZONE,
 )
 
@@ -49,19 +51,23 @@ def log_time() -> str:
 # ============================================================
 
 def estimate_average_line_length(path: str, sample: int = 200) -> int:
-    if not os.path.exists(path):
-        return 300
+    target_path = path
+    if not os.path.exists(target_path):
+        all_path = os.path.join(os.path.dirname(path), "all.log")
+        target_path = all_path if os.path.exists(all_path) else None
+    if not target_path or not os.path.exists(target_path):
+        return 180
     try:
         lines = []
-        with open(path, "r", encoding="utf-8") as f:
+        with open(target_path, "r", encoding="utf-8", errors="replace") as f:
             for _ in range(sample):
                 line = next(f, None)
                 if line is None:
                     break
-                lines.append(len(line))
-        return sum(lines) // len(lines) if lines else 300
+                lines.append(len(line.encode("utf-8")))
+        return sum(lines) // len(lines) if lines else 180
     except Exception:
-        return 300
+        return 180
 
 
 def calc_max_bytes(avg_len: int, lines: int) -> int:
@@ -81,10 +87,49 @@ class UnlockedRotatingFileHandler(RotatingFileHandler):
 
     def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None):
         super().__init__(filename, mode, maxBytes, backupCount, encoding, delay=True)
-        self.stream = None  # Принудительно отключаем постоянный стрим
+        self.stream = None
 
     def _open(self):
         return None
+
+    def rotation_filename(self, default_name: str) -> str:
+        """Превращает logs/all.log.1 -> logs/all.1.log для подсветки синтаксиса в редакторах."""
+        parts = default_name.rsplit(".", 2)
+        if len(parts) == 3 and parts[2].isdigit():
+            return f"{parts[0]}.{parts[2]}.{parts[1]}"
+        return default_name
+
+    def doRollover(self):
+        if self.stream:
+            try:
+                self.stream.close()
+            except Exception:
+                pass
+            self.stream = None
+
+        if self.backupCount > 0:
+            for i in range(self.backupCount - 1, 0, -1):
+                sfn = self.rotation_filename(f"{self.baseFilename}.{i}")
+                dfn = self.rotation_filename(f"{self.baseFilename}.{i + 1}")
+                if os.path.exists(sfn):
+                    try:
+                        if os.path.exists(dfn):
+                            os.remove(dfn)
+                        os.replace(sfn, dfn)
+                    except Exception:
+                        pass
+            dfn = self.rotation_filename(f"{self.baseFilename}.1")
+            try:
+                if os.path.exists(dfn):
+                    os.remove(dfn)
+                os.replace(self.baseFilename, dfn)
+            except Exception:
+                try:
+                    shutil.copy2(self.baseFilename, dfn)
+                    with open(self.baseFilename, "w", encoding=self.encoding) as f:
+                        f.truncate(0)
+                except Exception:
+                    pass
 
     def emit(self, record):
         try:
@@ -224,10 +269,9 @@ class UnifiedLogger:
         context: Optional[dict] = None,
     ):
         os.makedirs(log_dir, exist_ok=True)
-        log_path = os.path.join(log_dir, f"{name}.log")
-
-        avg_len = estimate_average_line_length(log_path)
-        max_bytes = calc_max_bytes(avg_len, max_lines)
+        all_log_path = os.path.join(log_dir, "all.log")
+        avg_len = estimate_average_line_length(all_log_path)
+        all_max_bytes = max(50_000, calc_max_bytes(avg_len, max_lines))
 
         logger = logging.getLogger(name)
         logger.setLevel(logging.DEBUG)
@@ -241,12 +285,10 @@ class UnifiedLogger:
             )
 
             if LOG_TO_FILE:
-                # Общий лог-файл для всех модулей
-                all_log_path = os.path.join(log_dir, "all.log")
                 all_handler = UnlockedRotatingFileHandler(
                     all_log_path,
-                    maxBytes=max_bytes * 5,  # В 5 раз больше, так как он общий
-                    backupCount=1,
+                    maxBytes=all_max_bytes,
+                    backupCount=LOG_BACKUP_COUNT,
                     encoding="utf-8",
                 )
                 all_handler.setFormatter(formatter)
