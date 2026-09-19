@@ -245,10 +245,19 @@ class TestGridStressIntegration(unittest.TestCase):
 
             # 2. Динамический расчет размера от сетки RAYSOLUSDT (в фикстуре)
             state = CronIntegration.get_symbol_state("RAYSOLUSDT")
-            # Для SHORT (хэдж застрявшего лонга cron3 на ~316.5$): 50% объема = 158.26$
+            # Для SHORT (хэдж застрявшего лонга cron3 на ~316.5$, уровень 4 -> default 50%): 50% объема = 158.26$
             self.assertAlmostEqual(state["SHORT"]["invest_size"], 158.26, delta=1.0)
-            # Для LONG (хэдж шорта cron3 на ~171.6$): 50% объема = 85.8$
-            self.assertAlmostEqual(state["LONG"]["invest_size"], 85.8, delta=1.0)
+            # Для LONG (хэдж шорта cron3 на ~171.6$, уровень 2 -> 75%): 75% объема = 128.70$
+            self.assertAlmostEqual(state["LONG"]["invest_size"], 128.70, delta=1.0)
+
+            # 3. Обратная совместимость с фиксированным числом (float = 0.5)
+            orig_hedge = cfg["data_sources"].get("default_hedge_ratio")
+            try:
+                cfg["data_sources"]["default_hedge_ratio"] = 0.5
+                state_fixed = CronIntegration.get_symbol_state("RAYSOLUSDT")
+                self.assertAlmostEqual(state_fixed["LONG"]["invest_size"], 85.8, delta=1.0)
+            finally:
+                cfg["data_sources"]["default_hedge_ratio"] = orig_hedge
         finally:
             cfg["data_sources"]["hardcoded_symbols"] = orig_syms
             cfg["data_sources"]["hardcoded_size"] = orig_size
@@ -307,6 +316,23 @@ class TestGridStressIntegration(unittest.TestCase):
             if os.path.exists(test_file):
                 os.remove(test_file)
 
+    def test_dynamic_hedge_ratio_levels(self):
+        """
+        Проверка карты динамического хеджирования:
+        - уровень 0/1: 1.0 (100%)
+        - уровни 2-3: 0.75 (75%)
+        - уровни выше 3: 0.5 (50%)
+        """
+        hedge_map = {"0": 1.0, "1": 1.0, "2": 0.75, "3": 0.75, "default": 0.5}
+        self.assertEqual(CronIntegration.resolve_hedge_ratio(hedge_map, max_level=0, active_count=1), 1.0)
+        self.assertEqual(CronIntegration.resolve_hedge_ratio(hedge_map, max_level=1, active_count=2), 1.0)
+        self.assertEqual(CronIntegration.resolve_hedge_ratio(hedge_map, max_level=2, active_count=3), 0.75)
+        self.assertEqual(CronIntegration.resolve_hedge_ratio(hedge_map, max_level=3, active_count=4), 0.75)
+        self.assertEqual(CronIntegration.resolve_hedge_ratio(hedge_map, max_level=4, active_count=5), 0.5)
+        self.assertEqual(CronIntegration.resolve_hedge_ratio(hedge_map, max_level=5, active_count=6), 0.5)
+        self.assertEqual(CronIntegration.resolve_hedge_ratio(0.85, max_level=2), 0.85)
+
 
 if __name__ == "__main__":
     unittest.main()
+

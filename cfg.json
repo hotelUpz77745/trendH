@@ -16,8 +16,14 @@
         "_comment_hardcoded": "If hardcoded_symbols/size are present and non-empty, they override reading from the paths",
         "inactive_grid_mode": "TAKE_LEVEL_0",
         "_comment_inactive_grid_mode": "Режим при неактивной сетке (is_active=false на всех уровнях нужной стороны): 'TAKE_LEVEL_0' (по дефолту) — брать объем нулевого уровня (invest_size * grid[0].volume) невзирая на активность; 'SKIP' — ничего не брать (размер позиции 0) и скипать трендовый сигнал.",
-        "default_hedge_ratio": 0.5,
-        "_comment_default_hedge_ratio": "Коэффициент хеджирования объема сетки cron3 (0.5 = 50% от накопленного объема). Базовое значение. Может переопределяться внутри каждой вселенной параметром hedge_ratio"
+        "default_hedge_ratio": {
+            "0": 1.0,
+            "1": 1.0,
+            "2": 0.75,
+            "3": 0.75,
+            "default": 0.5
+        },
+        "_comment_default_hedge_ratio": "Динамическая карта коэффициента хеджирования сетки cron3 (уровни 0-1: 1.0, уровни 2-3: 0.75, уровни 4+: 0.5)"
     },
     "logging": {
         "debug": false,
@@ -110,7 +116,13 @@
                     "value": 0.02
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u15_cons": {
             "name": "Breakout Sniper (Conservative)",
@@ -167,7 +179,13 @@
                     "value": 0.015
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u15_aggr": {
             "name": "Momentum Surge Breakout (Aggressive)",
@@ -234,7 +252,13 @@
                     "value": 0.025
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u15_scalp": {
             "name": "Micro Breakout Scalp (Fast Scalp)",
@@ -275,7 +299,13 @@
                     "value": 0.008
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u15_reverse": {
             "name": "Анти-Breakout LuxAlgo + Taker Flow (Standard)",
@@ -338,7 +368,13 @@
                     "value": 0.045
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u15_reverse_fade": {
             "name": "Pure Liquidity Fade (Range Return)",
@@ -390,7 +426,13 @@
                     "value": 0.025
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u15_reverse_tight": {
             "name": "Conservative Fade (Tight SL)",
@@ -449,7 +491,13 @@
                     "value": 0.015
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u15_reverse_scalp": {
             "name": "Micro Fade Scalp (Quick Reversal)",
@@ -490,7 +538,13 @@
                     "value": 0.018
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u3_reverse": {
             "name": "Реверс Breakout & Volume (Standard)",
@@ -555,7 +609,13 @@
                     "value": 0.04
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u3_reverse_climax": {
             "name": "Volume Climax Exhaustion Reversal",
@@ -620,7 +680,13 @@
                     "value": 0.02
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u3_reverse_aggr": {
             "name": "Aggressive Volume Fade",
@@ -674,7 +740,13 @@
                     "value": 0.03
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u3_reverse_opt": {
             "name": "Volume Fade (Noise-Filtered & Optimized)",
@@ -729,7 +801,13 @@
                     "value": 0.025
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u3_reverse_trend": {
             "name": "Trend-Aligned Pullback Fade",
@@ -794,7 +872,13 @@
                     "value": 0.02
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_grid_stress_base": {
             "name": "Grid Stress Momentum Overlay (TP 15%, SL 3.5%)",
@@ -839,7 +923,13 @@
                     "value": 0.035
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_grid_stress_aggr": {
             "name": "Grid Stress Fast Momentum (TP 8%, SL 2.0%)",
@@ -881,7 +971,13 @@
                     "value": 0.02
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_grid_extreme_breakout": {
             "name": "Grid Extreme Level Breakout (TP 25%, SL 4.0%)",
@@ -929,7 +1025,13 @@
                     "value": 0.04
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_grid_pure_shadow": {
             "name": "Pure Grid Shadow Hedge (No TP, SL 5%)",
@@ -958,7 +1060,13 @@
                     "value": 0.05
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_hvh_pullback": {
             "name": "HVH Mean-Reversion Pullback",
@@ -1019,7 +1127,13 @@
                     ]
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_hvh_impulse": {
             "name": "Pure Impulse HVH Breakout",
@@ -1066,7 +1180,13 @@
                     "value": 0.025
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_sq_hvh_impulse": {
             "name": "Squeeze HVH Breakout (Impulse)",
@@ -1132,7 +1252,13 @@
                     ]
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_sq_hvh_reverse": {
             "name": "Squeeze HVH Climax Fade (Reverse)",
@@ -1183,7 +1309,13 @@
                     "max_seconds": 1200.0
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_grid_stress_40": {
             "name": "Grid Stress Overlay 40% (Soft Lvl 2)",
@@ -1228,7 +1360,13 @@
                     "value": 0.025
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_grid_stress_50": {
             "name": "Grid Stress Overlay 50% (Med Lvl 2)",
@@ -1273,7 +1411,13 @@
                     "value": 0.03
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_grid_shadow_40": {
             "name": "Pure Grid Shadow 40% (Soft Lvl 2)",
@@ -1302,7 +1446,13 @@
                     "value": 0.04
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_grid_shadow_50": {
             "name": "Pure Grid Shadow 50% (Med Lvl 2)",
@@ -1331,7 +1481,13 @@
                     "value": 0.05
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_hvh_impulse_40": {
             "name": "HVH Impulse Overlay 40% (Soft)",
@@ -1378,7 +1534,13 @@
                     "value": 0.02
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         },
         "u_hvh_impulse_50": {
             "name": "HVH Impulse Overlay 50% (Med)",
@@ -1425,7 +1587,13 @@
                     "value": 0.025
                 }
             },
-            "hedge_ratio": 0.5
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         }
     },
     "watchdog": {

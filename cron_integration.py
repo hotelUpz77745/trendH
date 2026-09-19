@@ -126,7 +126,7 @@ class CronIntegration:
                     "grid": grid
                 }
 
-            default_hedge_ratio = float(data_sources.get("default_hedge_ratio", 0.5))
+            default_hedge_ratio = data_sources.get("default_hedge_ratio", 0.5)
             for side in ("LONG", "SHORT"):
                 s_info = sides_info.get(side, {})
                 opp_info = sides_info.get("SHORT" if side == "LONG" else "LONG", {})
@@ -136,9 +136,14 @@ class CronIntegration:
                 result[side]["base_order_usd"] = s_info.get("base_order_usd", 50.0)
                 result[side]["accum_usd"] = s_info.get("accum_usd", 0.0)
 
-                # Хэджирование: если на противоположной стороне набран объем, хэдж берет долю default_hedge_ratio
+                # Хэджирование: если на противоположной стороне набран объем, хэдж берет долю от hedge_ratio
                 if opp_info.get("accum_usd", 0.0) > 0:
-                    calc_size = opp_info["accum_usd"] * default_hedge_ratio
+                    opp_grid = opp_info.get("grid", {})
+                    opp_levels = [int(k) for k, v in opp_grid.items() if v.get("is_active", False)]
+                    opp_max_lvl = max(opp_levels) if opp_levels else -1
+                    opp_count = len(opp_levels)
+                    ratio = cls.resolve_hedge_ratio(default_hedge_ratio, max_level=opp_max_lvl, active_count=opp_count)
+                    calc_size = opp_info["accum_usd"] * ratio
                 elif s_info.get("has_active", False) and s_info.get("accum_usd", 0.0) > 0:
                     calc_size = s_info["accum_usd"]
                 else:
@@ -152,6 +157,36 @@ class CronIntegration:
         except Exception as e:
             log(f"[CronIntegration] Error reading state for {symbol}: {e}", level="ERROR", throttle_sec=60)
         return result
+
+    @classmethod
+    def resolve_hedge_ratio(cls, hedge_cfg: Any, max_level: int = -1, active_count: int = 0) -> float:
+        """
+        Вычисляет динамический коэффициент хеджирования:
+        - Если hedge_cfg - float/int, возвращает его (обратная совместимость).
+        - Если hedge_cfg - dict (карта зависимостей по уровням/количеству сеток):
+          0-1: 1.0 (100% объема)
+          2-3: 0.75 (75% объема)
+          4+: 0.5 (50% объема)
+        """
+        if isinstance(hedge_cfg, (int, float)):
+            return float(hedge_cfg)
+        if isinstance(hedge_cfg, dict):
+            if max_level >= 0:
+                if str(max_level) in hedge_cfg:
+                    return float(hedge_cfg[str(max_level)])
+                if max_level in hedge_cfg:
+                    return float(hedge_cfg[max_level])
+                if max_level == 0 and "1" in hedge_cfg:
+                    return float(hedge_cfg["1"])
+            if active_count > 0:
+                if str(active_count) in hedge_cfg:
+                    return float(hedge_cfg[str(active_count)])
+                if active_count in hedge_cfg:
+                    return float(hedge_cfg[active_count])
+            if "default" in hedge_cfg:
+                return float(hedge_cfg["default"])
+            return 0.5
+        return 0.5
 
     @classmethod
     def get_grid_stress(cls, symbol: str, current_price: float = 0.0) -> Dict[str, Any]:

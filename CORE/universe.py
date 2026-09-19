@@ -5,7 +5,7 @@
 
 import json
 import time
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, List, Callable, Union
 from pathlib import Path
 
 from c_log import log
@@ -91,12 +91,39 @@ class StrategyUniverse:
         self.enter_rules, self.exit_rules = enter_rules, exit_rules
         default_grid_mode = cfg.get("data_sources", {}).get("inactive_grid_mode", "TAKE_LEVEL_0")
         self.inactive_grid_mode = str(inactive_grid_mode or default_grid_mode).strip().upper()
-        self.hedge_ratio = float(hedge_ratio if hedge_ratio is not None else cfg.get("data_sources", {}).get("default_hedge_ratio", 0.5))
+        self.hedge_ratio = hedge_ratio if hedge_ratio is not None else cfg.get("data_sources", {}).get("default_hedge_ratio", 0.5)
         self.entry_engine, self.exit_engine = EntrySignalEngine(enter_rules), ExitSignalEngine(exit_rules, ANALYTICS_CFG, get_slippage_ratio_fn)
         self.state, self.analytics = UniverseState(universe_id=universe_id, backup_manager=backup_manager), AnalyticsManager(universe_id=universe_id)
         self.state.load_state()
         self.reentry_cooldown_sec: float = float(cfg.get("reentry_cooldown_sec", 60.0))
         self.last_exit_time, self.position_ext_data = {}, {}
+
+    def get_dynamic_hedge_ratio(self, max_level: int = -1, active_count: int = 0) -> float:
+        """
+        Вычисляет динамический коэффициент хеджирования:
+        - Если hedge_ratio число (float/int), возвращает его (обратная совместимость).
+        - Если hedge_ratio словарь (карта зависимостей по уровням/количеству сеток):
+          0-1: 1.0 (100% объема)
+          2-3: 0.75 (75% объема)
+          4+: 0.5 (50% объема)
+        """
+        if isinstance(self.hedge_ratio, (int, float)):
+            return float(self.hedge_ratio)
+        if isinstance(self.hedge_ratio, dict):
+            if max_level >= 0:
+                if str(max_level) in self.hedge_ratio:
+                    return float(self.hedge_ratio[str(max_level)])
+                if max_level in self.hedge_ratio:
+                    return float(self.hedge_ratio[max_level])
+                if max_level == 0 and "1" in self.hedge_ratio:
+                    return float(self.hedge_ratio["1"])
+            if active_count > 0:
+                if str(active_count) in self.hedge_ratio:
+                    return float(self.hedge_ratio[str(active_count)])
+                if active_count in self.hedge_ratio:
+                    return float(self.hedge_ratio[active_count])
+            return float(self.hedge_ratio.get("default", 0.5))
+        return 0.5
 
     def check_entry(self, side: str, indicators: Dict[str, Any]) -> bool:
         return self.entry_engine.check_signal(side, indicators)
@@ -154,14 +181,19 @@ class StrategyUniverse:
 
             # Проверка условий входа
             if not is_paused and self.check_entry(side, indicators):
-                eff_invest_size = invest_size
+                eff_invest_size, eff_ratio, opp_accum = invest_size, 1.0, 0.0
                 if cron_state and side in cron_state:
                     s_info = cron_state[side]
                     has_active = s_info.get("has_active", False)
                     opp_side = "SHORT" if side == "LONG" else "LONG"
-                    opp_accum = cron_state.get(opp_side, {}).get("accum_usd", 0.0)
+                    opp_data = cron_state.get(opp_side, {})
+                    opp_accum = opp_data.get("accum_usd", 0.0)
                     if opp_accum > 0:
-                        eff_invest_size = round(opp_accum * self.hedge_ratio, 2)
+                        opp_grid = opp_data.get("raw_grid", {})
+                        opp_levels = [int(k) for k, v in opp_grid.items() if v.get("is_active", False)]
+                        opp_max_lvl = max(opp_levels) if opp_levels else -1
+                        eff_ratio = self.get_dynamic_hedge_ratio(max_level=opp_max_lvl, active_count=len(opp_levels))
+                        eff_invest_size = round(opp_accum * eff_ratio, 2)
                     elif not has_active and opp_accum == 0.0:
                         eff_invest_size = 0.0 if self.inactive_grid_mode in ("SKIP", "SKIP_SIGNAL", "SKIP_IF_INACTIVE") else s_info.get("base_order_usd", invest_size)
 
@@ -178,7 +210,8 @@ class StrategyUniverse:
 
                 log(f"[SIGNAL ENTRY] [{self.universe_id}][{symbol}][{side}] Trend: {indicators.get('trend')}{htf_str}, RSI: {rsi_str}{grid_str}", level="INFO")
                 if eff_invest_size > 0:
-                    log(f"[POSITION OPEN] [{self.universe_id}][{symbol}][{side}] Цена: {current_price}, Размер: {eff_invest_size}${grid_str}", level="INFO")
+                    hedge_info_str = f" (hedge={eff_ratio:.0%})" if opp_accum > 0 else ""
+                    log(f"[POSITION OPEN] [{self.universe_id}][{symbol}][{side}] Цена: {current_price}, Размер: {eff_invest_size}${hedge_info_str}{grid_str}", level="INFO")
                     self.state.open_position(symbol, side, current_price, eff_invest_size)
                     self.position_ext_data.setdefault(symbol, {})[side] = {"highest": current_price, "lowest": current_price}
                 else:
