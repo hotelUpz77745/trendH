@@ -1594,6 +1594,214 @@
                 "3": 0.75,
                 "default": 0.5
             }
+        },
+        "u_sq_hvh_ratchet": {
+            "name": "Squeeze HVH Ratchet Pro",
+            "description": "Взрыв из сжатия (BB inside KC) + HVH импульс по HTF тренду 1h с безусловным переводом в безубыток (Breakeven Ratchet при +2.5%)",
+            "is_active": true,
+            "reentry_cooldown_sec": 120.0,
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "ema_fast": 10,
+                    "ema_slow": 30,
+                    "min_candles": 2,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "volatility_squeeze": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "bb_length": 20,
+                    "bb_mult": 2.0,
+                    "kc_mult": 1.5,
+                    "lookback_squeeze": 14,
+                    "long_cond": "SQUEEZE_LONG",
+                    "short_cond": "SQUEEZE_SHORT",
+                    "ignore_last_bars": 2,
+                    "min_squeeze_bars": 3
+                },
+                "hvh": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "period": 20,
+                    "dev_multiplier": 1.8,
+                    "corridor_mode": "rolling",
+                    "strategy_mode": "impulse",
+                    "long_cond": "HVH_IMPULSE_LONG",
+                    "short_cond": "HVH_IMPULSE_SHORT"
+                }
+            },
+            "exit_rules": {
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "buffer_ratio": 0.0012
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "period": 14,
+                    "multiplier": 2.2
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 900.0,
+                    "min_pnl_ratio": 0.005
+                },
+                "take_profit_ratio": {
+                    "value": 0.06
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                },
+                "trend_reversal": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ]
+                }
+            },
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
+        },
+        "u15_cons_ratchet": {
+            "name": "Breakout Sniper Ratchet Pro",
+            "description": "Снайперский пробой консолидации LuxAlgo (Taker Buy >= 65% + HTF 1h) с Breakeven Ratchet (+2.5%) и динамическим тайм-стопом на развитие импульса",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "sr_levels": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.5,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_LONG",
+                    "short_cond": "BREAKOUT_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.65,
+                    "max_buy_ratio": 0.35,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "buffer_ratio": 0.0012
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.2
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1200.0,
+                    "min_pnl_ratio": 0.005
+                },
+                "take_profit_ratio": {
+                    "value": 0.045
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            },
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
+        },
+        "u_grid_stress_shock": {
+            "name": "Grid Stress Fast Shock Overlay",
+            "description": "Импульсный хедж при динамическом шоке сетки cron3 (набор 40%+ менее чем за 30 мин) с Breakeven Ratchet (+2.5%) и снятием при разгрузке сетки",
+            "is_active": true,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "require_shock": true,
+                    "max_fill_duration_sec": 1800.0,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                },
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                }
+            },
+            "exit_rules": {
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "buffer_ratio": 0.0012
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.2
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.5
+                },
+                "take_profit_ratio": {
+                    "value": 0.08
+                },
+                "stop_loss_ratio": {
+                    "value": 0.025
+                }
+            },
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         }
     },
     "watchdog": {

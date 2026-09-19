@@ -260,6 +260,20 @@ class CronIntegration:
                 stressed = in_pos and price_stressed and (vol_ratio >= 0.45 or max_lvl >= 2)
                 extreme = in_pos and price_stressed and (vol_ratio >= 0.70 or max_lvl >= 4)
 
+                t_0 = grid.get("0", {}).get("activated_at")
+                t_max = grid.get(str(max_lvl), {}).get("activated_at") if max_lvl >= 0 else None
+                fill_dur = (t_max - t_0) if (t_0 and t_max and t_max >= t_0) else None
+                prev_lvl = max_lvl - 1 if max_lvl > 0 else 0
+                t_prev = grid.get(str(prev_lvl), {}).get("activated_at")
+                step_dur = (t_max - t_prev) if (t_max and t_prev and t_max >= t_prev) else None
+
+                is_shock = False
+                if max_lvl >= 2:
+                    if fill_dur is not None and fill_dur <= 1800:
+                        is_shock = True
+                    elif step_dur is not None and step_dur <= 600:
+                        is_shock = True
+
                 res[side] = {
                     "in_position": in_pos,
                     "volume_ratio": vol_ratio,
@@ -269,53 +283,31 @@ class CronIntegration:
                     "stressed": stressed,
                     "extreme": extreme,
                     "avg_entry_price": avg_price,
-                    "price_stressed": price_stressed
+                    "price_stressed": price_stressed,
+                    "fill_duration_sec": fill_dur,
+                    "last_step_sec": step_dur,
+                    "is_shock": is_shock
                 }
 
-            long_st = res["LONG"]["stressed"]
-            short_st = res["SHORT"]["stressed"]
-            long_ext = res["LONG"]["extreme"]
-            short_ext = res["SHORT"]["extreme"]
+            long_ext, short_ext = res["LONG"]["extreme"], res["SHORT"]["extreme"]
+            long_st, short_st = res["LONG"]["stressed"], res["SHORT"]["stressed"]
 
-            if long_ext and not short_ext:
-                res["status"] = "LONG_GRID_EXTREME"
-                res["stressed_side"] = "LONG"
-                res["opposite_side"] = "SHORT"
-                res["volume_ratio"] = res["LONG"]["volume_ratio"]
-                res["max_level"] = res["LONG"]["max_level"]
-                res["extreme"] = True
-            elif short_ext and not long_ext:
-                res["status"] = "SHORT_GRID_EXTREME"
-                res["stressed_side"] = "SHORT"
-                res["opposite_side"] = "LONG"
-                res["volume_ratio"] = res["SHORT"]["volume_ratio"]
-                res["max_level"] = res["SHORT"]["max_level"]
-                res["extreme"] = True
-            elif long_st and not short_st:
-                res["status"] = "LONG_GRID_STRESSED"
-                res["stressed_side"] = "LONG"
-                res["opposite_side"] = "SHORT"
-                res["volume_ratio"] = res["LONG"]["volume_ratio"]
-                res["max_level"] = res["LONG"]["max_level"]
-            elif short_st and not long_st:
-                res["status"] = "SHORT_GRID_STRESSED"
-                res["stressed_side"] = "SHORT"
-                res["opposite_side"] = "LONG"
-                res["volume_ratio"] = res["SHORT"]["volume_ratio"]
-                res["max_level"] = res["SHORT"]["max_level"]
-            elif long_st and short_st:
-                if res["LONG"]["volume_ratio"] >= res["SHORT"]["volume_ratio"]:
-                    res["status"] = "LONG_GRID_STRESSED"
-                    res["stressed_side"] = "LONG"
-                    res["opposite_side"] = "SHORT"
-                    res["volume_ratio"] = res["LONG"]["volume_ratio"]
-                    res["max_level"] = res["LONG"]["max_level"]
-                else:
-                    res["status"] = "SHORT_GRID_STRESSED"
-                    res["stressed_side"] = "SHORT"
-                    res["opposite_side"] = "LONG"
-                    res["volume_ratio"] = res["SHORT"]["volume_ratio"]
-                    res["max_level"] = res["SHORT"]["max_level"]
+            primary = None
+            if long_ext or short_ext:
+                primary = "LONG" if (long_ext and not short_ext) else ("SHORT" if (short_ext and not long_ext) else ("LONG" if res["LONG"]["volume_ratio"] >= res["SHORT"]["volume_ratio"] else "SHORT"))
+            elif long_st or short_st:
+                primary = "LONG" if (long_st and not short_st) else ("SHORT" if (short_st and not long_st) else ("LONG" if res["LONG"]["volume_ratio"] >= res["SHORT"]["volume_ratio"] else "SHORT"))
+
+            if primary:
+                is_ext = res[primary]["extreme"]
+                res["status"] = f"{primary}_GRID_EXTREME" if is_ext else f"{primary}_GRID_STRESSED"
+                res["stressed_side"] = primary
+                res["opposite_side"] = "SHORT" if primary == "LONG" else "LONG"
+                res["volume_ratio"] = res[primary]["volume_ratio"]
+                res["max_level"] = res[primary]["max_level"]
+                res["extreme"] = is_ext
+                res["is_shock"] = res[primary].get("is_shock", False)
+                res["fill_duration_sec"] = res[primary].get("fill_duration_sec")
 
             cls._cache[symbol] = {"ts": now, "data": dict(res)}
             log(
@@ -364,6 +356,8 @@ class EntryGridStressRule(BaseRule):
         self.min_volume_ratio: float = float(cfg.get("min_volume_ratio", 0.5))
         self.min_filled_level: int = int(cfg.get("min_filled_level", 3))
         self.extreme_only: bool = bool(cfg.get("extreme_only", False))
+        self.require_shock: bool = bool(cfg.get("require_shock", False))
+        self.max_fill_duration_sec: Optional[float] = cfg.get("max_fill_duration_sec")
 
     def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
@@ -380,6 +374,14 @@ class EntryGridStressRule(BaseRule):
         if not side_info.get("in_position", False):
             return False
 
+        if self.require_shock and not side_info.get("is_shock", False):
+            return False
+
+        if self.max_fill_duration_sec is not None:
+            dur = side_info.get("fill_duration_sec")
+            if dur is None or dur > self.max_fill_duration_sec:
+                return False
+
         passed = False
         if self.extreme_only:
             extreme_cond = "SHORT_GRID_EXTREME" if side == "LONG" else "LONG_GRID_EXTREME"
@@ -393,18 +395,15 @@ class EntryGridStressRule(BaseRule):
 
         if passed:
             symbol = kwargs.get("symbol", indicators.get("symbol", "N/A"))
-            cur_p = kwargs.get("current_price", indicators.get("current_price", 0.0))
-            vol_r = side_info.get("volume_ratio", 0.0)
-            accum_v = side_info.get("accumulated_volume", vol_r * 100.0)
-            avg_p = side_info.get("avg_entry_price", 0.0)
-            dd_p = side_info.get("drawdown_pct", 0.0)
+            cur_p, avg_p = kwargs.get("current_price", indicators.get("current_price", 0.0)), side_info.get("avg_entry_price", 0.0)
+            vol_r, dd_p = side_info.get("volume_ratio", 0.0), side_info.get("drawdown_pct", 0.0)
+            shock_tag = " [SHOCK]" if side_info.get("is_shock") else ""
+            dur_tag = f", fill_time={side_info.get('fill_duration_sec', 0):.0f}s" if side_info.get("fill_duration_sec") else ""
             log(
-                f"[GRID STRESS MATCH] [{symbol}][{side}] cron3_stuck={target_side} | "
-                f"vol_ratio={vol_r:.1%} ({accum_v:.1f}%), max_lvl={side_info.get('max_level', -1)}/5, "
+                f"[GRID STRESS MATCH] [{symbol}][{side}] cron3_stuck={target_side}{shock_tag} | "
+                f"vol_ratio={vol_r:.1%}, max_lvl={side_info.get('max_level', -1)}/5{dur_tag}, "
                 f"avg_price={avg_p:.4f}, cur_price={cur_p:.4f}, dd={dd_p:+.2f}%, status={status}",
-                level="INFO",
-                throttle_sec=5,
-                throttle_key=f"gsm_{symbol}_{side}"
+                level="INFO", throttle_sec=5, throttle_key=f"gsm_{symbol}_{side}"
             )
         return passed
 
@@ -414,28 +413,20 @@ class ExitGridReliefRule(BaseRule):
     Правило выхода при закрытии или разгрузке позиции сетки сеточником (Grid Relief).
     Если застрявшая сторона закрыла позицию по TP или сбросила объемы, хэдж закрывается.
     """
-
     def __init__(self, cfg: Dict[str, Any]):
-        self.cfg = cfg
-        self.is_active: bool = bool(cfg.get("is_active", False))
-        self.exit_on_position_close: bool = bool(cfg.get("exit_on_position_close", True))
+        self.cfg, self.is_active = cfg, bool(cfg.get("is_active", False))
+        self.exit_on_position_close = bool(cfg.get("exit_on_position_close", True))
         self.max_volume_ratio: float = float(cfg.get("max_volume_ratio", 0.2))
 
     def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
             return False
-        indicators = indicators or kwargs.get("indicators", {})
-        stress = indicators.get("grid_stress", kwargs.get("grid_stress"))
+        stress = (indicators or kwargs.get("indicators", {})).get("grid_stress", kwargs.get("grid_stress"))
         if not stress or not isinstance(stress, dict):
             return False
-
-        hedged_grid_side = "LONG" if side == "SHORT" else "SHORT"
-        grid_data = stress.get(hedged_grid_side, {})
+        grid_data = stress.get("LONG" if side == "SHORT" else "SHORT", {})
         if not grid_data:
             return False
-
         if self.exit_on_position_close and not grid_data.get("in_position", False):
             return True
-        if grid_data.get("volume_ratio", 0.0) <= self.max_volume_ratio:
-            return True
-        return False
+        return grid_data.get("volume_ratio", 0.0) <= self.max_volume_ratio
