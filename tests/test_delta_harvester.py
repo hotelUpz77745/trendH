@@ -166,13 +166,20 @@ class TestDeltaHarvesterAndTrailing(unittest.TestCase):
         u_cfg = universes["u_delta_harvester"]
         self.assertTrue(u_cfg.get("is_active"))
         self.assertEqual(u_cfg.get("inactive_grid_mode"), "SKIP")
-        self.assertEqual(u_cfg.get("hedge_ratio"), 1.0)
+        self.assertEqual(u_cfg.get("reentry_cooldown_sec"), 900.0)
+        self.assertIsInstance(u_cfg.get("hedge_ratio"), dict)
+        self.assertEqual(u_cfg["hedge_ratio"].get("2"), 0.75)
+        self.assertEqual(u_cfg["hedge_ratio"].get("4"), 0.40)
 
-        # Проверка правил выхода
+        # Проверка правил входа и выхода
+        enter_rules = u_cfg.get("enter_rules", {}).get("delta_harvester", {})
+        self.assertTrue(enter_rules.get("require_momentum"))
+        self.assertEqual(enter_rules.get("min_rsi"), 48.0)
+
         exit_rules = u_cfg.get("exit_rules", {})
         self.assertIn("breakeven_ratchet", exit_rules)
         self.assertIn("grid_relief", exit_rules)
-        self.assertEqual(exit_rules.get("stop_loss_ratio", {}).get("value"), 0.07)
+        self.assertEqual(exit_rules.get("stop_loss_ratio", {}).get("value"), 0.038)
         self.assertIsNone(exit_rules.get("take_profit_ratio", {}).get("value"))
 
         be = exit_rules["breakeven_ratchet"]
@@ -181,7 +188,8 @@ class TestDeltaHarvesterAndTrailing(unittest.TestCase):
         self.assertEqual(be.get("trail_ratio"), 0.018)
 
     def test_universe_dynamic_delta_sizing(self):
-        """Проверка 1:1 дельта-хеджирования: размер ордера равен объему застрявшей сетки."""
+        """Проверка градуированного дельта-хеджирования по уровням сетки."""
+        hedge_map = {"0": 1.0, "1": 0.8, "2": 0.75, "3": 0.55, "4": 0.40, "default": 0.50}
         u = StrategyUniverse(
             universe_id="u_delta_harvester",
             name="Delta Harvester Test",
@@ -191,26 +199,62 @@ class TestDeltaHarvesterAndTrailing(unittest.TestCase):
             get_slippage_ratio_fn=lambda sym: 0.0005,
             is_active=True,
             inactive_grid_mode="SKIP",
-            hedge_ratio=1.0
+            hedge_ratio=hedge_map
         )
 
         cron_state = {
             "LONG": {"has_active": False, "accum_usd": 0.0},
             "SHORT": {
                 "has_active": True,
-                "accum_usd": 156.40,
+                "accum_usd": 200.0,
                 "raw_grid": {"0": {"is_active": True}, "1": {"is_active": True}, "2": {"is_active": True}}
             }
         }
 
-        # Вычисляем хедж для LONG стороны против застрявшего SHORT:
-        opp_side = "SHORT"
-        opp_accum = cron_state[opp_side]["accum_usd"]
-        eff_ratio = u.get_dynamic_hedge_ratio(max_level=2, active_count=3)
-        eff_size = round(opp_accum * eff_ratio, 2)
+        # Level 2 -> 75% хедж
+        opp_accum = cron_state["SHORT"]["accum_usd"]
+        eff_ratio_l2 = u.get_dynamic_hedge_ratio(max_level=2, active_count=3)
+        eff_size_l2 = round(opp_accum * eff_ratio_l2, 2)
+        self.assertEqual(eff_ratio_l2, 0.75)
+        self.assertEqual(eff_size_l2, 150.0)
 
-        self.assertEqual(eff_ratio, 1.0)
-        self.assertEqual(eff_size, 156.40)
+        # Level 4 -> 40% хедж (защита от раздувания сайзинга на хаях)
+        eff_ratio_l4 = u.get_dynamic_hedge_ratio(max_level=4, active_count=5)
+        self.assertEqual(eff_ratio_l4, 0.40)
+
+    def test_entry_delta_harvester_momentum_guard(self):
+        """Проверка Momentum Guard: блокировка входа на красных свечах и слабом RSI."""
+        cfg = {"is_active": True, "min_volume_ratio": 0.40, "min_filled_level": 2, "require_momentum": True, "min_rsi": 48.0}
+        rule = EntryDeltaHarvesterRule(cfg)
+
+        stress_stuck = {
+            "status": "SHORT_GRID_STRESSED",
+            "SHORT": {"in_position": True, "volume_ratio": 0.5, "max_level": 2, "stressed": True, "price_stressed": True}
+        }
+
+        # 1. Свеча красная (падение) -> блокировка входа в LONG
+        ind_red_candle = {
+            "grid_stress": stress_stuck,
+            "candles_5m": [{"open": 100.0, "close": 98.0}],
+            "rsi_value": 55.0
+        }
+        self.assertFalse(rule.check("LONG", indicators=ind_red_candle))
+
+        # 2. Свеча зеленая, но RSI < 48 -> блокировка входа в LONG
+        ind_weak_rsi = {
+            "grid_stress": stress_stuck,
+            "candles_5m": [{"open": 98.0, "close": 100.0}],
+            "rsi_value": 44.0
+        }
+        self.assertFalse(rule.check("LONG", indicators=ind_weak_rsi))
+
+        # 3. Свеча зеленая и RSI >= 48 -> разрешен вход в LONG
+        ind_bullish = {
+            "grid_stress": stress_stuck,
+            "candles_5m": [{"open": 98.0, "close": 100.0}],
+            "rsi_value": 55.0
+        }
+        self.assertTrue(rule.check("LONG", indicators=ind_bullish))
 
 
 if __name__ == "__main__":

@@ -1773,20 +1773,30 @@
             "description": "1:1 Dynamic Delta-Neutral Grid Hedge with Trailing Harvest",
             "is_active": true,
             "inactive_grid_mode": "SKIP",
-            "hedge_ratio": 1.0,
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
             "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
             "enter_rules": {
                 "delta_harvester": {
                     "is_active": true,
                     "min_volume_ratio": 0.4,
                     "min_filled_level": 2,
                     "extreme_only": false,
-                    "require_shock": false
+                    "require_shock": false,
+                    "require_momentum": true,
+                    "min_rsi": 48.0
                 }
             },
             "exit_rules": {
                 "stop_loss_ratio": {
-                    "value": 0.07
+                    "value": 0.038
                 },
                 "take_profit_ratio": {
                     "value": null

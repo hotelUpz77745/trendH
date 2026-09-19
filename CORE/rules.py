@@ -128,9 +128,12 @@ class EntryDeltaHarvesterRule(BaseRule):
     Универсальное правило входа Delta Harvester:
     Моментально подхватывает застрявший объем сеточника (Level >= 2, Volume >= 40%)
     в сторону текущего тренда (противоположно сетке).
+    Включает Momentum Guard для защиты от покупок на откатах и падающих ножах.
     """
     def __init__(self, cfg: Dict[str, Any]):
         self.cfg, self.is_active = cfg, bool(cfg.get("is_active", False))
+        self.require_momentum = bool(cfg.get("require_momentum", True))
+        self.min_rsi = float(cfg.get("min_rsi", 48.0))
         from cron_integration import EntryGridStressRule
         self.stress_rule = EntryGridStressRule({
             "is_active": self.is_active,
@@ -144,7 +147,27 @@ class EntryDeltaHarvesterRule(BaseRule):
     def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
             return True
-        return self.stress_rule.check(side, indicators=indicators, **kwargs)
+        if not self.stress_rule.check(side, indicators=indicators, **kwargs):
+            return False
+        if self.require_momentum and indicators:
+            candles = indicators.get("candles_5m", indicators.get("candles", []))
+            if candles and isinstance(candles, list):
+                last_c = candles[-1]
+                if isinstance(last_c, dict):
+                    op = float(last_c.get("open", 0.0))
+                    cl = float(last_c.get("close", 0.0))
+                    if op > 0 and cl > 0:
+                        if side == "LONG" and cl < op:
+                            return False
+                        elif side == "SHORT" and cl > op:
+                            return False
+            rsi = indicators.get("rsi_value")
+            if rsi is not None and isinstance(rsi, (int, float)):
+                if side == "LONG" and rsi < self.min_rsi:
+                    return False
+                elif side == "SHORT" and rsi > (100.0 - self.min_rsi):
+                    return False
+        return True
 
 
 class EntrySignalEngine:
