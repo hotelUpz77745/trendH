@@ -279,6 +279,45 @@ class TestDeltaHarvesterAndTrailing(unittest.TestCase):
         self.assertEqual(exit_rules.get("stop_loss_ratio", {}).get("value"), 0.038)
         self.assertTrue(exit_rules.get("breakeven_ratchet", {}).get("is_active"))
 
+    def test_u_shadow_harvester_configurations(self):
+        """Проверка вселенных u_shadow_harvester_40 и 50 (Grid Reverse + Trailing)."""
+        full_cfg = load_config()
+        universes = full_cfg.get("universes", {})
+        for uid in ("u_shadow_harvester_40", "u_shadow_harvester_50"):
+            self.assertIn(uid, universes)
+            u_cfg = universes[uid]
+            self.assertTrue(u_cfg.get("is_active"))
+            self.assertIn("grid_stress", u_cfg.get("enter_rules", {}))
+            exit_rules = u_cfg.get("exit_rules", {})
+            self.assertTrue(exit_rules.get("breakeven_ratchet", {}).get("is_active"))
+            self.assertEqual(exit_rules["breakeven_ratchet"].get("trail_ratio"), 0.018)
+            self.assertEqual(exit_rules.get("stop_loss_ratio", {}).get("value"), 0.038)
+
+    def test_u_delta_sniper_15m_configuration(self):
+        """Проверка вселенной u_delta_sniper_15m (15m HVH Impulse)."""
+        full_cfg = load_config()
+        universes = full_cfg.get("universes", {})
+        self.assertIn("u_delta_sniper_15m", universes)
+        u_cfg = universes["u_delta_sniper_15m"]
+        self.assertTrue(u_cfg.get("is_active"))
+        hvh_cfg = u_cfg.get("enter_rules", {}).get("hvh", {})
+        self.assertEqual(hvh_cfg.get("timeframe"), "15m")
+        self.assertEqual(hvh_cfg.get("dev"), 1.6)
+        self.assertEqual(hvh_cfg.get("signal_type"), "impulse")
+
+    def test_u_hvh_delta_symbiosis_configuration(self):
+        """Проверка симбиоза u_hvh_delta_symbiosis (1H Trend + 15m HVH Pullback + Trailing)."""
+        full_cfg = load_config()
+        universes = full_cfg.get("universes", {})
+        self.assertIn("u_hvh_delta_symbiosis", universes)
+        u_cfg = universes["u_hvh_delta_symbiosis"]
+        self.assertTrue(u_cfg.get("is_active"))
+        enter_rules = u_cfg.get("enter_rules", {})
+        self.assertEqual(enter_rules.get("trend_htf", {}).get("timeframe"), "1h")
+        self.assertEqual(enter_rules.get("hvh", {}).get("signal_type"), "pullback")
+        self.assertIn("grid_stress", enter_rules)
+        self.assertTrue(u_cfg.get("exit_rules", {}).get("breakeven_ratchet", {}).get("is_active"))
+
 
 if __name__ == "__main__":
     unittest.main()

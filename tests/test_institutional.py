@@ -191,13 +191,15 @@ class TestInstitutionalRules(unittest.TestCase):
             get_slippage_ratio_fn=self.slip_fn
         )
         self.assertIn("u_sq_hvh_ratchet", manager.universes)
-        self.assertIn("u15_cons_ratchet", manager.universes)
         self.assertIn("u_grid_stress_shock", manager.universes)
-        self.assertIn("u15_ratchet", manager.universes)
         self.assertIn("u_delta_harvester", manager.universes)
         self.assertIn("u_delta_sniper", manager.universes)
-        self.assertEqual(len(cfg.get("universes", {})), 31)
-        self.assertEqual(len(manager.universes), 22)
+        self.assertIn("u_shadow_harvester_40", manager.universes)
+        self.assertIn("u_shadow_harvester_50", manager.universes)
+        self.assertIn("u_delta_sniper_15m", manager.universes)
+        self.assertIn("u_hvh_delta_symbiosis", manager.universes)
+        self.assertEqual(len(cfg.get("universes", {})), 35)
+        self.assertEqual(len(manager.universes), 21)
 
 
 if __name__ == "__main__":

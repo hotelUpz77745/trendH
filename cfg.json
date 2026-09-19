@@ -65,7 +65,7 @@
         "u15": {
             "name": "Breakout LuxAlgo + Taker Flow",
             "description": "Пробой уровней LuxAlgo с фильтром агрессии маркета (Taker Buy >=60%) для отсечения ложных выносов стопов",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "trend_htf": {
                     "is_active": true,
@@ -128,7 +128,7 @@
         "u15_cons": {
             "name": "Breakout Sniper (Conservative)",
             "description": "Консервативный пробой с повышенным порогом Taker Buy >=65% и расширенной зоной уровней (margin 2.5). Режим TAKE_LEVEL_0 — входит автономно, не дожидаясь сетки",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "trend_htf": {
                     "is_active": true,
@@ -191,7 +191,7 @@
         "u15_aggr": {
             "name": "Momentum Surge Breakout (Aggressive)",
             "description": "Агрессивный пробой с ранним входом (Taker >=55%) и подтверждением всплеска объема 1m",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "trend_htf": {
                     "is_active": true,
@@ -1575,7 +1575,7 @@
         "u15_cons_ratchet": {
             "name": "Breakout Sniper Ratchet Pro",
             "description": "Снайперский пробой консолидации LuxAlgo (Taker Buy >= 65% + HTF 1h) с Breakeven Ratchet (+2.5%) и динамическим тайм-стопом на развитие импульса",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "trend_htf": {
                     "is_active": true,
@@ -1702,7 +1702,7 @@
         "u15_ratchet": {
             "name": "Breakout LuxAlgo + Ratchet Pro",
             "description": "Флагманский пробой уровней LuxAlgo (Taker Buy >= 60% + тренд H1) на базе доказанного лидера U15 с защитой Breakeven Ratchet (+2.5% в безубыток)",
-            "is_active": true,
+            "is_active": false,
             "enter_rules": {
                 "trend_htf": {
                     "is_active": true,
@@ -1847,6 +1847,217 @@
                     "signal_type": "impulse",
                     "long_cond": "HVH_LONG",
                     "short_cond": "HVH_SHORT"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.038
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "trail_ratio": 0.018,
+                    "buffer_ratio": 0.005
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
+        },
+        "u_shadow_harvester_40": {
+            "name": "Shadow Harvester 40% (Grid Reverse + Trailing)",
+            "description": "Чистый реверс-хэдж сетки 40% (Lvl 2+) с динамическим трейлингом прибыли (2.5% -> BE, 1.8% trail) и выходом по TP сетки",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.038
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "trail_ratio": 0.018,
+                    "buffer_ratio": 0.005
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
+        },
+        "u_shadow_harvester_50": {
+            "name": "Shadow Harvester 50% (Grid Reverse + Trailing)",
+            "description": "Чистый реверс-хэдж сетки 50% (Lvl 2+) с динамическим трейлингом прибыли (2.5% -> BE, 1.8% trail) и выходом по TP сетки",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.038
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "trail_ratio": 0.018,
+                    "buffer_ratio": 0.005
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
+        },
+        "u_delta_sniper_15m": {
+            "name": "Delta Sniper 15m (Harvester + 15m HVH Impulse)",
+            "description": "Институциональный дельта-хеджер по импульсному пробою HVH на 15m с динамическим трейлингом",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "delta_harvester": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.4,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "require_shock": false,
+                    "require_momentum": true,
+                    "min_rsi": 48.0
+                },
+                "hvh": {
+                    "is_active": true,
+                    "timeframe": "15m",
+                    "period": 20,
+                    "dev": 1.6,
+                    "signal_type": "impulse",
+                    "long_cond": "HVH_LONG",
+                    "short_cond": "HVH_SHORT"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.038
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "trail_ratio": 0.018,
+                    "buffer_ratio": 0.005
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
+        },
+        "u_hvh_delta_symbiosis": {
+            "name": "HVH Delta Symbiosis (1H Trend + 15m Pullback + Trailing)",
+            "description": "Симбиоз лидера №1 U_HVH_PULLBACK и №2 U_DELTA_HARVESTER: вход на откате 15m HVH по тренду 1H с динамическим трейлингом прибыли",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "hvh": {
+                    "is_active": true,
+                    "timeframe": "15m",
+                    "period": 20,
+                    "dev": 1.8,
+                    "mode": "rolling",
+                    "signal_type": "pullback",
+                    "long_cond": "HVH_LONG",
+                    "short_cond": "HVH_SHORT"
+                },
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.25,
+                    "min_filled_level": 1,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
                 }
             },
             "exit_rules": {
