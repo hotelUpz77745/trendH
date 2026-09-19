@@ -404,7 +404,7 @@ class EntryGridStressRule(BaseRule):
                     f"[GRID STRESS MATCH] [{symbol}][{side}] cron3_stuck={target_side}{shock_tag} | "
                     f"vol_ratio={vol_r:.1%}, max_lvl={side_info.get('max_level', -1)}/5{dur_tag}, "
                     f"avg_price={avg_p:.4f}, cur_price={cur_p:.4f}, dd={dd_p:+.2f}%, status={status}",
-                    level="INFO", throttle_sec=5, throttle_key=f"gsm_{symbol}_{side}"
+                    level="DEBUG", throttle_sec=30, throttle_key=f"gsm_{symbol}_{side}"
                 )
         return passed
 
