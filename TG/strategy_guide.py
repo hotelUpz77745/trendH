@@ -141,12 +141,19 @@ STRATEGY_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
         "exit": "• <b>Breakeven Ratchet</b>: Безубыток при +2.5%.\n• <b>Chandelier Exit</b>: 2.2x ATR.\n• <b>Time Stop</b>: 15 мин (динамический выход при затухании импульса <0.5%).",
         "note": "🚀 <b>Институциональный архетип 1</b>: Защищает прибыль от резких сквизов."
     },
+    "u15_ratchet": {
+        "name": "Breakout LuxAlgo + Ratchet Pro 💎",
+        "concept": "<b>Флагманский пробой уровней LuxAlgo + Breakeven Ratchet.</b> Усиленная версия главного лидера по винрейту u15 (WR 47% на 625 сделках). Вход при Taker Buy >= 60% и пробое уровня LuxAlgo. При достижении +2.5% прибыли стоп безусловно подтягивается в безубыток (+ комиссия), предотвращая просадки на откатах.",
+        "entry": "• <b>HTF Trend (1h)</b>: Тренд H1.\n• <b>S/R Levels (5m)</b>: Пробой уровня (margin 2.0, thickness_k 0.17).\n• <b>Taker Flow (5m)</b>: Taker Buy >= 60%.",
+        "exit": "• <b>Breakeven Ratchet</b>: Безубыток при +2.5%.\n• <b>Chandelier Exit</b>: 2.2x ATR | <b>TP</b>: +5.0% | <b>SL</b>: -2.0%.\n• <b>Time Stop</b>: 20 мин (динамический выход при стагнации <0.5%).",
+        "note": "💎 <b>Флагманский пробой</b>: Максимальная стабильность дистанции 600+ сделок с защитой безубытка."
+    },
     "u15_cons_ratchet": {
         "name": "Breakout Sniper Ratchet Pro 🎯",
-        "concept": "<b>Архетип 2: Снайперский пробой консолидации + Breakeven Ratchet.</b> Усиленная версия абсолютного лидера u15_cons. Вход при Taker Buy >= 65% и пробое уровня LuxAlgo. Включает безусловный безубыток при +2.5% и динамический 20-минутный тайм-стоп.",
+        "concept": "<b>Архетип 2: Снайперский пробой консолидации + Breakeven Ratchet.</b> Усиленная версия u15_cons. Вход при Taker Buy >= 65% и пробое уровня LuxAlgo (margin 2.5). Включает безусловный безубыток при +2.5% и динамический 20-минутный тайм-стоп.",
         "entry": "• <b>HTF Trend (1h)</b>: Тренд H1.\n• <b>S/R Levels (5m)</b>: Пробой уровня с margin 2.5.\n• <b>Taker Flow (5m)</b>: Taker Buy >= 65%.",
         "exit": "• <b>Breakeven Ratchet</b>: Безубыток при +2.5%.\n• <b>Chandelier Exit</b>: 2.2x ATR | <b>TP</b>: +4.5% | <b>SL</b>: -2.0%.\n• <b>Time Stop</b>: 20 мин (выход при стагнации <0.5%).",
-        "note": "🎯 <b>Институциональный архетип 2</b>: Максимальный винрейт с защитой накопленного профита."
+        "note": "🎯 <b>Институциональный архетип 2</b>: Защита накопленного профита."
     },
     "u_grid_stress_shock": {
         "name": "Grid Stress Fast Shock Overlay ⚡",

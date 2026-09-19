@@ -1802,6 +1802,75 @@
                 "3": 0.75,
                 "default": 0.5
             }
+        },
+        "u15_ratchet": {
+            "name": "Breakout LuxAlgo + Ratchet Pro",
+            "description": "Флагманский пробой уровней LuxAlgo (Taker Buy >= 60% + тренд H1) на базе доказанного лидера U15 с защитой Breakeven Ratchet (+2.5% в безубыток)",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "sr_levels": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_LONG",
+                    "short_cond": "BREAKOUT_SHORT"
+                },
+                "taker_flow": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "min_buy_ratio": 0.6,
+                    "max_buy_ratio": 0.4,
+                    "long_cond": "TAKER_BUY_DOMINANT",
+                    "short_cond": "TAKER_SELL_DOMINANT"
+                }
+            },
+            "exit_rules": {
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.025,
+                    "buffer_ratio": 0.0012
+                },
+                "chandelier_exit": {
+                    "is_active": true,
+                    "length": 15,
+                    "atr_mult": 2.2
+                },
+                "time_stop": {
+                    "is_active": true,
+                    "max_seconds": 1200.0,
+                    "min_pnl_ratio": 0.005
+                },
+                "take_profit_ratio": {
+                    "value": 0.05
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            },
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
         }
     },
     "watchdog": {
