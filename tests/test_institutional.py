@@ -194,8 +194,8 @@ class TestInstitutionalRules(unittest.TestCase):
         self.assertIn("u15_cons_ratchet", manager.universes)
         self.assertIn("u_grid_stress_shock", manager.universes)
         self.assertIn("u15_ratchet", manager.universes)
-        self.assertEqual(len(cfg.get("universes", {})), 31)
-        self.assertEqual(len(manager.universes), 22)
+        self.assertEqual(len(cfg.get("universes", {})), 29)
+        self.assertEqual(len(manager.universes), 20)
 
 
 if __name__ == "__main__":

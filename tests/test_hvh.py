@@ -174,7 +174,7 @@ class TestStrategyGuideAndLeaders(unittest.TestCase):
     """Тестирование справочника стратегий и маркировки доказанных лидеров."""
 
     def test_proven_leaders_metadata(self):
-        expected_leaders = {"u3_reverse_trend", "u15_reverse_fade"}
+        expected_leaders = {"u3_reverse_trend", "u15"}
         self.assertEqual(set(PROVEN_LEADERS.keys()), expected_leaders)
 
         for uid in expected_leaders:
@@ -192,9 +192,13 @@ class TestStrategyGuideAndLeaders(unittest.TestCase):
         text_u3 = format_strategy_guide_text("u3_reverse_trend")
         self.assertIn("ШПАРГАЛКА", text_u3)
         self.assertIn("PROVEN LEADER", text_u3)
-        self.assertIn("70.6%", text_u3)
+        self.assertIn("37%", text_u3)
         self.assertIn("Правила входа", text_u3)
         self.assertIn("Правила выхода", text_u3)
+
+        text_u15 = format_strategy_guide_text("u15")
+        self.assertIn("PROVEN LEADER", text_u15)
+        self.assertIn("47.1%", text_u15)
 
         text_sq = format_strategy_guide_text("u_sq_hvh_impulse")
         self.assertIn("SQUEEZE", text_sq.upper())

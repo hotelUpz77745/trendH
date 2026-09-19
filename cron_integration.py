@@ -394,17 +394,18 @@ class EntryGridStressRule(BaseRule):
                 passed = status in (expected_cond, f"{target_side}_GRID_EXTREME") or side_info.get("stressed", False) or side_info.get("price_stressed", True)
 
         if passed:
-            symbol = kwargs.get("symbol", indicators.get("symbol", "N/A"))
-            cur_p, avg_p = kwargs.get("current_price", indicators.get("current_price", 0.0)), side_info.get("avg_entry_price", 0.0)
-            vol_r, dd_p = side_info.get("volume_ratio", 0.0), side_info.get("drawdown_pct", 0.0)
-            shock_tag = " [SHOCK]" if side_info.get("is_shock") else ""
-            dur_tag = f", fill_time={side_info.get('fill_duration_sec', 0):.0f}s" if side_info.get("fill_duration_sec") else ""
-            log(
-                f"[GRID STRESS MATCH] [{symbol}][{side}] cron3_stuck={target_side}{shock_tag} | "
-                f"vol_ratio={vol_r:.1%}, max_lvl={side_info.get('max_level', -1)}/5{dur_tag}, "
-                f"avg_price={avg_p:.4f}, cur_price={cur_p:.4f}, dd={dd_p:+.2f}%, status={status}",
-                level="INFO", throttle_sec=5, throttle_key=f"gsm_{symbol}_{side}"
-            )
+            symbol = kwargs.get("symbol", indicators.get("symbol"))
+            if symbol and symbol != "N/A":
+                cur_p, avg_p = kwargs.get("current_price", indicators.get("current_price", 0.0)), side_info.get("avg_entry_price", 0.0)
+                vol_r, dd_p = side_info.get("volume_ratio", 0.0), side_info.get("drawdown_pct", 0.0)
+                shock_tag = " [SHOCK]" if side_info.get("is_shock") else ""
+                dur_tag = f", fill_time={side_info.get('fill_duration_sec', 0):.0f}s" if side_info.get("fill_duration_sec") else ""
+                log(
+                    f"[GRID STRESS MATCH] [{symbol}][{side}] cron3_stuck={target_side}{shock_tag} | "
+                    f"vol_ratio={vol_r:.1%}, max_lvl={side_info.get('max_level', -1)}/5{dur_tag}, "
+                    f"avg_price={avg_p:.4f}, cur_price={cur_p:.4f}, dd={dd_p:+.2f}%, status={status}",
+                    level="INFO", throttle_sec=5, throttle_key=f"gsm_{symbol}_{side}"
+                )
         return passed
 
 

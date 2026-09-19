@@ -260,53 +260,6 @@
                 "default": 0.5
             }
         },
-        "u15_scalp": {
-            "name": "Micro Breakout Scalp (Fast Scalp)",
-            "description": "Сверхбыстрый скальп первичного импульса пробоя с жестким тайм-стопом 10 минут",
-            "is_active": true,
-            "enter_rules": {
-                "sr_levels": {
-                    "is_active": true,
-                    "timeframe": "5m",
-                    "swing_len": 15,
-                    "window": 300,
-                    "margin": 2.0,
-                    "thickness_k": 0.17,
-                    "max_zones": 10,
-                    "level_mode": "latest",
-                    "breakout_edge": "h",
-                    "long_cond": "BREAKOUT_LONG",
-                    "short_cond": "BREAKOUT_SHORT"
-                },
-                "taker_flow": {
-                    "is_active": true,
-                    "timeframe": "5m",
-                    "min_buy_ratio": 0.6,
-                    "max_buy_ratio": 0.4,
-                    "long_cond": "TAKER_BUY_DOMINANT",
-                    "short_cond": "TAKER_SELL_DOMINANT"
-                }
-            },
-            "exit_rules": {
-                "time_stop": {
-                    "is_active": true,
-                    "max_seconds": 600.0
-                },
-                "take_profit_ratio": {
-                    "value": 0.015
-                },
-                "stop_loss_ratio": {
-                    "value": 0.008
-                }
-            },
-            "hedge_ratio": {
-                "0": 1.0,
-                "1": 1.0,
-                "2": 0.75,
-                "3": 0.75,
-                "default": 0.5
-            }
-        },
         "u15_reverse": {
             "name": "Анти-Breakout LuxAlgo + Taker Flow (Standard)",
             "description": "Инверсная стратегия пробоя LuxAlgo: вход против выносов при агрессивном маркет-потоке",
@@ -366,64 +319,6 @@
                 },
                 "stop_loss_ratio": {
                     "value": 0.045
-                }
-            },
-            "hedge_ratio": {
-                "0": 1.0,
-                "1": 1.0,
-                "2": 0.75,
-                "3": 0.75,
-                "default": 0.5
-            }
-        },
-        "u15_reverse_fade": {
-            "name": "Pure Liquidity Fade (Range Return)",
-            "description": "Контртрендовый возврат в диапазон после ложного пробоя уровня без привязки к старшему тренду HTF",
-            "is_active": true,
-            "enter_rules": {
-                "sr_levels_reverse": {
-                    "is_active": true,
-                    "timeframe": "5m",
-                    "swing_len": 15,
-                    "window": 300,
-                    "margin": 2.0,
-                    "thickness_k": 0.17,
-                    "max_zones": 10,
-                    "level_mode": "latest",
-                    "breakout_edge": "h",
-                    "long_cond": "BREAKOUT_SHORT",
-                    "short_cond": "BREAKOUT_LONG"
-                },
-                "taker_flow_reverse": {
-                    "is_active": true,
-                    "timeframe": "5m",
-                    "min_buy_ratio": 0.6,
-                    "max_buy_ratio": 0.4,
-                    "long_cond": "TAKER_SELL_DOMINANT",
-                    "short_cond": "TAKER_BUY_DOMINANT"
-                }
-            },
-            "exit_rules": {
-                "trend_reversal_reverse": {
-                    "is_active": true,
-                    "long_exit_trends": [
-                        "FLAT",
-                        "UP"
-                    ],
-                    "short_exit_trends": [
-                        "FLAT",
-                        "DOWN"
-                    ]
-                },
-                "time_stop": {
-                    "is_active": true,
-                    "max_seconds": 1200.0
-                },
-                "take_profit_ratio": {
-                    "value": 0.025
-                },
-                "stop_loss_ratio": {
-                    "value": 0.025
                 }
             },
             "hedge_ratio": {

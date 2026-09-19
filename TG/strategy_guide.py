@@ -11,15 +11,15 @@ from c_log import UnifiedLogger
 logger = UnifiedLogger("StrategyGuide")
 
 PROVEN_LEADERS = {
-    "u3_reverse_trend": {
+    "u15": {
         "rank": "🥇",
         "badge": " 💎 [PROVEN LEADER]",
-        "stats": "34 сд. | WR: 70.6% | Realized: +17.49$ | Net: +14.03$"
+        "stats": "636 сд. | WR: 47.1% | Net: +5.39$ | DD: -35.99$"
     },
-    "u15_reverse_fade": {
+    "u3_reverse_trend": {
         "rank": "🥈",
         "badge": " 💎 [PROVEN LEADER]",
-        "stats": "65 сд. | WR: 61.5% | Realized: +7.67$ | Net: -0.47$"
+        "stats": "19 сд. | WR: 37% | Net: +3.20$ | DD: -7.84$"
     }
 }
 
@@ -36,19 +36,19 @@ def get_leader_badge(uid: str) -> str:
 
 
 STRATEGY_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
+    "u15": {
+        "name": "Breakout LuxAlgo + Taker Flow 🥇",
+        "concept": "<b>Флагманский пробой уровней LuxAlgo.</b> Абсолютный лидер торгов по стабильности. Торгует истинные пробои динамических уровней по старшему тренду H1 с жесткой фильтрацией агрессии маркета (Taker Buy >= 60%).",
+        "entry": "• <b>HTF Trend (1h)</b>: EMA(10) > EMA(30) + подтверждение.\n• <b>S/R Levels (5m)</b>: Пробой уровня (Swing 15, Margin 2.0, thickness_k 0.17).\n• <b>Taker Flow (5m)</b>: Taker Buy >= 60%.",
+        "exit": "• <b>Chandelier Exit</b>: Трейлинг 2.2x ATR | <b>TP</b>: +4.5% | <b>SL</b>: -2.0%\n• <b>Time Stop</b>: 20 мин.",
+        "note": "🏆 <b>Лидер #1 реальных торгов</b>: 47.1% винрейт на 636 сделках, чистая прибыль +5.39$, минимальная просадка."
+    },
     "u3_reverse_trend": {
-        "name": "Trend-Aligned Pullback Fade 🥇",
+        "name": "Trend-Aligned Pullback Fade 🥈",
         "concept": "<b>Покупка откатов по старшему тренду.</b> Стратегия ловит ложные пробои уровней на M5 (fade) СТРОГО в направлении глобального тренда H1. Это позволяет заходить по лучшим ценам с минимальным риском.",
         "entry": "• <b>HTF Trend (1h)</b>: EMA(10) > EMA(30) + подтверждение 2 свечи.\n• <b>S/R Reverse (5m)</b>: Ложный пробой уровня против тренда.\n• <b>Volume Filter (1m)</b>: Всплеск тикового объема (slice_factor > 1.1).",
         "exit": "• <b>Take Profit</b>: +3.5%\n• <b>Stop Loss</b>: -2.0%\n• <b>Trend Reversal</b>: Немедленный выход при сломе тренда H1 (переход в FLAT или разворот).",
-        "note": "🏆 <b>Лидер #1 реальных торгов</b>: 70.6% винрейт, чистая прибыль +14.03 USDT."
-    },
-    "u15_reverse_fade": {
-        "name": "Pure Liquidity Fade (Range Return) 🥈",
-        "concept": "<b>Сбор ликвидности на ложных импульсах.</b> Вход в контртренд, когда маркет-мейкер выносит стопы за экстремумы, а поток маркет-ордеров (Taker Flow) резко истощается.",
-        "entry": "• <b>S/R Reverse (5m)</b>: Вынос за границу диапазона (Swing Length 15, Margin 2.0).\n• <b>Taker Flow Reverse (5m)</b>: Доминирование противоположной стороны (покупка при истощении продавцов).",
-        "exit": "• <b>Take Profit</b>: +2.5%\n• <b>Stop Loss</b>: -2.5%\n• <b>Time Stop</b>: Закрытие через 20 минут (1200 сек), если цена не пошла в плюс.",
-        "note": "🥈 <b>Лидер #2 реальных торгов</b>: 61.5% винрейт на 65 сделках, около безубытка с комиссиями."
+        "note": "🥈 <b>Лидер #2 реальных торгов</b>: чистая прибыль +3.20 USDT, минимальная просадка."
     },
     "u3_reverse_opt": {
         "name": "Volume Fade (Noise-Filtered & Optimized) 🎯",
