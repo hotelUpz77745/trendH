@@ -268,6 +268,8 @@ class Main:
         if flow.get("signals") is not None and flow.get("total_vol", 0.0) > 0:
             indicators["taker_flow"] = flow["signals"]
 
+        indicators["symbol"] = symbol
+        indicators["current_price"] = current_price
         cron_state = CronIntegration.get_symbol_state(symbol)
         indicators["grid_stress"] = CronIntegration.get_grid_stress(symbol, current_price)
         allow_long = self.direction_mode in ("LONG", "HEDGE", "MONO")

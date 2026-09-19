@@ -24,7 +24,7 @@
         "info": true,
         "warning": true,
         "error": true,
-        "max_log_lines": 50000,
+        "max_log_lines": 5000,
         "log_to_console": false,
         "log_to_file": true,
         "TIME_ZONE": "UTC"
