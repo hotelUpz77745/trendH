@@ -148,18 +148,11 @@ class StrategyUniverse:
                 open_time_ms=pos.open_time, highest_price=ext["highest"], lowest_price=ext["lowest"]
             )
             if should_exit:
-                fee_ratio = ANALYTICS_CFG.get("taker_fee_ratio", 0) * 2
-                slippage_ratio = get_slippage_ratio_fn(symbol) * 2
-                fee_slip_ratio = fee_ratio + slippage_ratio
-
+                fee_slip = (ANALYTICS_CFG.get("taker_fee_ratio", 0) + get_slippage_ratio_fn(symbol)) * 2
                 pnl_ratio = (current_price - pos.open_price) / pos.open_price if side == "LONG" else (pos.open_price - current_price) / pos.open_price
-                pnl_usd, comm_usd = pnl_ratio * pos.size, -(fee_slip_ratio * pos.size)
-                exit_reason = getattr(self.exit_engine, "last_exit_reason", "") or "EXIT"
-
-                log(
-                    f"[SIGNAL EXIT] [{self.universe_id}][{symbol}][{side}] Выход [{exit_reason}]! Вход: {pos.open_price:.4f} -> {current_price:.4f} | PnL: {pnl_ratio * 100:+.2f}% ({pnl_usd:+.2f}$)",
-                    level="INFO"
-                )
+                pnl_usd, comm_usd = pnl_ratio * pos.size, -(fee_slip * pos.size)
+                reason = getattr(self.exit_engine, "last_exit_reason", "") or "EXIT"
+                log(f"[SIGNAL EXIT] [{self.universe_id}][{symbol}][{side}] Выход [{reason}]! Вход: {pos.open_price:.4f} -> {current_price:.4f} | PnL: {pnl_ratio * 100:+.2f}% ({pnl_usd:+.2f}$)", level="INFO")
                 self.analytics.record_virtual_trade(symbol, side, pnl_usd, comm_usd, open_time_ms=pos.open_time)
                 self.state.close_position(symbol, side)
                 self.last_exit_time.setdefault(symbol, {})[side] = time.time()
@@ -211,7 +204,7 @@ class StrategyUniverse:
     def update_live_metrics(self, current_prices: Dict[str, float]) -> Dict[str, Any]:
         """В моменте рассчитывает нереализованный PnL, живое эквити и аккумулирует просадку."""
         an_data = self.analytics._read_data()
-        start_bal = float(an_data.get("start_balance_usdt", 1000.0))
+        start_bal = float(cfg.get("universes", {}).get(self.universe_id, {}).get("start_balance", an_data.get("start_balance_usdt", ANALYTICS_CFG.get("default_start_balance", 200.0))))
         realized_gross = float(an_data.get("realized_pnl_usdt", 0.0))
         realized_net = float(an_data.get("net_profit_usdt", realized_gross))
         commission_paid = abs(realized_gross - realized_net)
@@ -231,19 +224,32 @@ class StrategyUniverse:
         live_equity = start_bal + live_net_profit
 
         prev_peak = float(an_data.get("peak_balance_usdt", start_bal))
+        stored_start = float(an_data.get("start_balance_usdt", start_bal))
+        prev_max_dd = float(an_data.get("max_drawdown_usdt", 0.0))
+
+        # Защита от миграции стартового баланса (например, с 1000$ на 200$)
+        if stored_start > 0 and abs(stored_start - start_bal) > 0.01:
+            delta = start_bal - stored_start
+            prev_peak = max(start_bal, prev_peak + delta)
+            if prev_max_dd > prev_peak:
+                prev_max_dd = max(0.0, prev_max_dd + delta)
+            an_data["start_balance_usdt"] = start_bal
+        elif prev_peak >= 800.0 and start_bal <= 300.0:
+            prev_peak = start_bal + max(0.0, prev_peak - 1000.0)
+            prev_max_dd = min(prev_max_dd, prev_peak - float(an_data.get("min_balance_usdt", start_bal)))
+
         peak_equity = max(prev_peak, start_bal, live_equity)
         current_dd = max(0.0, peak_equity - live_equity)
-        prev_max_dd = float(an_data.get("max_drawdown_usdt", 0.0))
         max_dd = max(prev_max_dd, current_dd)
 
         prev_u = float(an_data.get("unrealized_pnl_usdt", 0.0))
         prev_cdd = float(an_data.get("current_drawdown_usdt", 0.0))
         if max_dd > prev_max_dd or peak_equity > prev_peak or abs(unrealized_pnl - prev_u) > 0.01 or abs(current_dd - prev_cdd) > 0.01:
-            an_data["universe_id"] = self.universe_id
-            an_data["unrealized_pnl_usdt"] = round(unrealized_pnl, 4)
-            an_data["peak_balance_usdt"] = round(peak_equity, 4)
-            an_data["max_drawdown_usdt"] = round(max_dd, 4)
-            an_data["current_drawdown_usdt"] = round(current_dd, 4)
+            an_data.update({
+                "universe_id": self.universe_id, "unrealized_pnl_usdt": round(unrealized_pnl, 4),
+                "peak_balance_usdt": round(peak_equity, 4), "max_drawdown_usdt": round(max_dd, 4),
+                "current_drawdown_usdt": round(current_dd, 4), "start_balance_usdt": round(start_bal, 2)
+            })
             self.analytics._write_data(an_data)
 
         return {
@@ -365,13 +371,12 @@ class UniverseManager:
         tot_start, tot_realized, tot_unrealized = 0.0, 0.0, 0.0
         tot_active, tot_trades, tot_wins = 0, 0, 0
         merged_coins: Dict[str, Any] = {}
-
         for univ in self.universes.values():
             if not univ.is_active:
                 continue
             m = univ.update_live_metrics(current_prices)
             an = univ.analytics._read_data() if hasattr(univ.analytics, "_read_data") else {}
-            tot_start += m.get("start_balance", 1000.0)
+            tot_start += m.get("start_balance", 200.0)
             tot_realized += m["realized_pnl"]
             tot_unrealized += m["unrealized_pnl"]
             tot_active += m["active_count"]
@@ -399,8 +404,7 @@ class UniverseManager:
         prev_peak = float(port_data.get("peak_balance_usdt", tot_start))
         peak_equity = max(prev_peak, tot_start, tot_equity)
         current_dd = max(0.0, peak_equity - tot_equity)
-        prev_max_dd = float(port_data.get("max_drawdown_usdt", 0.0))
-        max_dd = max(prev_max_dd, current_dd)
+        max_dd = max(float(port_data.get("max_drawdown_usdt", 0.0)), current_dd)
 
         port_data.update({
             "universe_id": "all", "start_balance_usdt": round(tot_start, 2), "cur_balance_usdt": round(tot_start + tot_realized, 4),
@@ -426,22 +430,18 @@ class UniverseManager:
         """Формирует сравнительную таблицу лидеров (Leaderboard) по всем запущенным вселенным."""
         leaderboard = []
         current_prices = current_prices or {}
-
         for uid, univ in self.universes.items():
             m = univ.update_live_metrics(current_prices)
             an_data = univ.analytics._read_data() if hasattr(univ.analytics, "_read_data") else {}
-            total_trades = an_data.get("total_trades", 0)
-            winrate = an_data.get("winrate_pct", 0.0)
-            max_dd = m["max_dd"]
-            rec_factor = round(m["live_net_profit"] / max_dd, 2) if max_dd > 0 else 0.0
-
+            tot_tr = an_data.get("total_trades", 0)
+            wr = an_data.get("winrate_pct", 0.0)
+            rec = round(m["live_net_profit"] / m["max_dd"], 2) if m["max_dd"] > 0 else 0.0
             leaderboard.append({
                 "uid": uid, "name": univ.name, "description": univ.description,
                 "net_profit": m["live_net_profit"], "realized_pnl": m["realized_pnl"],
                 "commission_paid": m.get("commission_paid", 0.0), "unrealized_pnl": m["unrealized_pnl"],
-                "total_trades": total_trades, "winrate": winrate, "max_dd": max_dd,
-                "current_dd": m["current_dd"], "recovery_factor": rec_factor, "active_count": m["active_count"],
+                "total_trades": tot_tr, "winrate": wr, "max_dd": m["max_dd"],
+                "current_dd": m["current_dd"], "recovery_factor": rec, "active_count": m["active_count"],
             })
-
         leaderboard.sort(key=lambda x: x["net_profit"], reverse=True)
         return leaderboard

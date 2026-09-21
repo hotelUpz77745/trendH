@@ -215,8 +215,26 @@ class TestInstitutionalRules(unittest.TestCase):
         self.assertIn("u15_4h_rsi1d_alpha", manager.universes)
         self.assertIn("u_jem_matrix_harvest", manager.universes)
         self.assertIn("u_jem_symbiotic_quantum", manager.universes)
-        self.assertEqual(len(cfg.get("universes", {})), 52)
-        self.assertEqual(len(manager.universes), 38)
+        self.assertIn("u_sh_wide_prime", manager.universes)
+        self.assertIn("u_grid_shadow_stag_prime", manager.universes)
+        self.assertEqual(len(cfg.get("universes", {})), 54)
+        self.assertEqual(len(manager.universes), 40)
+
+    def test_ghost_peak_calibration_protection(self):
+        """Проверка автоматической нормализации аномальных пиков баланса (из эпохи 1000$)."""
+        from ANALYTICS.metrics import AnalyticsMathEngine
+        data = {
+            "universe_id": "u_test_phantom",
+            "start_balance_usdt": 200.0,
+            "peak_balance_usdt": 1030.48,
+            "min_balance_usdt": 154.05,
+            "net_profit_usdt": 18.43,
+            "unrealized_pnl_usdt": 5.0,
+            "max_drawdown_usdt": 816.88
+        }
+        AnalyticsMathEngine._calculate_global_metrics(data)
+        self.assertAlmostEqual(data["peak_balance_usdt"], 230.48, delta=0.1)
+        self.assertLess(data["max_drawdown_usdt"], 80.0)
 
     def test_grid_net_filter_rule(self):
         """Проверка фильтрации монет по статистике сеточника (Grid Net PnL)."""

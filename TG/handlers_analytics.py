@@ -85,14 +85,14 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "all") 
 
         if univ and hasattr(univ, "update_live_metrics"):
             m = univ.update_live_metrics(cur_prices)
-            start_bal = float(data.get("start_balance_usdt", m.get("start_balance", 1000.0)))
+            start_bal = float(data.get("start_balance_usdt", m.get("start_balance", 200.0)))
             realized_pnl = float(data.get("realized_pnl_usdt", m["realized_pnl"]))
             unrealized_pnl, active_count = m["unrealized_pnl"], m["active_count"]
             live_net, live_bal = realized_pnl + unrealized_pnl, start_bal + (realized_pnl + unrealized_pnl)
             max_dd, curr_dd = m["max_dd"], m["current_dd"]
             peak_bal = m.get("peak_equity", float(data.get("peak_balance_usdt", max(start_bal, live_bal))))
         else:
-            start_bal = float(data.get("start_balance_usdt", 0.0)) or 1000.0
+            start_bal = float(data.get("start_balance_usdt", 0.0)) or 200.0
             realized_pnl = float(data.get("realized_pnl_usdt", 0.0))
             unrealized_pnl, active_count = float(data.get("unrealized_pnl_usdt", 0.0)), 0
             if univ and hasattr(univ, "state"):

@@ -67,7 +67,7 @@ class AnalyticsMathEngine:
         initial = float(data.get("start_balance_usdt", 0.0))
         if initial <= 0.0:
             from consts import ANALYTICS_CFG
-            initial = float(ANALYTICS_CFG.get("default_start_balance", 1000.0))
+            initial = float(ANALYTICS_CFG.get("default_start_balance", 200.0))
             data["start_balance_usdt"] = initial
 
         net_profit = float(data.get("net_profit_usdt", 0.0))
@@ -86,6 +86,11 @@ class AnalyticsMathEngine:
         prev_peak = float(data.get("peak_balance_usdt", initial))
         prev_max_dd = float(data.get("max_drawdown_usdt", 0.0))
 
+        # Защита от миграции стартового баланса (например, 1000$ -> 200$)
+        if prev_peak >= 800.0 and initial <= 300.0:
+            prev_peak = initial + max(0.0, prev_peak - 1000.0)
+            prev_max_dd = min(prev_max_dd, prev_peak - float(data.get("min_balance_usdt", initial)))
+
         peak = max(initial, bot_cur_balance, live_equity, prev_peak)
         min_bal = min(initial, bot_cur_balance, live_equity, float(data.get("min_balance_usdt", initial)))
         max_dd = prev_max_dd
@@ -95,10 +100,10 @@ class AnalyticsMathEngine:
         uid = universe_id or data.get("universe_id", "")
         suffix = f"_{uid}" if uid and uid != "default" else ""
         ledger_file = ANALYTICS_DIR / f"trades_ledger{suffix}.txt"
-        if not ledger_file.exists():
+        if not ledger_file.exists() and uid in ("", "default", "all"):
             ledger_file = ANALYTICS_DIR / "trades_ledger.txt"
 
-        if ledger_file.exists():
+        if ledger_file and ledger_file.exists():
             try:
                 import csv
                 balances = []
