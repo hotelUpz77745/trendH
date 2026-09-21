@@ -1959,6 +1959,96 @@
                 }
             }
         },
+        "u_shadow_harvester_mid": {
+            "name": "Shadow Harvester Mid (4.5% / 2.5% Trail)",
+            "description": "Свинг-Жнец 50% (Lvl 2+) с умеренным трейлингом (активация +4.5%, трейл 2.5%, БУ +1.5%) и выходом по разгрузке сетки (<=15%)",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.04
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.045,
+                    "trail_ratio": 0.025,
+                    "buffer_ratio": 0.015
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
+        },
+        "u_shadow_harvester_wide": {
+            "name": "Shadow Harvester Wide (7.0% / 3.5% Trail)",
+            "description": "Трендовый Жнец 50% (Lvl 2+) с широким трейлингом (активация +7.0%, трейл 3.5%, БУ +3.0%) и выходом по разгрузке сетки (<=15%)",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.05
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.070,
+                    "trail_ratio": 0.035,
+                    "buffer_ratio": 0.030
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
+        },
         "u_delta_sniper_15m": {
             "name": "Delta Sniper 15m (Harvester + 15m HVH Impulse)",
             "description": "Институциональный дельта-хеджер по импульсному пробою HVH на 15m с динамическим трейлингом",

@@ -196,10 +196,12 @@ class TestInstitutionalRules(unittest.TestCase):
         self.assertIn("u_delta_sniper", manager.universes)
         self.assertIn("u_shadow_harvester_40", manager.universes)
         self.assertIn("u_shadow_harvester_50", manager.universes)
+        self.assertIn("u_shadow_harvester_mid", manager.universes)
+        self.assertIn("u_shadow_harvester_wide", manager.universes)
         self.assertIn("u_delta_sniper_15m", manager.universes)
         self.assertIn("u_hvh_delta_symbiosis", manager.universes)
-        self.assertEqual(len(cfg.get("universes", {})), 35)
-        self.assertEqual(len(manager.universes), 21)
+        self.assertEqual(len(cfg.get("universes", {})), 37)
+        self.assertEqual(len(manager.universes), 23)
 
 
 if __name__ == "__main__":
