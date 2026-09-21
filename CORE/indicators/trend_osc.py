@@ -75,9 +75,9 @@ class RSICalculator:
     """Изолированный калькулятор осциллятора RSI."""
 
     def __init__(self, cfg: Dict[str, Any]):
-        self.is_active: bool = bool(cfg["is_active"])
-        self.timeframe: str = str(cfg["timeframe"])
-        self.window: int = int(cfg["window"])
+        self.is_active: bool = bool(cfg.get("is_active", True))
+        self.timeframe: str = str(cfg.get("timeframe", "5m"))
+        self.window: int = int(cfg.get("window", cfg.get("period", 14)))
         self.conditions: Dict[str, str] = cfg.get("conditions", {})
 
     def calculate(self, closes: List[float]) -> List[str]:

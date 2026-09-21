@@ -184,10 +184,17 @@ class EntrySignalEngine:
             elif base_key == "hvh":
                 from CORE.indicators.hvh import EntryHVHRule
                 self.rules.append(EntryHVHRule(val))
+            elif base_key in ("grid_net_filter", "cron_net_filter"):
+                from CORE.symbiosis_rules import EntryGridNetFilterRule
+                self.rules.append(EntryGridNetFilterRule(val))
+            elif base_key in ("htf_rsi", "rsi_htf", "daily_rsi"):
+                from CORE.symbiosis_rules import EntryHTFRSIRule
+                self.rules.append(EntryHTFRSIRule(val))
 
-    def check_signal(self, side: str, indicators: Dict[str, Any]) -> bool:
+    def check_signal(self, side: str, indicators: Dict[str, Any], symbol: str = "") -> bool:
+        sym = symbol or indicators.get("symbol", "")
         for rule in self.rules:
-            if not rule.check(side, indicators=indicators):
+            if not rule.check(side, indicators=indicators, symbol=sym):
                 return False
         return True
 
@@ -306,14 +313,7 @@ class ExitBreakevenRatchetRule(BaseRule):
 
 
 class ExitProfitStagnationRule(BaseRule):
-    """
-    Profit Stagnation & Breakeven Lock Exit:
-    1. Breakeven Lock: при достижении be_trigger_ratio (+2.8%) переносит стоп в безубыток (+be_buffer_ratio, e.g. +0.3%).
-       Стоп фиксируется и не трейлится вверх, защищая от выбивания на микро-откатах.
-    2. Profit Stagnation: если текущая прибыль >= min_profit_ratio (+5.0%),
-       и в течение stagnation_seconds (1800с = 30 мин) нет прогресса >= progress_threshold (+0.5%),
-       позиция закрывается по рынку для фиксации профита на вершине.
-    """
+    """Profit Stagnation & Breakeven Lock Exit: лок безубытка (+0.3%) и выход при застое (> +5%)."""
     def __init__(self, cfg: Dict[str, Any], analytics_cfg: Optional[Dict[str, Any]] = None):
         self.cfg, self.is_active = cfg, bool(cfg.get("is_active", False))
         self.be_trigger_ratio = float(cfg.get("be_trigger_ratio", 0.028))

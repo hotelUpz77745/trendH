@@ -122,8 +122,8 @@ class StrategyUniverse:
             return float(self.hedge_ratio.get("default", 0.5))
         return 0.5
 
-    def check_entry(self, side: str, indicators: Dict[str, Any]) -> bool:
-        return self.entry_engine.check_signal(side, indicators)
+    def check_entry(self, side: str, indicators: Dict[str, Any], symbol: str = "") -> bool:
+        return self.entry_engine.check_signal(side, indicators, symbol=symbol)
 
     def check_exit(self, side: str, symbol: str, open_price: float, current_price: float, indicators: Dict[str, Any], open_time_ms: Optional[int] = None, highest_price: Optional[float] = None, lowest_price: Optional[float] = None) -> bool:
         return self.exit_engine.check_signal(
@@ -171,7 +171,7 @@ class StrategyUniverse:
                 return
 
             # Проверка условий входа
-            if not is_paused and self.check_entry(side, indicators):
+            if not is_paused and self.check_entry(side, indicators, symbol=symbol):
                 eff_invest_size, eff_ratio, opp_accum = invest_size, 1.0, 0.0
                 if cron_state and side in cron_state:
                     s_info = cron_state[side]

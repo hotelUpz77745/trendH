@@ -203,16 +203,53 @@ class TestInstitutionalRules(unittest.TestCase):
         self.assertIn("u_symbiosis_harvester", manager.universes)
         self.assertIn("u_delta_sniper_15m", manager.universes)
         self.assertIn("u_hvh_delta_symbiosis", manager.universes)
-        self.assertEqual(len(cfg.get("universes", {})), 40)
-        self.assertEqual(len(manager.universes), 26)
+        self.assertIn("u_sh50_outsiders", manager.universes)
+        self.assertIn("u_sh50_notop", manager.universes)
+        self.assertIn("u_sh40_outsiders", manager.universes)
+        self.assertIn("u_sh40_notop", manager.universes)
+        self.assertIn("u_hvh_symbiosis_outsiders", manager.universes)
+        self.assertIn("u_hvh_symbiosis_notop", manager.universes)
+        self.assertIn("u_symb_harv_outsiders", manager.universes)
+        self.assertIn("u_symb_harv_notop", manager.universes)
+        self.assertIn("u15_4h_rsi1d_std", manager.universes)
+        self.assertIn("u15_4h_rsi1d_outsiders", manager.universes)
+        self.assertIn("u_jem_matrix_harvest", manager.universes)
+        self.assertIn("u_jem_symbiotic_quantum", manager.universes)
+        self.assertEqual(len(cfg.get("universes", {})), 52)
+        self.assertEqual(len(manager.universes), 38)
+
+    def test_grid_net_filter_rule(self):
+        """Проверка фильтрации монет по статистике сеточника (Grid Net PnL)."""
+        from CORE.symbiosis_rules import EntryGridNetFilterRule
+        rule_outsiders = EntryGridNetFilterRule({"is_active": True, "mode": "OUTSIDERS_ONLY", "max_grid_net": 0.0})
+        rule_notop = EntryGridNetFilterRule({"is_active": True, "mode": "EXCLUDE_TOP_CASH_COWS", "exclude_top_n": 5})
+
+        # PIEVERSEUSDT имеет высокий положительный Grid Net (+36.5$) -> должен блокироваться
+        self.assertFalse(rule_outsiders.check("LONG", symbol="PIEVERSEUSDT"))
+        self.assertFalse(rule_notop.check("LONG", symbol="PIEVERSEUSDT"))
+
+        # GUSDT имеет отрицательный Grid Net (-8.9$) -> должен проходить
+        self.assertTrue(rule_outsiders.check("LONG", symbol="GUSDT"))
+        self.assertTrue(rule_notop.check("LONG", symbol="GUSDT"))
+
+    def test_htf_rsi_filter_rule(self):
+        """Проверка дневного/4H фильтра RSI."""
+        from CORE.symbiosis_rules import EntryHTFRSIRule
+        rule = EntryHTFRSIRule({"is_active": True, "timeframe": "1d", "max_rsi_long": 70.0, "min_rsi_short": 30.0})
+
+        # LONG: при RSI 75 >= 70 блокируется, при 55 < 70 проходит
+        self.assertFalse(rule.check("LONG", indicators={"rsi_1d_value": 75.0}, symbol="BTCUSDT"))
+        self.assertTrue(rule.check("LONG", indicators={"rsi_1d_value": 55.0}, symbol="BTCUSDT"))
+
+        # SHORT: при RSI 25 <= 30 блокируется, при 45 > 30 проходит
+        self.assertFalse(rule.check("SHORT", indicators={"rsi_1d_value": 25.0}, symbol="BTCUSDT"))
+        self.assertTrue(rule.check("SHORT", indicators={"rsi_1d_value": 45.0}, symbol="BTCUSDT"))
 
     def test_profit_stagnation_be_lock(self):
         """Проверка БУ-замка в ExitProfitStagnationRule."""
         cfg = {"is_active": True, "be_trigger_ratio": 0.028, "be_buffer_ratio": 0.003, "min_profit_ratio": 0.05}
         rule = ExitProfitStagnationRule(cfg, self.analytics_cfg)
-        # До достижения 2.8% откат до 100.3 не должен закрывать
         self.assertFalse(rule.check("LONG", symbol="BTCUSDT", open_price=100.0, current_price=100.3, highest_price=102.0))
-        # После достижения 3.0% (>2.8%), откат до 100.3 (БУ + 0.3%) закрывает позицию
         self.assertTrue(rule.check("LONG", symbol="BTCUSDT", open_price=100.0, current_price=100.25, highest_price=103.0))
 
     def test_profit_stagnation_exit_timer(self):
@@ -223,11 +260,8 @@ class TestInstitutionalRules(unittest.TestCase):
         }
         rule = ExitProfitStagnationRule(cfg, self.analytics_cfg)
         t0 = 10000.0
-        # Вход по 100.0, текущая 106.0 (+6% > 5%), пик 106.0 в t0 -> первое наблюдение, не закрывает
         self.assertFalse(rule.check("LONG", symbol="SOLUSDT", open_price=100.0, current_price=106.0, highest_price=106.0, current_time=t0))
-        # Через 1000с (<1800с) цена все еще 106.0 -> еще не стагнация
         self.assertFalse(rule.check("LONG", symbol="SOLUSDT", open_price=100.0, current_price=106.0, highest_price=106.0, current_time=t0 + 1000))
-        # Через 1900с (>1800с) цена все еще 106.0 (нет прогресса >= 0.5%) -> ВЫХОД ПО СТАГНАЦИИ!
         self.assertTrue(rule.check("LONG", symbol="SOLUSDT", open_price=100.0, current_price=106.0, highest_price=106.0, current_time=t0 + 1900))
 
 

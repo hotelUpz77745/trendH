@@ -47,6 +47,10 @@ class IndicatorsEngine:
 
         rsi_cfg = enter_rules.get("rsi")
         self.rsi_calc = RSICalculator(rsi_cfg) if rsi_cfg else None
+        self.rsi_calcs: Dict[str, RSICalculator] = {}
+        for key, val in enter_rules.items():
+            if (key == "rsi" or key.startswith("rsi_")) and isinstance(val, dict) and val.get("is_active"):
+                self.rsi_calcs[key] = RSICalculator(val)
 
         waterline_cfg = enter_rules.get("rsi_waterline50")
         self.rsi_waterline_calc = RSIWaterlineCalculator(waterline_cfg) if waterline_cfg else None
@@ -86,6 +90,9 @@ class IndicatorsEngine:
                 tfs.add(calc.timeframe)
         if self.rsi_calc and self.rsi_calc.is_active:
             tfs.add(self.rsi_calc.timeframe)
+        for calc in self.rsi_calcs.values():
+            if calc.is_active:
+                tfs.add(calc.timeframe)
         if self.rsi_waterline_calc and self.rsi_waterline_calc.is_active:
             tfs.add(self.rsi_waterline_calc.timeframe)
         if self.sr_calc and self.sr_calc.is_active:
@@ -149,6 +156,12 @@ class IndicatorsEngine:
 
         result["rsi"] = rsi_states
         result["rsi_value"] = rsi_val
+
+        for key, calc in self.rsi_calcs.items():
+            if calc.is_active:
+                closes_sub = closes_by_tf.get(calc.timeframe, [])
+                result[key] = calc.calculate(closes_sub)
+                result[f"{key}_value"] = calc.get_raw_value(closes_sub)
 
         if self.rsi_waterline_calc and self.rsi_waterline_calc.is_active:
             closes_wl = closes_by_tf.get(self.rsi_waterline_calc.timeframe, [])
