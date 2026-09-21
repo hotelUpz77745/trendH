@@ -67,14 +67,28 @@ class AnalyticsManager:
             return {}
 
     def _write_data(self, data: Dict[str, Any], mark_backup: bool = True):
-        """Атомарно перезаписывает файл аналитики с перерасчетом математики."""
+        """Атомарно перезаписывает файл аналитики с перерасчетом математики и защитой от блокировок Windows."""
+        temp_file = self.log_file.with_suffix('.tmp')
         try:
             AnalyticsMathEngine.calculate(data, universe_id=self.universe_id)
-            temp_file = self.log_file.with_suffix('.tmp')
             temp_file.write_text(json.dumps(data, indent=4), encoding="utf-8")
-            os.replace(temp_file, self.log_file)
+            for attempt in range(5):
+                try:
+                    os.replace(temp_file, self.log_file)
+                    break
+                except (PermissionError, OSError):
+                    if attempt < 4:
+                        time.sleep(0.05 * (attempt + 1))
+                    else:
+                        raise
         except Exception as e:
             log(f"[{self.universe_id}] Error writing analytics file: {e}", level="ERROR")
+        finally:
+            if temp_file.exists():
+                try:
+                    temp_file.unlink()
+                except Exception:
+                    pass
 
     async def _append_to_csv(self, symbol: str, side: str, open_time: int, close_time: int, pnl: float, balance: float):
         """Добавляет строку закрытой сделки в журнал CSV."""
