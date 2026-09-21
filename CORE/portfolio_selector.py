@@ -180,17 +180,21 @@ class PortfolioSelector:
     def _score_for_grid_only(self, c: CoinMetrics) -> float:
         """Score for FOR_GRID_ONLY: Pure standalone grid without hedging.
 
-        Prioritizes high N/R, lowest R/R, lowest MDME, and positive Net profit.
-        TrendH metrics are not considered.
+        Prioritizes pure Net profit (50% weight), followed by N/R efficiency (20%),
+        R/R ratio (15%), and MDME drawdown (15%). TrendH metrics are not considered.
         """
         if c.grid_realized < 5.0 or c.grid_net <= 0.0:
             return -999.0
 
-        nr_score = max(0.0, min(c.grid_nr, 1.0)) * 45.0
-        rr_score = (1.0 / (max(0.1, c.grid_rr) + 0.2)) * 30.0
-        mdme_score = (1.0 / (max(0.01, c.grid_mdme) + 0.05)) * 15.0
-        net_score = min(c.grid_net, 30.0) / 30.0 * 10.0
-        return nr_score + rr_score + mdme_score + net_score
+        # 50% weight: Pure Net Profit (scaled up to 40.0 USDT)
+        net_score = min(max(0.0, c.grid_net), 40.0) / 40.0 * 50.0
+        # 20% weight: N/R efficiency (Net / Realized)
+        nr_score = max(0.0, min(c.grid_nr, 1.0)) * 20.0
+        # 15% weight: R/R ratio (lower risk/reward is better)
+        rr_score = (1.0 / (max(0.2, c.grid_rr) + 0.8)) * 15.0
+        # 15% weight: MDME (lower drawdown is better)
+        mdme_score = (1.0 / (max(0.02, c.grid_mdme) * 20.0 + 1.0)) * 15.0
+        return net_score + nr_score + rr_score + mdme_score
 
     def _score_for_gride_firstable(self, c: CoinMetrics) -> float:
         """Score for FOR_GRIDE_FIRSTABLE: Grid cash cows with sleeping hedge insurance."""
@@ -244,7 +248,7 @@ class PortfolioSelector:
             if mode == "FOR_GRID_ONLY":
                 c.score = self._score_for_grid_only(c)
                 c.role = "PURE_CASH_COW" if c.grid_nr >= 0.75 and c.grid_rr < 1.0 else "STANDALONE_GRID"
-                c.rationale = f"N/R: {c.grid_nr:.2f} | R/R: {c.grid_rr:.2f} | Grid Net: +{c.grid_net:.1f}$"
+                c.rationale = f"Grid Net: +{c.grid_net:.1f}$ (50%) | N/R: {c.grid_nr:.2f} | R/R: {c.grid_rr:.2f}"
             elif mode == "FOR_GRIDE_FIRSTABLE":
                 c.score = self._score_for_gride_firstable(c)
                 c.role = "CASH_COW" if c.grid_nr >= 0.75 and c.grid_rr < 1.0 else "GRID_STABLE"

@@ -161,16 +161,21 @@ class TestPortfolioSelector(unittest.TestCase):
         self.assertAlmostEqual(gusdt.combined_net, 26.83, places=2)
 
     def test_for_grid_only_mode_selection(self):
-        """FOR_GRID_ONLY must select pure cash cows based solely on grid metrics."""
+        """FOR_GRID_ONLY must select pure cash cows based solely on grid metrics (50% net weight)."""
         result = self.selector.select_portfolio(n_coins=2, mode="FOR_GRID_ONLY")
         self.assertEqual(result.mode, "FOR_GRID_ONLY")
         self.assertEqual(len(result.coins), 2)
 
         symbols = [c.symbol for c in result.coins]
         self.assertIn("CROSSUSDT", symbols)
-        self.assertIn("MIRAUSDT", symbols)
+        self.assertIn("PIEVERSEUSDT", symbols)
         # GUSDT has negative grid net (-12.87$) -> Disqualified in pure grid mode
         self.assertNotIn("GUSDT", symbols)
+
+        # n_coins=3 includes MIRAUSDT
+        result_3 = self.selector.select_portfolio(n_coins=3, mode="FOR_GRID_ONLY")
+        symbols_3 = [c.symbol for c in result_3.coins]
+        self.assertIn("MIRAUSDT", symbols_3)
 
     def test_for_gride_firstable_mode_selection(self):
         """FOR_GRIDE_FIRSTABLE must select Cash Cows (CROSS, MIRA) and exclude PIEVERSE (chop trap)."""
