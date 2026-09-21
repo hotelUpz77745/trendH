@@ -16,10 +16,7 @@ from consts import DATA_DIR, ANALYTICS_DIR, ANALYTICS_CFG, cfg
 
 
 class UniverseState:
-    """
-    Изолированное состояние позиций для конкретной торговой вселенной.
-    Сохраняет состояние в logs/data/state_{universe_id}.json.
-    """
+    """Изолированное состояние позиций для конкретной торговой вселенной."""
 
     def __init__(self, universe_id: str = "default", backup_manager=None):
         self.universe_id = universe_id
@@ -135,14 +132,8 @@ class StrategyUniverse:
         )
 
     def process_tick(
-        self,
-        symbol: str,
-        side: str,
-        current_price: float,
-        indicators: Dict[str, Any],
-        get_slippage_ratio_fn: Callable[[str], float],
-        is_paused: bool,
-        invest_size: float,
+        self, symbol: str, side: str, current_price: float, indicators: Dict[str, Any],
+        get_slippage_ratio_fn: Callable[[str], float], is_paused: bool, invest_size: float,
         cron_state: Optional[Dict[str, Any]] = None
     ):
         """Обрабатывает тик цены для конкретной валютной пары и стороны."""
@@ -218,13 +209,13 @@ class StrategyUniverse:
                     log(f"[SIGNAL SKIPPED] [{self.universe_id}][{symbol}][{side}] Пропуск входа: размер 0", level="INFO", throttle_sec=30)
 
     def update_live_metrics(self, current_prices: Dict[str, float]) -> Dict[str, Any]:
-        """
-        В моменте рассчитывает нереализованный PnL, живое эквити и аккумулирует просадку.
-        Учитывает как реализованный, так и нереализованный PnL.
-        """
+        """В моменте рассчитывает нереализованный PnL, живое эквити и аккумулирует просадку."""
         an_data = self.analytics._read_data()
         start_bal = float(an_data.get("start_balance_usdt", 1000.0))
-        realized_pnl = float(an_data.get("realized_pnl_usdt", an_data.get("net_profit_usdt", 0.0)))
+        realized_gross = float(an_data.get("realized_pnl_usdt", 0.0))
+        realized_net = float(an_data.get("net_profit_usdt", realized_gross))
+        commission_paid = abs(realized_gross - realized_net)
+        realized_pnl = realized_net
 
         active_count = 0
         unrealized_pnl = 0.0
@@ -256,10 +247,10 @@ class StrategyUniverse:
             self.analytics._write_data(an_data)
 
         return {
-            "realized_pnl": realized_pnl, "unrealized_pnl": unrealized_pnl,
-            "live_net_profit": live_net_profit, "live_equity": live_equity,
-            "peak_equity": peak_equity, "current_dd": current_dd,
-            "max_dd": max_dd, "active_count": active_count, "start_balance": start_bal
+            "realized_pnl": realized_pnl, "realized_gross": realized_gross, "commission_paid": commission_paid,
+            "unrealized_pnl": unrealized_pnl, "live_net_profit": live_net_profit, "live_equity": live_equity,
+            "peak_equity": peak_equity, "current_dd": current_dd, "max_dd": max_dd,
+            "active_count": active_count, "start_balance": start_bal
         }
 
     def close_all_positions(self, current_prices: Dict[str, float], get_slippage_ratio_fn: Callable[[str], float]) -> int:
@@ -280,10 +271,7 @@ class StrategyUniverse:
 
 
 class UniverseManager:
-    """
-    Менеджер параллельных вселенных (стратегий).
-    Координирует работу нескольких изолированных StrategyUniverse.
-    """
+    """Менеджер параллельных вселенных (стратегий)."""
 
     def __init__(
         self, universes_cfg: Dict[str, Any], default_enter_rules: Dict[str, Any], default_exit_rules: Dict[str, Any],
@@ -338,15 +326,7 @@ class UniverseManager:
                         base_exit = key[:-len(suffix)]
                         break
                 if base_exit == "rsi" and isinstance(val, dict) and val.get("is_active"):
-                    if "rsi" not in combined:
-                        combined["rsi"] = {
-                            "is_active": True,
-                            "timeframe": val.get("timeframe", "5m"),
-                            "window": val.get("window", 14),
-                            "conditions": {}
-                        }
-                    else:
-                        combined["rsi"]["is_active"] = True
+                    combined["rsi"] = {"is_active": True, "timeframe": val.get("timeframe", "5m"), "window": val.get("window", 14), "conditions": {}}
         return combined
 
     def get_universe(self, uid: str) -> Optional[StrategyUniverse]:
@@ -356,28 +336,17 @@ class UniverseManager:
         return list(self.universes.values())
 
     def process_tick(
-        self,
-        symbol: str,
-        side: str,
-        current_price: float,
-        indicators: Dict[str, Any],
-        get_slippage_ratio_fn: Callable[[str], float],
-        is_paused: bool,
-        invest_size: float,
+        self, symbol: str, side: str, current_price: float, indicators: Dict[str, Any],
+        get_slippage_ratio_fn: Callable[[str], float], is_paused: bool, invest_size: float,
         cron_state: Optional[Dict[str, Any]] = None
     ):
         """Раздает тик во все активные вселенные параллельно."""
         for universe in self.universes.values():
             if universe.is_active:
                 universe.process_tick(
-                    symbol=symbol,
-                    side=side,
-                    current_price=current_price,
-                    indicators=indicators,
-                    get_slippage_ratio_fn=get_slippage_ratio_fn,
-                    is_paused=is_paused,
-                    invest_size=invest_size,
-                    cron_state=cron_state
+                    symbol=symbol, side=side, current_price=current_price, indicators=indicators,
+                    get_slippage_ratio_fn=get_slippage_ratio_fn, is_paused=is_paused,
+                    invest_size=invest_size, cron_state=cron_state
                 )
 
     def close_all_positions(self, current_prices: Dict[str, float], get_slippage_ratio_fn: Callable[[str], float]) -> int:
@@ -454,10 +423,7 @@ class UniverseManager:
         }
 
     def get_leaderboard(self, current_prices: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
-        """
-        Формирует сравнительную таблицу лидеров (Leaderboard) по всем запущенным вселенным.
-        В моменте рассчитывает нереализованный PnL, живое эквити и аккумулирует просадку.
-        """
+        """Формирует сравнительную таблицу лидеров (Leaderboard) по всем запущенным вселенным."""
         leaderboard = []
         current_prices = current_prices or {}
 
@@ -471,7 +437,8 @@ class UniverseManager:
 
             leaderboard.append({
                 "uid": uid, "name": univ.name, "description": univ.description,
-                "net_profit": m["live_net_profit"], "realized_pnl": m["realized_pnl"], "unrealized_pnl": m["unrealized_pnl"],
+                "net_profit": m["live_net_profit"], "realized_pnl": m["realized_pnl"],
+                "commission_paid": m.get("commission_paid", 0.0), "unrealized_pnl": m["unrealized_pnl"],
                 "total_trades": total_trades, "winrate": winrate, "max_dd": max_dd,
                 "current_dd": m["current_dd"], "recovery_factor": rec_factor, "active_count": m["active_count"],
             })

@@ -148,9 +148,11 @@ def _format_leaderboard_lines(bot_core) -> list:
         p_s = "+" if item["net_profit"] >= 0 else ""
         u_s = "+" if item["unrealized_pnl"] >= 0 else ""
         dd = -abs(item["max_dd"]) if item["max_dd"] > 0 else 0.0
+        comm_val = item.get("commission_paid", 0.0)
+        comm_str = f" (комса: -{comm_val:.2f}$)" if comm_val > 0.01 else ""
         lines.append(
             f"{medal} <b>{uid.upper()}</b>{badge}{skip_tag}{short_name}\n"
-            f"   • PnL: <b>{p_s}{item['net_profit']:.2f}$</b> | WR: {item['winrate']:.0f}% ({item['total_trades']}) | DD: {dd:.2f}$ | Откр: {item['active_count']} ({u_s}{item['unrealized_pnl']:.2f}$)"
+            f"   • Net PnL: <b>{p_s}{item['net_profit']:.2f}$</b>{comm_str} | WR: {item['winrate']:.0f}% ({item['total_trades']}) | DD: {dd:.2f}$ | Откр: {item['active_count']} ({u_s}{item['unrealized_pnl']:.2f}$)"
         )
     return lines
 
