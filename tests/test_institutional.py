@@ -203,16 +203,16 @@ class TestInstitutionalRules(unittest.TestCase):
         self.assertIn("u_symbiosis_harvester", manager.universes)
         self.assertIn("u_delta_sniper_15m", manager.universes)
         self.assertIn("u_hvh_delta_symbiosis", manager.universes)
-        self.assertIn("u_sh50_outsiders", manager.universes)
+        self.assertIn("u_sh50_alpha", manager.universes)
         self.assertIn("u_sh50_notop", manager.universes)
-        self.assertIn("u_sh40_outsiders", manager.universes)
+        self.assertIn("u_sh40_alpha", manager.universes)
         self.assertIn("u_sh40_notop", manager.universes)
-        self.assertIn("u_hvh_symbiosis_outsiders", manager.universes)
+        self.assertIn("u_hvh_symbiosis_alpha", manager.universes)
         self.assertIn("u_hvh_symbiosis_notop", manager.universes)
-        self.assertIn("u_symb_harv_outsiders", manager.universes)
+        self.assertIn("u_symb_harv_alpha", manager.universes)
         self.assertIn("u_symb_harv_notop", manager.universes)
         self.assertIn("u15_4h_rsi1d_std", manager.universes)
-        self.assertIn("u15_4h_rsi1d_outsiders", manager.universes)
+        self.assertIn("u15_4h_rsi1d_alpha", manager.universes)
         self.assertIn("u_jem_matrix_harvest", manager.universes)
         self.assertIn("u_jem_symbiotic_quantum", manager.universes)
         self.assertEqual(len(cfg.get("universes", {})), 52)
@@ -221,15 +221,15 @@ class TestInstitutionalRules(unittest.TestCase):
     def test_grid_net_filter_rule(self):
         """Проверка фильтрации монет по статистике сеточника (Grid Net PnL)."""
         from CORE.symbiosis_rules import EntryGridNetFilterRule
-        rule_outsiders = EntryGridNetFilterRule({"is_active": True, "mode": "OUTSIDERS_ONLY", "max_grid_net": 0.0})
+        rule_alpha = EntryGridNetFilterRule({"is_active": True, "mode": "ALPHA_ONLY", "max_grid_net": 0.0})
         rule_notop = EntryGridNetFilterRule({"is_active": True, "mode": "EXCLUDE_TOP_CASH_COWS", "exclude_top_n": 5})
 
         # PIEVERSEUSDT имеет высокий положительный Grid Net (+36.5$) -> должен блокироваться
-        self.assertFalse(rule_outsiders.check("LONG", symbol="PIEVERSEUSDT"))
+        self.assertFalse(rule_alpha.check("LONG", symbol="PIEVERSEUSDT"))
         self.assertFalse(rule_notop.check("LONG", symbol="PIEVERSEUSDT"))
 
         # GUSDT имеет отрицательный Grid Net (-8.9$) -> должен проходить
-        self.assertTrue(rule_outsiders.check("LONG", symbol="GUSDT"))
+        self.assertTrue(rule_alpha.check("LONG", symbol="GUSDT"))
         self.assertTrue(rule_notop.check("LONG", symbol="GUSDT"))
 
     def test_htf_rsi_filter_rule(self):

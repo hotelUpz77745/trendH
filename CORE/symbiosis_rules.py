@@ -62,8 +62,9 @@ class EntryGridNetFilterRule(BaseRule):
     Правило фильтрации входа на базе статистики чистого PnL сеточника (Grid Net PnL).
     
     Режимы:
-    1. 'OUTSIDERS_ONLY': Вход разрешен ТОЛЬКО если у сеточника по этой монете net_profit <= max_grid_net
-       (по умолчанию <= 0.0). Защищает от ложных входов во флэтовых монетах-донорах сетки.
+    1. 'ALPHA_ONLY': Вход разрешен ТОЛЬКО на монетах в фазе сильного трендового импульса
+       Alpha Momentum (где сеточник тянет просадку, net_profit <= max_grid_net, по умолчанию <= 0.0).
+       Защищает от ложных входов во флэтовых монетах-донорах сетки.
     2. 'EXCLUDE_TOP_CASH_COWS': Запрещает вход на топ-N (по умолчанию 10) монетах сеточника
        с наибольшей прибылью (кэш-коровы сетки: PIEVERSE, CROSS, FLOCK и т.д.).
     """
@@ -71,7 +72,7 @@ class EntryGridNetFilterRule(BaseRule):
     def __init__(self, cfg: Dict[str, Any]):
         self.cfg = cfg
         self.is_active: bool = bool(cfg.get("is_active", False))
-        self.mode: str = str(cfg.get("mode", "OUTSIDERS_ONLY")).upper()
+        self.mode: str = str(cfg.get("mode", "ALPHA_ONLY")).upper()
         self.max_grid_net: float = float(cfg.get("max_grid_net", 0.0))
         self.exclude_top_n: int = int(cfg.get("exclude_top_n", 10))
         self.analytics_path: str = str(cfg.get("analytics_path", DEFAULT_CRON_ANALYTICS_PATH))
@@ -104,12 +105,12 @@ class EntryGridNetFilterRule(BaseRule):
         stats = self._get_coin_stats(symbol)
         grid_net = float(stats.get("net_profit_usdt", stats.get("realized_pnl_net_usdt", 0.0)))
 
-        if self.mode == "OUTSIDERS_ONLY":
-            # Разрешено входить только если сеточник страдает на этой монете (Net <= 0)
+        if self.mode in ("ALPHA_ONLY", "OUTSIDERS_ONLY"):
+            # Разрешено входить только если на монете идет трендовый вынос против сетки (Net <= 0)
             passed = grid_net <= self.max_grid_net
             if not passed:
                 log(
-                    f"[GRID_NET_FILTER] [{symbol}][{side}] Вход заблокирован: монета в плюсе у сетки "
+                    f"[GRID_NET_FILTER] [{symbol}][{side}] Вход заблокирован: монета во флэтовом коридоре сетки "
                     f"(Grid Net: +{grid_net:.2f}$ > {self.max_grid_net:.2f}$)",
                     level="DEBUG", throttle_sec=60, throttle_key=f"gnf_block_{symbol}"
                 )
