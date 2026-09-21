@@ -9,7 +9,7 @@ import unittest
 import time
 from typing import Dict, Any
 
-from CORE.rules import ExitBreakevenRatchetRule, ExitTimeStopRule, ExitSignalEngine
+from CORE.rules import ExitBreakevenRatchetRule, ExitTimeStopRule, ExitSignalEngine, ExitProfitStagnationRule
 from cron_integration import CronIntegration, EntryGridStressRule
 from CORE.universe import UniverseManager
 
@@ -198,10 +198,37 @@ class TestInstitutionalRules(unittest.TestCase):
         self.assertIn("u_shadow_harvester_50", manager.universes)
         self.assertIn("u_shadow_harvester_mid", manager.universes)
         self.assertIn("u_shadow_harvester_wide", manager.universes)
+        self.assertIn("u_grid_shadow_be", manager.universes)
+        self.assertIn("u_grid_shadow_stagnation", manager.universes)
+        self.assertIn("u_symbiosis_harvester", manager.universes)
         self.assertIn("u_delta_sniper_15m", manager.universes)
         self.assertIn("u_hvh_delta_symbiosis", manager.universes)
-        self.assertEqual(len(cfg.get("universes", {})), 37)
-        self.assertEqual(len(manager.universes), 23)
+        self.assertEqual(len(cfg.get("universes", {})), 40)
+        self.assertEqual(len(manager.universes), 26)
+
+    def test_profit_stagnation_be_lock(self):
+        """Проверка БУ-замка в ExitProfitStagnationRule."""
+        cfg = {"is_active": True, "be_trigger_ratio": 0.028, "be_buffer_ratio": 0.003, "min_profit_ratio": 0.05}
+        rule = ExitProfitStagnationRule(cfg, self.analytics_cfg)
+        # До достижения 2.8% откат до 100.3 не должен закрывать
+        self.assertFalse(rule.check("LONG", symbol="BTCUSDT", open_price=100.0, current_price=100.3, highest_price=102.0))
+        # После достижения 3.0% (>2.8%), откат до 100.3 (БУ + 0.3%) закрывает позицию
+        self.assertTrue(rule.check("LONG", symbol="BTCUSDT", open_price=100.0, current_price=100.25, highest_price=103.0))
+
+    def test_profit_stagnation_exit_timer(self):
+        """Проверка выхода по стагнации прибыли при отсутствии нового пика."""
+        cfg = {
+            "is_active": True, "be_trigger_ratio": 0.028, "be_buffer_ratio": 0.003,
+            "min_profit_ratio": 0.05, "stagnation_seconds": 1800.0, "progress_threshold": 0.005
+        }
+        rule = ExitProfitStagnationRule(cfg, self.analytics_cfg)
+        t0 = 10000.0
+        # Вход по 100.0, текущая 106.0 (+6% > 5%), пик 106.0 в t0 -> первое наблюдение, не закрывает
+        self.assertFalse(rule.check("LONG", symbol="SOLUSDT", open_price=100.0, current_price=106.0, highest_price=106.0, current_time=t0))
+        # Через 1000с (<1800с) цена все еще 106.0 -> еще не стагнация
+        self.assertFalse(rule.check("LONG", symbol="SOLUSDT", open_price=100.0, current_price=106.0, highest_price=106.0, current_time=t0 + 1000))
+        # Через 1900с (>1800с) цена все еще 106.0 (нет прогресса >= 0.5%) -> ВЫХОД ПО СТАГНАЦИИ!
+        self.assertTrue(rule.check("LONG", symbol="SOLUSDT", open_price=100.0, current_price=106.0, highest_price=106.0, current_time=t0 + 1900))
 
 
 if __name__ == "__main__":

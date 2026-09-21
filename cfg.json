@@ -2049,6 +2049,164 @@
                 }
             }
         },
+        "u_grid_shadow_be": {
+            "name": "Pure Grid Shadow (Breakeven Lock)",
+            "description": "Реверс-хэдж сетки 50% (Lvl 2+) с БУ-замком (+0.3% при +2.8%) без трейлинга. Выход по разгрузке сетки (<=15%) или SL 5%",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.05
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "profit_stagnation": {
+                    "is_active": true,
+                    "be_trigger_ratio": 0.028,
+                    "be_buffer_ratio": 0.003,
+                    "min_profit_ratio": 1.0
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
+        },
+        "u_grid_shadow_stagnation": {
+            "name": "Pure Grid Shadow (BE Lock + Profit Stagnation)",
+            "description": "Реверс-хэдж сетки 50% с БУ-замком (+0.3% при +2.8%) и датчиком стагнации прибыли (>5% и 30 мин без нового хая -> закрытие)",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.05
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "profit_stagnation": {
+                    "is_active": true,
+                    "be_trigger_ratio": 0.028,
+                    "be_buffer_ratio": 0.003,
+                    "min_profit_ratio": 0.05,
+                    "stagnation_seconds": 1800.0,
+                    "progress_threshold": 0.005
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
+        },
+        "u_symbiosis_harvester": {
+            "name": "Symbiosis Harvester 50% (1H Trend + 15m HVH + 50% Grid)",
+            "description": "Симбиоз снайпера (WR 80%) и Жнеца 50%: вход на откате 15m HVH по тренду 1H при стрессе сетки 50% со свинг-трейлингом",
+            "is_active": true,
+            "inactive_grid_mode": "SKIP",
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 0.8,
+                "2": 0.75,
+                "3": 0.55,
+                "4": 0.40,
+                "default": 0.50
+            },
+            "invest_size": 50.0,
+            "reentry_cooldown_sec": 900.0,
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "hvh": {
+                    "is_active": true,
+                    "timeframe": "15m",
+                    "period": 20,
+                    "dev": 1.8,
+                    "mode": "rolling",
+                    "signal_type": "pullback",
+                    "long_cond": "HVH_LONG",
+                    "short_cond": "HVH_SHORT"
+                },
+                "grid_stress": {
+                    "is_active": true,
+                    "min_volume_ratio": 0.5,
+                    "min_filled_level": 2,
+                    "extreme_only": false,
+                    "long_cond": "SHORT_GRID_STRESSED",
+                    "short_cond": "LONG_GRID_STRESSED"
+                }
+            },
+            "exit_rules": {
+                "stop_loss_ratio": {
+                    "value": 0.04
+                },
+                "take_profit_ratio": {
+                    "value": null
+                },
+                "breakeven_ratchet": {
+                    "is_active": true,
+                    "trigger_ratio": 0.045,
+                    "trail_ratio": 0.025,
+                    "buffer_ratio": 0.015
+                },
+                "grid_relief": {
+                    "is_active": true,
+                    "exit_on_position_close": true,
+                    "max_volume_ratio": 0.15
+                }
+            }
+        },
         "u_delta_sniper_15m": {
             "name": "Delta Sniper 15m (Harvester + 15m HVH Impulse)",
             "description": "Институциональный дельта-хеджер по импульсному пробою HVH на 15m с динамическим трейлингом",

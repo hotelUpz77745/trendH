@@ -17,39 +17,23 @@ class BaseRule(ABC):
 # ENTRY RULES (All active must pass for signal)
 # ==========================================
 class EntryTrendRule(BaseRule):
-    """
-    Правило входа по направлению тренда (базовый таймфрейм или HTF).
-    Поддерживает прямую проверку (trend_positive=True) и от обратного (False).
-    """
-
+    """Правило входа по направлению тренда (базовый таймфрейм или HTF)."""
     def __init__(self, cfg: Dict[str, Any], indicator_key: str = "trend"):
-        self.cfg = cfg
-        self.indicator_key = indicator_key
-        self.is_active: bool = bool(cfg.get("is_active", False))
-        self.trend_positive: bool = bool(cfg.get("trend_positive", True))
-        self.long_cond: str = str(cfg.get("long_cond", "UP"))
-        self.short_cond: str = str(cfg.get("short_cond", "DOWN"))
+        self.cfg, self.indicator_key = cfg, indicator_key
+        self.is_active, self.trend_positive = bool(cfg.get("is_active", False)), bool(cfg.get("trend_positive", True))
+        self.long_cond, self.short_cond = str(cfg.get("long_cond", "UP")), str(cfg.get("short_cond", "DOWN"))
 
     def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
             return True
-
-        indicators = indicators or kwargs.get("indicators", {})
-        trend = indicators.get(self.indicator_key, kwargs.get(self.indicator_key, kwargs.get("trend")))
-
+        trend = (indicators or kwargs.get("indicators", {})).get(self.indicator_key, kwargs.get(self.indicator_key, kwargs.get("trend")))
         if not trend or trend == "UNSTABLE":
             return False
-
-        if side == "LONG":
-            return trend == self.long_cond if self.trend_positive else trend != self.short_cond
-        elif side == "SHORT":
-            return trend == self.short_cond if self.trend_positive else trend != self.long_cond
-        return False
+        return (trend == self.long_cond if self.trend_positive else trend != self.short_cond) if side == "LONG" else ((trend == self.short_cond if self.trend_positive else trend != self.long_cond) if side == "SHORT" else False)
 
 
 class EntryRSIRule(BaseRule):
     """Правило входа по осциллятору RSI (вхождение в диапазон импульса)."""
-
     def __init__(self, cfg: Dict[str, Any]):
         self.cfg, self.is_active = cfg, bool(cfg.get("is_active", False))
         self.conditions = cfg.get("conditions", {})
@@ -62,8 +46,7 @@ class EntryRSIRule(BaseRule):
         rsi_val = indicators.get("rsi_value", kwargs.get("rsi_value"))
         if self.conditions and rsi_val is not None:
             from utils import eval_condition
-            cond_key = self.long_cond if side == "LONG" else self.short_cond
-            expr = self.conditions.get(cond_key)
+            expr = self.conditions.get(self.long_cond if side == "LONG" else self.short_cond)
             return eval_condition(expr, rsi_val) if expr else False
         rsi = indicators.get("rsi", kwargs.get("rsi", []))
         if not rsi or "UNSTABLE" in rsi:
@@ -124,16 +107,10 @@ class EntryVolumeFilterRule(BaseRule):
 
 
 class EntryDeltaHarvesterRule(BaseRule):
-    """
-    Универсальное правило входа Delta Harvester:
-    Моментально подхватывает застрявший объем сеточника (Level >= 2, Volume >= 40%)
-    в сторону текущего тренда (противоположно сетке).
-    Включает Momentum Guard для защиты от покупок на откатах и падающих ножах.
-    """
+    """Правило входа Delta Harvester: подхватывает стресс сетки с фильтром Momentum Guard."""
     def __init__(self, cfg: Dict[str, Any]):
         self.cfg, self.is_active = cfg, bool(cfg.get("is_active", False))
-        self.require_momentum = bool(cfg.get("require_momentum", True))
-        self.min_rsi = float(cfg.get("min_rsi", 48.0))
+        self.require_momentum, self.min_rsi = bool(cfg.get("require_momentum", True)), float(cfg.get("min_rsi", 48.0))
         from cron_integration import EntryGridStressRule
         self.stress_rule = EntryGridStressRule({
             "is_active": self.is_active,
@@ -151,21 +128,13 @@ class EntryDeltaHarvesterRule(BaseRule):
             return False
         if self.require_momentum and indicators:
             candles = indicators.get("candles_5m", indicators.get("candles", []))
-            if candles and isinstance(candles, list):
-                last_c = candles[-1]
-                if isinstance(last_c, dict):
-                    op = float(last_c.get("open", 0.0))
-                    cl = float(last_c.get("close", 0.0))
-                    if op > 0 and cl > 0:
-                        if side == "LONG" and cl < op:
-                            return False
-                        elif side == "SHORT" and cl > op:
-                            return False
+            if candles and isinstance(candles, list) and isinstance(candles[-1], dict):
+                op, cl = float(candles[-1].get("open", 0.0)), float(candles[-1].get("close", 0.0))
+                if op > 0 and cl > 0 and ((side == "LONG" and cl < op) or (side == "SHORT" and cl > op)):
+                    return False
             rsi = indicators.get("rsi_value")
             if rsi is not None and isinstance(rsi, (int, float)):
-                if side == "LONG" and rsi < self.min_rsi:
-                    return False
-                elif side == "SHORT" and rsi > (100.0 - self.min_rsi):
+                if (side == "LONG" and rsi < self.min_rsi) or (side == "SHORT" and rsi > (100.0 - self.min_rsi)):
                     return False
         return True
 
@@ -242,29 +211,25 @@ class ExitTrendReversalRule(BaseRule):
 class ExitTakeProfitRule(BaseRule):
     """Правило выхода по тейк-профиту с учетом комиссии и проскальзывания."""
     def __init__(self, cfg: Dict[str, Any], analytics_cfg: Dict[str, Any], get_slippage_ratio_fn: Callable[[str], float]):
-        self.cfg, self.analytics_cfg, self.value = cfg, analytics_cfg, cfg.get("value")
-        self.get_slippage_ratio_fn = get_slippage_ratio_fn
+        self.cfg, self.analytics_cfg, self.value, self.get_slippage_ratio_fn = cfg, analytics_cfg, cfg.get("value"), get_slippage_ratio_fn
 
     def check(self, side: str, symbol: str, open_price: float, current_price: float, **kwargs) -> bool:
         if self.value is None or open_price <= 0 or current_price <= 0:
             return False
         cost = (self.analytics_cfg.get("taker_fee_ratio", 0.0) + self.get_slippage_ratio_fn(symbol)) * 2
-        pnl = ((current_price - open_price) if side == "LONG" else (open_price - current_price)) / open_price - cost
-        return pnl >= self.value
+        return (((current_price - open_price) if side == "LONG" else (open_price - current_price)) / open_price - cost) >= self.value
 
 
 class ExitStopLossRule(BaseRule):
     """Правило выхода по стоп-лоссу с учетом комиссии и проскальзывания."""
     def __init__(self, cfg: Dict[str, Any], analytics_cfg: Dict[str, Any], get_slippage_ratio_fn: Callable[[str], float]):
-        self.cfg, self.analytics_cfg, self.value = cfg, analytics_cfg, cfg.get("value")
-        self.get_slippage_ratio_fn = get_slippage_ratio_fn
+        self.cfg, self.analytics_cfg, self.value, self.get_slippage_ratio_fn = cfg, analytics_cfg, cfg.get("value"), get_slippage_ratio_fn
 
     def check(self, side: str, symbol: str, open_price: float, current_price: float, **kwargs) -> bool:
         if self.value is None or open_price <= 0 or current_price <= 0:
             return False
         cost = (self.analytics_cfg.get("taker_fee_ratio", 0.0) + self.get_slippage_ratio_fn(symbol)) * 2
-        pnl = ((current_price - open_price) if side == "LONG" else (open_price - current_price)) / open_price - cost
-        return pnl <= -abs(self.value)
+        return (((current_price - open_price) if side == "LONG" else (open_price - current_price)) / open_price - cost) <= -abs(self.value)
 
 
 class ExitRSIRule(BaseRule):
@@ -278,19 +243,14 @@ class ExitRSIRule(BaseRule):
     def check(self, side: str, indicators: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
         if not self.is_active:
             return False
-        indicators = indicators or kwargs.get("indicators", {})
-        rsi_val, rsi_states = indicators.get("rsi_value", kwargs.get("rsi_value")), indicators.get("rsi", kwargs.get("rsi", []))
+        ind = indicators or kwargs.get("indicators", {})
+        rsi_val, rsi_states = ind.get("rsi_value", kwargs.get("rsi_value")), ind.get("rsi", kwargs.get("rsi", []))
         if side == "LONG":
-            if self.long_cond and self.long_cond in rsi_states:
-                return True
-            if rsi_val is not None:
-                return (self.long_exit_rsi is not None and rsi_val >= self.long_exit_rsi) or (self.long_loss_rsi is not None and rsi_val <= self.long_loss_rsi)
+            return (self.long_cond in rsi_states) or (rsi_val is not None and ((self.long_exit_rsi is not None and rsi_val >= self.long_exit_rsi) or (self.long_loss_rsi is not None and rsi_val <= self.long_loss_rsi)))
         elif side == "SHORT":
-            if self.short_cond and self.short_cond in rsi_states:
-                return True
-            if rsi_val is not None:
-                return (self.short_exit_rsi is not None and rsi_val <= self.short_exit_rsi) or (self.short_loss_rsi is not None and rsi_val >= self.short_loss_rsi)
+            return (self.short_cond in rsi_states) or (rsi_val is not None and ((self.short_exit_rsi is not None and rsi_val <= self.short_exit_rsi) or (self.short_loss_rsi is not None and rsi_val >= self.short_loss_rsi)))
         return False
+
 
 
 class ExitTimeStopRule(BaseRule):
@@ -345,6 +305,63 @@ class ExitBreakevenRatchetRule(BaseRule):
         return False
 
 
+class ExitProfitStagnationRule(BaseRule):
+    """
+    Profit Stagnation & Breakeven Lock Exit:
+    1. Breakeven Lock: при достижении be_trigger_ratio (+2.8%) переносит стоп в безубыток (+be_buffer_ratio, e.g. +0.3%).
+       Стоп фиксируется и не трейлится вверх, защищая от выбивания на микро-откатах.
+    2. Profit Stagnation: если текущая прибыль >= min_profit_ratio (+5.0%),
+       и в течение stagnation_seconds (1800с = 30 мин) нет прогресса >= progress_threshold (+0.5%),
+       позиция закрывается по рынку для фиксации профита на вершине.
+    """
+    def __init__(self, cfg: Dict[str, Any], analytics_cfg: Optional[Dict[str, Any]] = None):
+        self.cfg, self.is_active = cfg, bool(cfg.get("is_active", False))
+        self.be_trigger_ratio = float(cfg.get("be_trigger_ratio", 0.028))
+        fee = (analytics_cfg.get("taker_fee_ratio", 0.0006) * 2) if analytics_cfg else 0.0012
+        self.be_buffer_ratio, self.min_profit_ratio = float(cfg.get("be_buffer_ratio", fee)), float(cfg.get("min_profit_ratio", 0.05))
+        self.stagnation_seconds, self.progress_threshold = float(cfg.get("stagnation_seconds", 1800.0)), float(cfg.get("progress_threshold", 0.005))
+        self.peaks: Dict[tuple, Dict[str, float]] = {}
+
+    def check(self, side: str, symbol: str = "", open_price: float = 0.0, current_price: float = 0.0, **kwargs) -> bool:
+        if not self.is_active or open_price <= 0 or current_price <= 0:
+            return False
+        highest_price, lowest_price = kwargs.get("highest_price") or current_price, kwargs.get("lowest_price") or current_price
+        key = (symbol or "SYM", side)
+
+        # 1. Breakeven Lock
+        if side == "LONG" and ((highest_price - open_price) / open_price) >= self.be_trigger_ratio:
+            if current_price <= open_price * (1.0 + self.be_buffer_ratio):
+                self.peaks.pop(key, None)
+                return True
+        elif side == "SHORT" and ((open_price - lowest_price) / open_price) >= self.be_trigger_ratio:
+            if current_price >= open_price * (1.0 - self.be_buffer_ratio):
+                self.peaks.pop(key, None)
+                return True
+
+        # 2. Profit Stagnation Exit
+        import time
+        now = kwargs.get("current_time") or time.time()
+        curr_gain = ((current_price - open_price) / open_price) if side == "LONG" else ((open_price - current_price) / open_price)
+
+        if curr_gain >= self.min_profit_ratio:
+            ext_price = highest_price if side == "LONG" else lowest_price
+            if key not in self.peaks:
+                self.peaks[key] = {"peak": ext_price, "time": now}
+            else:
+                entry = self.peaks[key]
+                progress = (ext_price >= entry["peak"] * (1.0 + self.progress_threshold)) if side == "LONG" else (ext_price <= entry["peak"] * (1.0 - self.progress_threshold))
+                if progress:
+                    entry["peak"], entry["time"] = ext_price, now
+                elif (now - entry["time"]) >= self.stagnation_seconds:
+
+                    self.peaks.pop(key, None)
+                    return True
+        else:
+            self.peaks.pop(key, None)
+
+        return False
+
+
 class ExitSignalEngine:
     """
     Движок сигналов на выход.
@@ -380,6 +397,8 @@ class ExitSignalEngine:
                 self.rules.append(ExitTimeStopRule(val))
             elif base_key in ("breakeven_ratchet", "be_ratchet"):
                 self.rules.append(ExitBreakevenRatchetRule(val, analytics_cfg))
+            elif base_key in ("profit_stagnation", "stagnation_exit"):
+                self.rules.append(ExitProfitStagnationRule(val, analytics_cfg))
             elif base_key == "chandelier_exit":
                 from CORE.indicators.squeeze_flow import ExitChandelierRule
                 self.rules.append(ExitChandelierRule(val))
@@ -417,9 +436,9 @@ class ExitSignalEngine:
                 rsi=indicators.get("rsi", []),
                 open_time_ms=open_time_ms,
                 candles=indicators.get("candles_5m", indicators.get("candles")),
-                highest_price=kwargs.get("highest_price"),
-                lowest_price=kwargs.get("lowest_price")
+                **kwargs
             ):
                 self.last_exit_reason = rule.__class__.__name__
                 return True
         return False
+
