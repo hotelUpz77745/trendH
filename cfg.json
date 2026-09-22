@@ -734,6 +734,87 @@
                     "long_cond": "BREAKOUT_SHORT",
                     "short_cond": "BREAKOUT_LONG"
                 },
+                "grid_net_filter": {
+                    "is_active": true,
+                    "mode": "EXCLUDE_TOP_CASH_COWS",
+                    "exclude_top_n": 10
+                },
+                "vol_filter": {
+                    "is_active": true,
+                    "timeframe": "1m",
+                    "mode": "a",
+                    "period": 14,
+                    "a": {
+                        "slice_factor": 1.1
+                    },
+                    "r": {
+                        "slice_factor": 2.1
+                    },
+                    "long_cond": "VOLF_PASSED",
+                    "short_cond": "VOLF_PASSED"
+                }
+            },
+            "exit_rules": {
+                "trend_reversal": {
+                    "is_active": true,
+                    "long_exit_trends": [
+                        "FLAT",
+                        "DOWN"
+                    ],
+                    "short_exit_trends": [
+                        "FLAT",
+                        "UP"
+                    ]
+                },
+                "take_profit_ratio": {
+                    "value": 0.035
+                },
+                "stop_loss_ratio": {
+                    "value": 0.02
+                }
+            },
+            "hedge_ratio": {
+                "0": 1.0,
+                "1": 1.0,
+                "2": 0.75,
+                "3": 0.75,
+                "default": 0.5
+            }
+        },
+        "u3_reverse_trend_alpha": {
+            "name": "Trend-Aligned Pullback Fade (Alpha Momentum)",
+            "description": "Трендовый фейд: вход на 5m ложном пробое по 1H тренду ТОЛЬКО на монетах сильного трендового выноса сетки (Grid Net <= 0)",
+            "is_active": true,
+            "enter_rules": {
+                "trend_htf": {
+                    "is_active": true,
+                    "timeframe": "1h",
+                    "sma_fast": 10,
+                    "sma_slow": 30,
+                    "confirmation_candles": 2,
+                    "require_rising": true,
+                    "trend_positive": true,
+                    "long_cond": "UP",
+                    "short_cond": "DOWN"
+                },
+                "sr_levels_reverse": {
+                    "is_active": true,
+                    "timeframe": "5m",
+                    "swing_len": 15,
+                    "window": 300,
+                    "margin": 2.0,
+                    "thickness_k": 0.17,
+                    "max_zones": 10,
+                    "level_mode": "latest",
+                    "breakout_edge": "h",
+                    "long_cond": "BREAKOUT_SHORT",
+                    "short_cond": "BREAKOUT_LONG"
+                },
+                "grid_net_filter": {
+                    "is_active": true,
+                    "mode": "ALPHA_ONLY",
+                    "max_grid_net": 0.0
+                },
                 "vol_filter": {
                     "is_active": true,
                     "timeframe": "1m",

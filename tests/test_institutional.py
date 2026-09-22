@@ -217,8 +217,9 @@ class TestInstitutionalRules(unittest.TestCase):
         self.assertIn("u_jem_symbiotic_quantum", manager.universes)
         self.assertIn("u_sh_wide_prime", manager.universes)
         self.assertIn("u_grid_shadow_stag_prime", manager.universes)
-        self.assertEqual(len(cfg.get("universes", {})), 54)
-        self.assertEqual(len(manager.universes), 40)
+        self.assertIn("u3_reverse_trend_alpha", manager.universes)
+        self.assertEqual(len(cfg.get("universes", {})), 55)
+        self.assertEqual(len(manager.universes), 41)
 
     def test_ghost_peak_calibration_protection(self):
         """Проверка автоматической нормализации аномальных пиков баланса (из эпохи 1000$)."""
