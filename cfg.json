@@ -44,7 +44,7 @@
     },
     "analytics": {
         "taker_fee_ratio": 0.0006,
-        "default_start_balance": 200.0,
+        "default_start_balance": 0.0,
         "_comment_default_start_balance": "Стартовый депозит по умолчанию для виртуальных вселенных в USDT",
         "_comment_taker_fee_ratio": "Например, введите 0.0006 для 0.06%"
     },

@@ -9,8 +9,8 @@
 без накопленного исторического балласта.
 
 Перед сбросом автоматически архивирует:
-  * analytics.json  ->  ANALYTICS/backups/analytics_epoch{N}_{YYYYMMDD_HHMMSS}.json
-  * trades_ledger.txt -> ANALYTICS/backups/trades_ledger_epoch{N}_{YYYYMMDD_HHMMSS}.txt
+  * analytics.json  ->  backups/analytics_epoch{N}_{YYYYMMDD_HHMMSS}.json
+  * trades_ledger.txt -> backups/trades_ledger_epoch{N}_{YYYYMMDD_HHMMSS}.txt
 
 НИКОГДА не трогает CFG/runtime -- активный бот (PID 15256) работает непрерывно.
 """
@@ -25,7 +25,7 @@ import sys
 CRON3_DIR   = pathlib.Path(r"C:/Users/user/Desktop/My_Pro/HP_EliteBook_735_old/MY/HRON_3/cron3Papper")
 ANALYTICS_F = CRON3_DIR / "ANALYTICS" / "analytics.json"
 LEDGER_F    = CRON3_DIR / "ANALYTICS" / "trades_ledger.txt"
-BACKUP_DIR  = CRON3_DIR / "ANALYTICS" / "backups"
+BACKUP_DIR  = CRON3_DIR / "backups"  # вне ANALYTICS/ — не удалится при чистке
 
 # --- Поля живых позиций, которые СОХРАНЯЕМ при сбросе --------------------
 LIVE_FIELDS = ("long_unrealized", "short_unrealized", "long_amt", "short_amt", "max_position_size")

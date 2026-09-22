@@ -16,7 +16,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from consts import ANALYTICS_DIR, ANALYTICS_CFG
+from consts import ANALYTICS_DIR, ANALYTICS_CFG, BASE_DIR
 from ANALYTICS.metrics import AnalyticsMathEngine
 from ANALYTICS.plotter import generate_equity_curve, consolidate_portfolio_ledger
 from TG.keyboards import TGKeyboards
@@ -159,8 +159,8 @@ def _format_leaderboard_text(bot_core) -> str:
     return "\n".join(_format_leaderboard_lines(bot_core))
 
 def _backup_analytics(target_uid: str) -> None:
-    """Архивирует файлы аналитики и ledger в backups/ перед сбросом."""
-    bdir = ANALYTICS_DIR / "backups"
+    """Архивирует файлы аналитики и ledger в backups/analytics/ (вне logs/) перед сбросом."""
+    bdir = BASE_DIR / "backups" / "analytics"
     bdir.mkdir(parents=True, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     sfx = f"_{target_uid}" if target_uid and target_uid != "default" else ""
