@@ -239,17 +239,34 @@ class TestInstitutionalRules(unittest.TestCase):
 
     def test_grid_net_filter_rule(self):
         """Проверка фильтрации монет по статистике сеточника (Grid Net PnL)."""
-        from CORE.symbiosis_rules import EntryGridNetFilterRule
+        from CORE.symbiosis_rules import EntryGridNetFilterRule, CronAnalyticsCache
+
+        # Инжектируем стабильные mock-данные вместо живого analytics.json
+        CronAnalyticsCache._cache = {
+            "per_coin": {
+                "PIEVERSEUSDT": {"net_profit_usdt": 49.14, "realized_pnl_net_usdt": 49.14, "trades": 132},
+                "CROSSUSDT":    {"net_profit_usdt": 33.67, "realized_pnl_net_usdt": 33.67, "trades": 89},
+                "ARXUSDT":      {"net_profit_usdt": 32.69, "realized_pnl_net_usdt": 32.69, "trades": 99},
+                "LITUSDT":      {"net_profit_usdt": 11.38, "realized_pnl_net_usdt": 11.38, "trades": 37},
+                "TUSDT":        {"net_profit_usdt": 11.61, "realized_pnl_net_usdt": 11.61, "trades": 35},
+                "GUSDT":        {"net_profit_usdt": -10.93, "realized_pnl_net_usdt": -10.93, "trades": 15},
+            }
+        }
+        CronAnalyticsCache._last_read_ts = 1e18  # TTL не истечёт во время теста
+
         rule_alpha = EntryGridNetFilterRule({"is_active": True, "mode": "ALPHA_ONLY", "max_grid_net": 0.0})
         rule_notop = EntryGridNetFilterRule({"is_active": True, "mode": "EXCLUDE_TOP_CASH_COWS", "exclude_top_n": 5})
 
-        # PIEVERSEUSDT имеет высокий положительный Grid Net (+36.5$) -> должен блокироваться
+        # PIEVERSEUSDT: Grid Net +49.14$ -> должен блокироваться обоими фильтрами
         self.assertFalse(rule_alpha.check("LONG", symbol="PIEVERSEUSDT"))
         self.assertFalse(rule_notop.check("LONG", symbol="PIEVERSEUSDT"))
 
-        # GUSDT имеет отрицательный Grid Net (-8.9$) -> должен проходить
+        # GUSDT: Grid Net -10.93$ -> должен проходить оба фильтра
         self.assertTrue(rule_alpha.check("LONG", symbol="GUSDT"))
         self.assertTrue(rule_notop.check("LONG", symbol="GUSDT"))
+
+        CronAnalyticsCache.clear()  # Чистим кэш после теста
+
 
     def test_htf_rsi_filter_rule(self):
         """Проверка дневного/4H фильтра RSI."""

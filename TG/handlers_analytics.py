@@ -7,6 +7,8 @@ import json
 import csv
 import time
 import random
+import shutil
+import datetime
 from typing import Optional, Any
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
@@ -25,7 +27,6 @@ from utils import Utils
 logger = UnifiedLogger("TGAnalytics")
 analytics_router = Router(name="analytics_router")
 
-
 class AnalyticsStates(StatesGroup):
     waiting_for_balance = State()
     waiting_for_reset_confirm = State()
@@ -40,7 +41,6 @@ def _get_universe_list(bot_core) -> list:
 def _get_default_universe_id(bot_core=None) -> str:
     """Возвращает 'all' для показа суммарного портфеля всех стратегий по умолчанию."""
     return "all"
-
 
 def _get_analytics_data(universe_id: str = "all") -> dict:
     """Безопасное чтение файла аналитики вселенной или портфеля с перерасчетом метрик."""
@@ -57,7 +57,6 @@ def _get_analytics_data(universe_id: str = "all") -> dict:
         return data
     except Exception:
         return {}
-
 
 def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "all") -> str:
     """Форматирует сводку аналитики выбранной вселенной или суммарного портфеля со всеми метриками."""
@@ -129,7 +128,6 @@ def _format_analytics_text(data: dict, bot_core=None, universe_id: str = "all") 
         f"• Фактор восстановления: <code>{rec:.2f}</code>\n"
     )
 
-
 def _format_leaderboard_lines(bot_core) -> list:
     """Форматирует строки таблицы лидеров для всех параллельных вселенных."""
     if not bot_core or not hasattr(bot_core, "universe_manager"):
@@ -156,34 +154,42 @@ def _format_leaderboard_lines(bot_core) -> list:
         )
     return lines
 
-
 def _format_leaderboard_text(bot_core) -> str:
     """Возвращает полный текст таблицы лидеров."""
     return "\n".join(_format_leaderboard_lines(bot_core))
 
+def _backup_analytics(target_uid: str) -> None:
+    """Архивирует файлы аналитики и ledger в backups/ перед сбросом."""
+    bdir = ANALYTICS_DIR / "backups"
+    bdir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    sfx = f"_{target_uid}" if target_uid and target_uid != "default" else ""
+    pairs = [(f"analytics{sfx}.json", f"analytics_{target_uid}_{ts}.json"),
+             (f"trades_ledger{sfx}.txt", f"trades_ledger_{target_uid}_{ts}.txt")]
+    for src_name, dst_name in pairs:
+        src = ANALYTICS_DIR / src_name
+        if src.exists() and src.stat().st_size > 10:
+            shutil.copy2(src, bdir / dst_name)
+            logger.info(f"[Backup] {dst_name}")
 
 def _do_reset_analytics(uid: str, bot_core=None) -> None:
-    """Выполняет фактический сброс файлов аналитики и журнала сделок для вселенной или всех вселенных."""
+    """Сброс аналитики с timestamped-бэкапом перед обнулением."""
     now_ms = int(time.time() * 1000)
-    targets = []
-    if uid == "all" and bot_core and hasattr(bot_core, "universe_manager"):
-        targets = [u.universe_id for u in bot_core.universe_manager.get_all_universes()] + ["all", "default"]
-    else:
-        targets = [uid]
-
+    targets = ([u.universe_id for u in bot_core.universe_manager.get_all_universes()] + ["all", "default"]
+               if uid == "all" and bot_core and hasattr(bot_core, "universe_manager") else [uid])
     start_bal = float(ANALYTICS_CFG.get("default_start_balance", 200.0))
     for target_uid in set(targets):
+        _backup_analytics(target_uid)
         data = {
             "start_balance_usdt": start_bal, "first_trade_ts": now_ms, "cur_balance_usdt": start_bal,
             "total_trades": 0, "winning_trades": 0, "winrate_pct": 0.0, "realized_pnl_usdt": 0.0,
             "net_profit_usdt": 0.0, "unrealized_pnl_usdt": 0.0, "per_coin": {}
         }
         AnalyticsMathEngine.calculate(data, universe_id=target_uid)
-        suffix = f"_{target_uid}" if target_uid and target_uid != "default" else ""
-        (ANALYTICS_DIR / f"analytics{suffix}.json").write_text(json.dumps(data, indent=4), encoding="utf-8")
-        with open(ANALYTICS_DIR / f"trades_ledger{suffix}.txt", mode="w", newline="", encoding="utf-8") as f:
+        sfx = f"_{target_uid}" if target_uid and target_uid != "default" else ""
+        (ANALYTICS_DIR / f"analytics{sfx}.json").write_text(json.dumps(data, indent=4), encoding="utf-8")
+        with open(ANALYTICS_DIR / f"trades_ledger{sfx}.txt", mode="w", newline="", encoding="utf-8") as f:
             csv.writer(f, delimiter=';').writerow(["Symbol", "Side", "Open Time", "Close Time", "PnL", "Balance"])
-
 
 async def _send_or_edit_split_messages(callback: CallbackQuery, messages: list, kb: Optional[Any], tag: str):
     """Отправляет одно или несколько сообщений без превышения лимита символов Telegram."""
@@ -325,16 +331,11 @@ def setup_analytics_handlers(router: Router, bot_core):
     @router.callback_query(F.data == "analytics_help")
     async def on_analytics_help(callback: CallbackQuery):
         await callback.answer()
-        help_text = (
-            "<b>ℹ️ Шпаргалка по показателям аналитики:</b>\n\n"
-            "• <b>ROI (%)</b>: Доходность относительно стартового депозита.\n"
-            "• <b>Net Profit</b>: Чистая прибыль с учетом комиссий.\n"
-            "• <b>Realized PnL</b>: Суммарный закрытый результат по всем сделкам.\n"
-            "• <b>Winrate (%)</b>: Процент прибыльных сделок от общего числа.\n"
-            "• <b>Max Drawdown</b>: Максимальная историческая просадка баланса.\n"
-            "• <b>Recovery Factor</b>: PnL / Max Drawdown.\n"
-            "• <b>Leaderboard</b>: Сравнительная таблица всех 30 вселенных."
-        )
+        help_text = ("<b>ℹ️ Шпаргалка по показателям аналитики:</b>\n\n"
+                     "• <b>ROI (%)</b>: Доходность относительно стартового депозита.\n• <b>Net Profit</b>: Чистая прибыль с учетом комиссий.\n"
+                     "• <b>Realized PnL</b>: Суммарный закрытый результат.\n• <b>Winrate (%)</b>: Доля прибыльных сделок.\n"
+                     "• <b>Max Drawdown</b>: Макс. историческая просадка.\n• <b>Recovery Factor</b>: PnL / Max Drawdown.\n"
+                     "• <b>Leaderboard</b>: Таблица всех вселенных стратегий.")
         await callback.message.edit_text(help_text, reply_markup=TGKeyboards.leaderboard_menu(), parse_mode="HTML")
 
     @router.callback_query(F.data.startswith("analytics_set_balance_"))
